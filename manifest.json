@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PhishingShield",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Proactively detects, warns against, and prevents navigation to malicious phishing links.",
   "icons": {
     "16": "images/icon16.png",
@@ -59,6 +59,6 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://api.emailjs.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:3000 https://api.emailjs.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com;"
   }
 }

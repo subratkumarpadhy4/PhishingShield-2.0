@@ -68,29 +68,22 @@ function initRiskAnalysis(isFortressMode) {
     if (window.location.href.includes('warning.html')) return;
 
     setTimeout(async () => {
+        // RiskEngine is loaded via manifest content_scripts
+        if (typeof RiskEngine === 'undefined') {
+            console.error("RiskEngine not found!");
+            return;
+        }
+
         const analysis = RiskEngine.analyzePage();
 
         // Fortress Mode: Heightened Sensitivity
         if (isFortressMode) {
             analysis.score += 25; // Base paranoia penalty
-            analysis.reasons.push("🛡️ Fortress Mode: Security Tightened (+25 Score)");
+            analysis.reasons.push("🛡️ Fortress Mode: Security Tightened (+25)");
             if (analysis.score > 100) analysis.score = 100;
         }
 
         console.log("PhishingShield Risk Analysis:", analysis);
-
-        // Feature: Extension Detection (Now Async) - DISABLED PER USER REQUEST (Scan on Install instead)
-        /*
-        const extAnalysis = await RiskEngine.analyzeExtensions();
-        if (extAnalysis.count > 0) {
-            analysis.score += extAnalysis.score;
-            analysis.reasons.push(...extAnalysis.reasons);
-            // Heighten threat level if extensions are interfering
-            if (analysis.primaryThreat === "Generic Suspicion") {
-                analysis.primaryThreat = "Suspicious Extension Activity";
-            }
-        }
-        */
 
         // Cap score at 100
         analysis.score = Math.min(analysis.score, 100);
@@ -327,88 +320,234 @@ function initLoginProtection() {
     observer.observe(document.body, { childList: true, subtree: true });
 }
 
-/**
- * Feature 3 (Hackathon): Real-Time Risk Analysis HUD
- */
-// (Old initRiskAnalysis and initLogVisit logic removed - Replaced by new structured logic at top of file)
-// This space intentionally left blank to clean up the file structure during refactor.
-
 function showRiskHUD(analysis) {
     if (document.getElementById('phishingshield-hud')) return;
 
-    console.log("PhishingShield: Displaying HUD. Score:", analysis.score);
+    // Cleanup
+    const existingStyles = document.getElementById('ps-styles');
+    if (existingStyles) existingStyles.remove();
 
     const hud = document.createElement('div');
     hud.id = 'phishingshield-hud';
 
-    // FORCE VISIBILITY: Standard CSS classes might be overridden by page styles.
-    // Using inline important styles ensures the HUD is always on top.
-    hud.style.cssText = "position: fixed; bottom: 20px; right: 20px; z-index: 2147483647 !important; display: block !important; width: 300px !important; opacity: 1 !important; transform: none !important;";
+    // FLOATING PILL / CAPSULE DESIGN (Minimal)
+    const styles = `
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        z-index: 2147483647 !important;
+        display: flex !important;
+        align-items: center;
+        gap: 15px;
+        padding: 12px 20px;
+        background: rgba(20, 20, 20, 0.95);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 50px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        color: white;
+        transform: translateY(20px) scale(0.95);
+        opacity: 0;
+        animation: ps-pop-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        max-width: 400px;
+    `;
 
-    // Determine color based on score
-    let color = '#ffc107'; // Warning Yellow
-    let level = 'Medium Risk';
+    // Keyframes & Classes
+    const styleSheet = document.createElement('style');
+    styleSheet.id = 'ps-styles';
+    styleSheet.textContent = `
+        @keyframes ps-pop-in {
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        .ps-divider {
+            width: 1px;
+            height: 24px;
+            background: rgba(255,255,255,0.2);
+        }
+        .ps-action-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #aaa;
+            transition: all 0.2s;
+            font-size: 18px;
+        }
+        .ps-action-btn:hover {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            transform: scale(1.1);
+        }
+        .ps-action-btn.danger { color: #ff6b6b; }
+        .ps-action-btn.danger:hover { background: rgba(220, 53, 69, 0.2); }
+        
+        /* DETAILS PANEL */
+        #hud-details-panel {
+            position: absolute;
+            bottom: 70px;
+            right: 0;
+            width: 300px;
+            background: rgba(20, 20, 20, 0.98);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+            display: none;
+            color: #eee;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        #hud-details-panel h4 {
+            margin: 0 0 10px 0;
+            color: #fff;
+            font-size: 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 5px;
+        }
+        #hud-details-panel ul {
+            padding-left: 20px;
+            margin: 0;
+        }
+        #hud-details-panel li {
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding-bottom: 5px;
+        }
+        #hud-details-panel li:last-child {
+            border-bottom: none;
+        }
+        .ps-score-badge {
+            background: rgba(255, 71, 87, 0.2);
+            color: #ff6b6b;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-left: 10px;
+            white-space: nowrap;
+        }
+        .ps-score-badge.bonus {
+            background: rgba(46, 213, 115, 0.2);
+            color: #2ed573;
+        }
+    `;
+    document.head.appendChild(styleSheet);
+
+    hud.style.cssText = styles;
+
+    // Status Logic
+    let color = '#ffc107'; // Yellow
+    let icon = '⚠️';
     if (analysis.score >= 50) {
-        color = '#dc3545'; // Danger Red
-        level = 'HIGH RISK';
+        color = '#ff6b6b'; // Red
+        icon = '🚨';
     }
 
-    // Build lists
-    const reasonsHtml = analysis.reasons.map(r => `<li>${r}</li>`).join('');
+    // Prepare reasons list with Score Parsing
+    const reasonsList = analysis.reasons.map(r => {
+        // Regex to extract score: "Some reason (+25)" or "Reason (-10)"
+        // Flexible: allows spaces inside parens, before parens, and handles different spacing
+        const match = r.match(/(.*)\s\(\s*([+-]\d+)\s*\)$/);
+
+        let text = r;
+        let badge = '';
+
+        if (match) {
+            text = match[1].trim();
+            const scoreVal = parseInt(match[2]);
+            const isBonus = scoreVal < 0; // Negative score is good (bonus)
+            // Ensure bonus class is applied if score is negative OR if the text implies safety (Green pattern)
+            const isSafety = isBonus || text.includes('Adaptive Trust') || text.includes('Verified Official');
+            const badgeClass = isSafety ? 'ps-score-badge bonus' : 'ps-score-badge';
+
+            // Ensure sign is displayed
+            const sign = scoreVal > 0 ? '+' : '';
+            badge = `<span class="${badgeClass}">${sign}${scoreVal}</span>`;
+        } else if (r.includes('Fortress Mode')) {
+            if (r.includes('+25')) badge = `<span class="ps-score-badge">+25</span>`;
+        } else if (r.includes('(+')) {
+            // Backup parsing for simple (+Number) if regex failed
+            const simpleMatch = r.match(/\(\+(\d+)\)/);
+            if (simpleMatch) {
+                badge = `<span class="ps-score-badge">+${simpleMatch[1]}</span>`;
+                text = r.replace(`(+${simpleMatch[1]})`, '').trim();
+            }
+        }
+
+        return `<li><span>${text}</span>${badge}</li>`;
+    }).join('');
 
     hud.innerHTML = `
-        <div class="hud-header" style="background-color: ${color}">
-            <span class="hud-icon">🛡️</span>
-            <div>
-                <div class="hud-title">PhishingShield Alert</div>
-                <div style="font-size: 11px; opacity: 0.9;">${analysis.primaryThreat || 'Potential Risk'}</div>
-            </div>
-            <div class="hud-controls">
-                 <button id="hud-report" class="hud-btn" style="margin-right:5px; background:#6c757d;" title="Report as Phishing">🚩 Report</button>
-                 <button id="hud-inspect" class="hud-btn" style="margin-right:5px;" title="Highlight Risky Elements">🔍 Inspect</button>
-                 <button id="hud-close" class="hud-btn">×</button>
+        <!-- Details Panel (Hidden by default) -->
+        <div id="hud-details-panel">
+            <h4>Risk Factors Detected</h4>
+            <ul>${reasonsList || '<li style="justify-content:center; opacity:0.7;">No specific threats found.</li>'}</ul>
+        </div>
+
+        <!-- Left: Icon & Score -->
+        <div style="display:flex; align-items:center; gap:10px;">
+            <div style="font-size: 22px;">${icon}</div>
+            <div style="display:flex; flex-direction:column; line-height:1.2;">
+                <span style="font-weight:800; font-size:16px;">${analysis.score}<small style="font-size:11px; opacity:0.7;">/100</small></span>
+                <span style="font-size:11px; color:${color}; font-weight:600; max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    ${analysis.primaryThreat || 'Threat Detected'}
+                </span>
             </div>
         </div>
-        <div class="hud-body">
-            <div class="risk-score">
-                <span class="score-val" style="color: ${color}">${analysis.score}</span> / 100
-            </div>
-            <div class="risk-level" style="color: ${color}">${level}</div>
-            <ul class="risk-factors">
-                ${reasonsHtml}
-            </ul>
-             <a href="#" id="hud-learn-more" style="display:block; margin-top:10px; color:${color}; font-size:12px; font-weight:bold;">Learn about these threats &rsaquo;</a>
+
+        <div class="ps-divider"></div>
+
+        <!-- Right: Small Icon Actions -->
+        <div style="display:flex; align-items:center; gap:5px;">
+            <!-- Order: Inspect -> Info -> Report -->
+            <button id="hud-inspect" class="ps-action-btn" title="Inspect Page">🔍</button>
+            <button id="hud-info" class="ps-action-btn" title="View Details">ℹ️</button>
+            <button id="hud-report" class="ps-action-btn danger" title="Report Phishing">🚩</button>
+            <div style="width:10px;"></div> <!-- Spacer -->
+            <button id="hud-close" class="ps-action-btn" title="Close" style="font-size:14px; background:rgba(255,255,255,0.1);">✕</button>
         </div>
     `;
 
     document.body.appendChild(hud);
 
-    // Event Listeners
+    // Bindings
     document.getElementById('hud-close').addEventListener('click', () => hud.remove());
 
     document.getElementById('hud-inspect').addEventListener('click', () => {
         activateInspectorMode(analysis);
-        chrome.runtime.sendMessage({ type: "ADD_XP", amount: 50 });
+    });
+
+    // Toggle Details
+    document.getElementById('hud-info').addEventListener('click', (e) => {
+        const panel = document.getElementById('hud-details-panel');
+        if (panel.style.display === 'block') {
+            panel.style.display = 'none';
+            e.target.style.color = '#aaa';
+        } else {
+            panel.style.display = 'block';
+            e.target.style.color = '#fff'; // Active state
+        }
     });
 
     document.getElementById('hud-report').addEventListener('click', () => {
-        if (confirm("Report this website to the PhishingShield community?\n\nThis will flag it for review.")) {
-            const currentUrl = window.location.href;
-            // Fix for local files having empty hostname
-            const hostname = window.location.hostname || "Local File";
-
+        if (confirm("Flag this site as malicious?")) {
             chrome.runtime.sendMessage({
                 type: "REPORT_SITE",
-                url: currentUrl,
-                hostname: hostname
-            }, (response) => {
-                if (chrome.runtime.lastError) {
-                    alert("❌ Report Failed: " + chrome.runtime.lastError.message + "\n\nTip: content scripts on file:// might be restricted.");
-                    console.error("PhishingShield Report Error:", chrome.runtime.lastError);
-                } else {
-                    alert("✅ Thanks! Report submitted to Admin Portal.\n\nOpen Dashboard to view it.");
-                    hud.remove();
-                }
+                url: window.location.href,
+                hostname: window.location.hostname
+            }, () => {
+                alert("Site Flagged.");
+                hud.remove();
             });
         }
     });
@@ -548,4 +687,3 @@ function initFortressClipboard(isFortressMode) {
         }, true); // Capture phase
     });
 }
-

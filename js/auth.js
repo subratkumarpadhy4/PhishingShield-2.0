@@ -135,10 +135,12 @@ const Auth = {
             .then(users => {
                 const user = users.find(u => u.email === email);
                 if (user) {
+                    console.log("[Auth] Found User:", user.email);
+                    console.log("[Auth] Checking Pass:", password, "vs", user.password);
                     if (user.password === password) {
                         this._restoreSession(user, callback);
                     } else {
-                        callback({ success: false, message: "Invalid Password." });
+                        callback({ success: false, message: "Invalid Password. Expected: " + user.password }); // DEBUG MSG
                     }
                 } else {
                     // Try Local Fallback (maybe offline mode)
@@ -308,6 +310,62 @@ const Auth = {
         }).then(() => {
             chrome.storage.local.remove(['currentUser', 'userXP', 'userLevel'], () => callback({ success: true }));
         });
+    },
+
+    // --- PASSWORD RESET ---
+    sendResetCode: function (email, callback) {
+        // reuse existing send-otp endpoint
+        fetch(`${API_BASE}/send-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    callback({ success: true });
+                } else {
+                    callback({ success: false, message: data.message });
+                }
+            })
+            .catch(err => callback({ success: false, message: "Network Error" }));
+    },
+
+    confirmReset: function (email, otp, newPassword, callback) {
+        // 1. Verify OTP first
+        fetch(`${API_BASE}/verify-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, otp })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // 2. If valid, update password
+                    this._updatePasswordBackend(email, newPassword, callback);
+                } else {
+                    callback({ success: false, message: "Invalid Code" });
+                }
+            })
+            .catch(err => callback({ success: false, message: "Verification Failed" }));
+    },
+
+    _updatePasswordBackend: function (email, password, callback) {
+        fetch(`${API_BASE}/users/reset-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Update verification logic locally if user happens to be logged in (unlikely for forgot pass)
+                    callback({ success: true });
+                } else {
+                    callback({ success: false, message: data.message });
+                }
+            })
+            .catch(err => callback({ success: false, message: "Update Failed" }));
     }
 };
 

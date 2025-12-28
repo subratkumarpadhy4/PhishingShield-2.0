@@ -123,9 +123,9 @@ const RiskEngine = {
                 let aiPoints = Math.round(aiResult.probability * 40);
                 if (isSimpleDomain) {
                     aiPoints = Math.min(aiPoints, 10);
-                    reasons.push(`🤖 AI Alert (Dampened by Clean Domain Trust)`);
+                    reasons.push(`🤖 AI Alert (Dampened by Clean Domain Trust) (+${aiPoints})`);
                 } else {
-                    reasons.push(`🤖 AI Engine: ${Math.round(aiResult.probability * 100)}% Confidence`);
+                    reasons.push(`🤖 AI Engine: ${Math.round(aiResult.probability * 100)}% Confidence (+${aiPoints})`);
                 }
                 score += aiPoints;
             }
@@ -155,7 +155,7 @@ const RiskEngine = {
 
         if (maxEntropy > 4.2) {
             score += 25;
-            reasons.push(`⚠️ High Domain Entropy in '${highEntropyPart}'`);
+            reasons.push(`⚠️ High Domain Entropy in '${highEntropyPart}' (+25)`);
         }
 
         // C. TYPOSQUATTING SENTINEL
@@ -181,7 +181,7 @@ const RiskEngine = {
 
                 if (isTyposquat) {
                     score += SCORE_TYPOSQUAT;
-                    reasons.push(`⚠️ Potential Typosquatting: resembles "${brand}"`);
+                    reasons.push(`⚠️ Potential Typosquatting: resembles "${brand}" (+${SCORE_TYPOSQUAT})`);
                 }
             }
         }
@@ -191,7 +191,7 @@ const RiskEngine = {
         for (const tld of riskyTLDs) {
             if (hostname.endsWith(tld)) {
                 score += 15;
-                reasons.push(`⚠️ Suspicious TLD (${tld})`);
+                reasons.push(`⚠️ Suspicious TLD (${tld}) (+15)`);
                 break;
             }
         }
@@ -216,12 +216,12 @@ const RiskEngine = {
             // If there's a password field OR it looks like a login form, FLAG IT.
             if (passwordField || loginForm) {
                 score += 50; // High Penalty
-                reasons.push("🚨 MITM / SSL Stripping Detected: Login over insecure HTTP!");
+                reasons.push("🚨 MITM / SSL Stripping Detected: Login over insecure HTTP! (+50)");
                 primaryThreat = "Man-in-the-Middle Attack";
             } else {
                 // General insecure warning
                 score += 10;
-                reasons.push("⚠️ Insecure Connection (HTTP)");
+                reasons.push("⚠️ Insecure Connection (HTTP) (+10)");
             }
         } else {
             // Mixed Content Check (Passive)
@@ -229,7 +229,7 @@ const RiskEngine = {
             const insecureResources = document.querySelectorAll('script[src^="http:"], iframe[src^="http:"]');
             if (insecureResources.length > 0) {
                 score += 35;
-                reasons.push(`⚠️ Mixed Content: Page is secure, but loads ${insecureResources.length} insecure resources.`);
+                reasons.push(`⚠️ Mixed Content: Page is secure, but loads ${insecureResources.length} insecure resources. (+35)`);
             }
         }
 
@@ -331,19 +331,19 @@ const RiskEngine = {
             } else if (check.tier === 'CAUTION') {
                 // Tier 2: Low Risk / Caution
                 score += 10;
-                reasons.push(`⚠️ Caution: Unverified Extension active: '${check.name}'`);
+                reasons.push(`⚠️ Caution: Unverified Extension active: '${check.name}' (+10)`);
                 count++;
             } else {
                 // Tier 3: High Risk
                 score += 25;
-                reasons.push(`🚨 HIGH RISK: Extension '${check.name}' (${check.installType || 'Unknown'}) modifying this page.`);
+                reasons.push(`🚨 HIGH RISK: Extension '${check.name}' (${check.installType || 'Unknown'}) modifying this page. (+25)`);
                 count++;
             }
         }
 
         if (simulated) {
             score += 25;
-            reasons.push("⚠️ DETECTED SIMULATED ROGUE EXTENSION (Demo)");
+            reasons.push("⚠️ DETECTED SIMULATED ROGUE EXTENSION (Demo) (+25)");
             count++;
         }
 

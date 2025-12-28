@@ -1,16 +1,10 @@
-importScripts('firebase-app-compat.js', 'firebase-auth-compat.js', 'firebase-firestore-compat.js', 'firebase-config.js');
+// Service Worker Window Polyfill for Firebase (Legacy support removed)
+// Running entirely on local Node.js backend (http://localhost:3000)
 
-// Initialize Firebase
-let db = null;
-if (typeof firebase !== 'undefined' && typeof firebaseConfig !== 'undefined') {
-    try {
-        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-        db = firebase.firestore();
-        console.log("[PhishingShield] Firebase Background Connected for Global Sync");
-    } catch (e) {
-        console.warn("[PhishingShield] Firebase Config missing or invalid.", e);
-    }
-}
+let db = null; // No longer used
+
+// Import AI Model for basic offline checks
+importScripts('js/ai_model.js');
 
 // -----------------------------------------------------------------------------
 // TRUSTED EXTENSIONS WHITELIST (Tier 1: Trusted)
@@ -113,40 +107,62 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.type === "LOG_VISIT") {
-
+        console.log("[PhishingShield] LOG_VISIT received.");
+        updateXP(5); // +5 XP per visit
+    } else if (request.type === "ADD_XP") {
+        console.log("[PhishingShield] ADD_XP received:", request.amount);
+        updateXP(request.amount || 10);
     } else if (request.type === "REPORT_SITE") {
-        const report = {
-            id: Date.now().toString(),
-            url: request.url,
-            hostname: request.hostname,
-            reporter: "Current User", // In prod, use request.userEmail or similar if we trust it
-            timestamp: Date.now(),
-            status: 'pending' // pending, banned, ignored
-        };
 
-        // 1. Save Locally (Immediate Feedback)
-        chrome.storage.local.get(['reportedSites'], (result) => {
-            const reports = result.reportedSites || [];
-            reports.push(report);
-            chrome.storage.local.set({ reportedSites: reports }, () => {
-                console.log("[PhishingShield] Report Logged Locally:", report);
+        // 1. Fetch Reporter Info
+        chrome.storage.local.get(['currentUser'], (data) => {
+            const user = data.currentUser || {};
+            const reporterName = user.name || 'Anonymous';
+            const reporterEmail = user.email ? ` (${user.email})` : '';
+            const reporterDisplay = reporterName + reporterEmail;
+
+            const reportPayload = {
+                url: request.url,
+                hostname: request.hostname,
+                reporter: reporterDisplay
+            };
+
+            // 2. Send to Node.js Backend
+            fetch('http://localhost:3000/api/reports', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(reportPayload)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log("[PhishingShield] Report Sent to Server:", data);
+                    sendResponse({ success: true, data: data });
+                })
+                .catch(err => {
+                    console.error("[PhishingShield] Reporting Failed:", err);
+                    sendResponse({ success: false, error: err.toString() });
+                });
+
+            // 3. Keep Local Backup (Optional, for offline viewing)
+            chrome.storage.local.get(['reportedSites'], (res) => {
+                const logs = res.reportedSites || [];
+                logs.push({ ...reportPayload, status: 'pending', timestamp: Date.now() });
+                chrome.storage.local.set({ reportedSites: logs });
             });
         });
 
-        // 2. Sync to Global CrowdShield (Firebase)
-        if (db) {
-            db.collection('reported_sites').add(report)
-                .then(() => console.log("[PhishingShield] Report Synced Globally 🌍"))
-                .catch(err => console.error("Global Sync Failed:", err));
-        } else {
-            console.log("[PhishingShield] Global Sync Skipped (No DB Connection)");
-        }
+        return true;
     }
 });
 
 /**
  * Updates User XP and checks for Level Up
  */
+// Helper: Level Calculation (Square Root Curve)
+function calculateLevel(xp) {
+    return Math.floor(Math.sqrt(xp / 100)) + 1;
+}
+
 function updateXP(amount) {
     // Silent Ticker: Update Badge
     if (amount > 0) {
@@ -202,6 +218,14 @@ function updateXP(amount) {
                 users[userIndex].level = newLevel;
                 updates.users = users; // Save users too
                 console.log(`[PhishingShield] Synced User ${currentEmail}: XP=${currentXP}, Lvl=${newLevel}`);
+
+                // PUSH TO SERVER IMMEDIATELY
+                fetch('http://localhost:3000/api/users/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(users[userIndex])
+                }).then(() => console.log("[PhishingShield] XP Saved to Server"))
+                    .catch(e => console.error("[PhishingShield] XP Sync Failed:", e));
             }
         }
 

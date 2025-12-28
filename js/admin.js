@@ -50,11 +50,15 @@ function checkAdminAccess() {
     // Check Current User directly from Storage
     chrome.storage.local.get(['currentUser'], (res) => {
         const user = res.currentUser;
-        const normalizedEmail = user ? user.email.toLowerCase() : '';
-        const normalizedOwner = OWNER_EMAIL.toLowerCase();
+        console.log("[Admin Check] Stored User:", user ? user.email : "NULL"); // DEBUG
+        console.log("[Admin Check] Expected Owner:", OWNER_EMAIL); // DEBUG
+
+        const normalizedEmail = user ? user.email.toLowerCase().trim() : '';
+        const normalizedOwner = OWNER_EMAIL.toLowerCase().trim();
 
         if (normalizedEmail === normalizedOwner) {
             // Authorized Owner
+            console.log("[Admin Check] ACCESS GRANTED ✅");
             unlockUI();
 
             // Trigger Fresh Data Load
@@ -179,7 +183,18 @@ function loadDashboardData() {
             renderLogs(aggregatedLogs);
 
             // --- Populate Reports Table ---
-            renderReports(reports);
+            // Fetch from Node.js Backend
+            fetch('http://localhost:3000/api/reports')
+                .then(res => res.json())
+                .then(serverReports => {
+                    console.log("[Admin] Fetched Global Reports:", serverReports);
+                    renderReports(serverReports);
+                })
+                .catch(err => {
+                    console.warn("[Admin] Could not fetch global reports (Server Offline?)", err);
+                    // Fallback to local
+                    renderReports(reports);
+                });
 
             // DEBUG: Inject Test Report Button if not exists
             if (!document.getElementById('btn-add-test-report')) {
@@ -191,20 +206,18 @@ function loadDashboardData() {
                     btn.textContent = '+ Add Test Report';
                     btn.style.marginLeft = '10px';
                     btn.onclick = () => {
-                        const fakeReport = {
-                            id: Date.now().toString(),
-                            url: 'http://malicious-test-example.com',
-                            reporter: 'Debug User',
-                            timestamp: Date.now(),
-                            status: 'pending'
-                        };
-                        reports.push(fakeReport);
-                        chrome.storage.local.set({ reportedSites: reports }, () => {
-                            // Sync this new report global
-                            if (typeof Auth !== 'undefined' && Auth.syncReports) Auth.syncReports();
-
+                        // Send Test Report to Server
+                        fetch('http://localhost:3000/api/reports', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                url: 'http://test-malicious-site.com',
+                                reporter: 'Admin Test',
+                                hostname: 'test-malicious-site.com'
+                            })
+                        }).then(() => {
+                            alert("Test Report Sent to Server.");
                             loadDashboardData();
-                            alert("Added Test Report to Pending Sync.");
                         });
                     };
                     header.appendChild(btn);
@@ -215,15 +228,11 @@ function loadDashboardData() {
 
     // Trigger Load
     console.log("Fetching Data...");
+    // Just perform local check + server fetch logic inside processData
+    // We removed Auth dependency for Reports, but keep it for Users if needed.
     if (typeof Auth !== 'undefined' && Auth.getUsers) {
         Auth.getUsers((users) => {
-            if (Auth.getGlobalReports) {
-                Auth.getGlobalReports((reports) => {
-                    processData(users, reports);
-                });
-            } else {
-                processData(users, []);
-            }
+            processData(users || [], []);
         });
     } else {
         chrome.storage.local.get(['users'], r => processData(r.users || [], []));
@@ -259,10 +268,20 @@ function renderReports(reports) {
             actionBtn = '-';
         }
 
+        // Parse reporter to separate Name and Email if possible for better display
+        let reporterDisplay = r.reporter || 'Anonymous';
+        // If format is "Name (email)", we can bold the name
+        if (reporterDisplay.includes('(')) {
+            const parts = reporterDisplay.split('(');
+            const name = parts[0].trim();
+            const email = '(' + parts[1]; // keep the email part
+            reporterDisplay = `<strong>${name}</strong> <span style="font-size:12px; color:#6c757d;">${email}</span>`;
+        }
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td style="font-family:monospace; color:#0d6efd;">${r.url}</td>
-            <td>${r.reporter || 'Anonymous'}</td>
+            <td>${reporterDisplay}</td>
             <td>${date}</td>
             <td>${statusBadge}</td>
             <td>${actionBtn}</td>
