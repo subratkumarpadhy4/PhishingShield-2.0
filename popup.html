@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishingShield</title>
+    <style>
+        body {
+            width: 250px;
+            padding: 15px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+        }
+
+        .status {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .icon {
+            background: transparent !important;
+            width: 128px;
+            height: 128px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto 10px auto;
+            clip-path: circle(50%);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .icon img {
+            object-fit: contain;
+            width: 100%;
+            height: 100%;
+            transform: scale(1.4);
+            background: transparent !important;
+            opacity: 1;
+        }
+
+        h2 {
+            margin: 5px 0;
+            font-size: 18px;
+            color: #343a40;
+        }
+
+        p.status-text {
+            font-size: 14px;
+            color: #6c757d;
+        }
+
+        .settings {
+            border-top: 1px solid #dee2e6;
+            padding-top: 15px;
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+
+        /* Simple Switch Toggle */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 34px;
+            height: 20px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 12px;
+            width: 12px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked+.slider {
+            background-color: #28a745;
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(14px);
+        }
+
+        /* Gamification Stats */
+        .stats-grid {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            flex: 1;
+            text-align: center;
+            border: 1px solid #dee2e6;
+        }
+
+        .stat-card h3 {
+            font-size: 11px;
+            color: #6c757d;
+            margin: 0 0 5px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .level-badge {
+            font-size: 16px;
+            font-weight: bold;
+            color: #0d6efd;
+            margin-bottom: 5px;
+        }
+
+        .stat-number {
+            font-size: 20px;
+            font-weight: bold;
+            color: #28a745;
+        }
+
+        .xp-bar {
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 5px auto;
+            width: 80%;
+        }
+
+        .xp-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0d6efd, #0dcaf0);
+            border-radius: 3px;
+        }
+
+        .xp-text {
+            font-size: 10px;
+            color: #adb5bd;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="auth-section" style="position: absolute; top: 10px; right: 15px; font-size: 11px; z-index: 100;">
+        <a href="login.html" target="_blank" id="btn-login"
+            style="color: #0d6efd; text-decoration: none; font-weight: bold;">Login</a>
+        <a href="dashboard.html" target="_blank" id="user-profile-link"
+            style="display: none; color: #495057; text-decoration: none; font-weight: bold; cursor: pointer;">
+            Hi, <span id="user-name">User</span> 👤
+        </a>
+    </div>
+    <div class="status">
+        <div class="icon">
+            <img src="images/image.png" alt="PhishingShield Logo">
+        </div>
+        <h2>PhishingShield</h2>
+
+        <!-- Tab Navigation -->
+        <div class="tabs"
+            style="display: flex; justify-content: center; margin-bottom: 15px; border-bottom: 1px solid #dee2e6;">
+            <div class="tab active" id="tab-dashboard"
+                style="padding: 8px 15px; cursor: pointer; border-bottom: 2px solid #28a745; font-weight: bold; font-size: 13px;">
+                Dashboard</div>
+            <div class="tab" id="tab-dojo" style="padding: 8px 15px; cursor: pointer; color: #6c757d; font-size: 13px;">
+                Dojo 🥋</div>
+        </div>
+
+        <!-- VIEW: DASHBOARD -->
+        <div id="view-dashboard">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Safety Level</h3>
+                    <div class="level-badge">Lvl <span id="safety-level">1</span></div>
+                    <div class="xp-bar">
+                        <div class="xp-fill" id="xp-bar-fill" style="width: 10%"></div>
+                    </div>
+                    <div class="xp-text" id="safety-xp">0 XP</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Attacks Blocked</h3>
+                    <div class="stat-number" id="blocked-count">0</div>
+                </div>
+            </div>
+
+            <div class="settings"><strong>Settings</strong>
+                <div class="setting-item"><span>Link Preview</span><label class="switch"><input type="checkbox"
+                            id="toggle-preview" checked><span class="slider round"></span></label></div>
+                <div class="setting-item"><span>Login Protection</span><label class="switch"><input type="checkbox"
+                            id="toggle-login" checked><span class="slider round"></span></label></div>
+                <div class="setting-item"><span>Scan Downloads</span><label class="switch"><input type="checkbox"
+                            id="toggle-downloads" checked><span class="slider round"></span></label></div>
+
+                <div class="setting-item"><span>History Limit</span>
+                    <input type="number" id="history-limit" min="10" max="100" value="50"
+                        style="width: 50px; padding: 2px; text-align: center; border-radius: 4px; border: 1px solid #ced4da;">
+                </div>
+
+                <!-- Fortress Mode -->
+                <div class="setting-item" style="border-top: 1px solid #dee2e6; padding-top: 15px; margin-top: 10px;">
+                    <span style="color: #ffc107; font-weight: bold;">🛡️ Fortress Mode</span><label
+                        class="switch"><input type="checkbox" id="toggle-fortress"><span
+                            class="slider round"></span></label>
+                </div>
+
+                <div style="margin-top: 15px; text-align: center;">
+                    <a href="dashboard.html" target="_blank" id="open-dashboard"
+                        style="display: block; text-decoration: none; text-align: center; background: #0d6efd; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; width: 100%; box-sizing: border-box;">Open
+                        Analytics Dashboard</a>
+                    <!-- Admin Passkey Removed -->
+
+                    <button id="btn-logout"
+                        style="width: 100%; margin-top: 10px; background: #dc3545; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; display: none;">
+                        Sign Out
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: DOJO -->
+        <div id="view-dojo" style="display: none;">
+            <div class="dojo-card"
+                style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6; text-align: center;">
+                <h3 style="margin-top: 0; color: #495057;">Identify the Threat</h3>
+                <div id="dojo-question-area" style="margin: 15px 0;">
+                    <p id="dojo-scenario" style="font-size: 14px; font-weight: 500; margin-bottom: 5px;">Scenario...</p>
+                    <div style="background: #f8f9fa; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 12px; color: #d63384; word-break: break-all;"
+                        id="dojo-url">http://example.com</div>
+                </div>
+
+                <div class="dojo-actions" style="display: flex; gap: 10px; justify-content: center;">
+                    <button id="btn-safe"
+                        style="flex: 1; background: #28a745; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">Safe
+                        ✅</button>
+                    <button id="btn-phish"
+                        style="flex: 1; background: #dc3545; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">Phishing
+                        🎣</button>
+                </div>
+
+                <div id="dojo-feedback" style="margin-top: 15px; font-size: 13px; display: none;"></div>
+                <button id="btn-next"
+                    style="width: 100%; margin-top: 10px; background: #0d6efd; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; display: none;">Next
+                    Scenario &rarr;</button>
+            </div>
+        </div>
+
+    </div>
+    <script src="js/dojo.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/popup.js"></script>
+</body>
+
+</html>

