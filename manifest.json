@@ -12,7 +12,9 @@
   "permissions": [
     "declarativeNetRequest",
     "contextMenus",
-    "storage"
+    "storage",
+    "management",
+    "notifications"
   ],
   "host_permissions": [
     "<all_urls>"

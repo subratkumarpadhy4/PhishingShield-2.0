@@ -277,12 +277,15 @@ const RiskEngine = {
      * Scans the DOM for resources injected by other extensions (chrome-extension://).
      * This helps detect if a user is being tracked or modified by a suspicious extension.
      */
-    analyzeExtensions: function () {
+    /**
+     * Scans the DOM for resources injected by other extensions (chrome-extension://).
+     * ASYNC: Queries background script to check if extension is Trusted, Caution, or High Risk.
+     */
+    analyzeExtensions: async function () {
         const foundExtensions = new Set();
         const riskyTags = ['script', 'iframe', 'link', 'img', 'embed', 'object'];
 
         // HACKATHON DEMO: Allow simulation of a rogue extension via URL param
-        // Example: ?simulate_rogue_ext=true
         const urlParams = new URLSearchParams(window.location.search);
         let simulated = urlParams.has('simulate_rogue_ext');
 
@@ -291,13 +294,10 @@ const RiskEngine = {
             for (let el of elements) {
                 let src = el.src || el.href;
                 if (src && src.startsWith('chrome-extension://')) {
-                    // Extract ID directly without URL object to avoid parsing errors
                     try {
                         const parts = src.split('/');
                         if (parts.length >= 3) {
                             const extId = parts[2];
-                            // Filter out OUROWN extension if we knew our ID (optional)
-                            // For now, we report everything for the user to see.
                             foundExtensions.add(extId);
                         }
                     } catch (e) { }
@@ -308,31 +308,52 @@ const RiskEngine = {
         const suspiciousList = Array.from(foundExtensions);
         let score = 0;
         let reasons = [];
+        let count = 0;
 
-        if (suspiciousList.length > 0 || simulated) {
-            score += 25; // Base penalty for foreign code injection
-
-            if (simulated) {
-                reasons.push("⚠️ DETECTED SIMULATED ROGUE EXTENSION (Demo)");
-            }
-
-            suspiciousList.forEach(id => {
-                reasons.push(`⚠️ Detected browser extension injecting content (ID: ${id.substring(0, 8)}...)`);
+        // processing loop
+        for (const id of suspiciousList) {
+            // Ask Background for Tier
+            // We use a Promise wrapper for chrome.runtime.sendMessage
+            const check = await new Promise(resolve => {
+                chrome.runtime.sendMessage({ type: "CHECK_EXTENSION_ID", id: id }, (response) => {
+                    // Handle case where background might not respond (e.g. context invalid)
+                    if (chrome.runtime.lastError || !response) {
+                        resolve({ tier: 'HIGH_RISK', name: 'Unknown' });
+                    } else {
+                        resolve(response);
+                    }
+                });
             });
 
-            // If many extensions are injecting, it's very suspicious
-            if (suspiciousList.length > 2) {
-                score += 20;
-                reasons.push("⚠️ High volume of extension activity blocked/detected.");
+            if (check.tier === 'TRUSTED') {
+                // Tier 1: Do nothing. Safe.
+                console.log(`[PhishingShield] Trusted Extension Detected: ${check.name} (${id})`);
+            } else if (check.tier === 'CAUTION') {
+                // Tier 2: Low Risk / Caution
+                score += 10;
+                reasons.push(`⚠️ Caution: Unverified Extension active: '${check.name}'`);
+                count++;
+            } else {
+                // Tier 3: High Risk
+                score += 25;
+                reasons.push(`🚨 HIGH RISK: Extension '${check.name}' (${check.installType || 'Unknown'}) modifying this page.`);
+                count++;
             }
+        }
+
+        if (simulated) {
+            score += 25;
+            reasons.push("⚠️ DETECTED SIMULATED ROGUE EXTENSION (Demo)");
+            count++;
         }
 
         return {
             score: score,
             reasons: reasons,
-            count: suspiciousList.length + (simulated ? 1 : 0)
+            count: count
         };
     },
+
 
     /**
      * Calculates Levenshtein Distance between two strings.

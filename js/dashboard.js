@@ -45,11 +45,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 3. LOAD DATA & STATS
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-            chrome.storage.local.get(['visitLog', 'theme', 'users'], (result) => {
+            chrome.storage.local.get(['visitLog', 'theme', 'users', 'suspectedExtensions'], (result) => {
                 const log = result.visitLog || [];
                 const users = result.users || [];
+                const extLog = result.suspectedExtensions || [];
+
                 updateStats(log);
                 renderTable(log);
+                renderExtensionTable(extLog); // New Function
                 renderLeaderboard(users);
 
                 if (result.theme === 'dark') {
@@ -311,6 +314,30 @@ function updateStats(log) {
 
         const p = level === 1 ? (xp / 100) * 100 : ((xp - prev) / (next - prev)) * 100;
         if (bar) bar.style.width = Math.min(p, 100) + '%';
+    });
+}
+
+function renderExtensionTable(log) {
+    const tbody = document.getElementById('ext-log-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!log || log.length === 0) {
+        tbody.innerHTML = '<tr><td colspan=4 align=center>No activity.</td></tr>';
+        return;
+    }
+
+    [...log].reverse().slice(0, 50).forEach(e => {
+        const tr = document.createElement('tr');
+        const badgeClass = e.tier === 'HIGH_RISK' ? 'risk-high' : 'risk-med';
+
+        tr.innerHTML = `
+            <td>${e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '-'}</td>
+            <td><strong>${e.name}</strong> <small style="color:#6c757d">(${e.id.substring(0, 8)}...)</small></td>
+            <td><span class="risk-badge ${badgeClass}">${e.tier}</span></td>
+            <td>${e.installType}</td>
+        `;
+        tbody.appendChild(tr);
     });
 }
 

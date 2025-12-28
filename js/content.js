@@ -67,7 +67,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 function initRiskAnalysis(isFortressMode) {
     if (window.location.href.includes('warning.html')) return;
 
-    setTimeout(() => {
+    setTimeout(async () => {
         const analysis = RiskEngine.analyzePage();
 
         // Fortress Mode: Heightened Sensitivity
@@ -79,8 +79,9 @@ function initRiskAnalysis(isFortressMode) {
 
         console.log("PhishingShield Risk Analysis:", analysis);
 
-        // Feature: Extension Detection
-        const extAnalysis = RiskEngine.analyzeExtensions();
+        // Feature: Extension Detection (Now Async) - DISABLED PER USER REQUEST (Scan on Install instead)
+        /*
+        const extAnalysis = await RiskEngine.analyzeExtensions();
         if (extAnalysis.count > 0) {
             analysis.score += extAnalysis.score;
             analysis.reasons.push(...extAnalysis.reasons);
@@ -89,6 +90,7 @@ function initRiskAnalysis(isFortressMode) {
                 analysis.primaryThreat = "Suspicious Extension Activity";
             }
         }
+        */
 
         // Cap score at 100
         analysis.score = Math.min(analysis.score, 100);
