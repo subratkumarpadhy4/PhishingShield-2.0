@@ -107,14 +107,38 @@ app.post('/api/send-otp', (req, res) => {
         to: email,
         subject: 'Your Verification Code',
         html: `
-            <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-                <h2 style="color: #0d6efd;">PhishingShield Verification</h2>
-                <p>Use the following code to complete your request:</p>
-                <div style="font-size: 24px; font-weight: bold; letter-spacing: 5px; background: #f8f9fa; padding: 15px; text-align: center; border-radius: 8px; border: 1px solid #ddd; margin: 20px 0;">
-                    ${code}
+            <div style="background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px 0;">
+                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); overflow: hidden;">
+                    <!-- Header -->
+                    <div style="background-color: #0f172a; padding: 30px; text-align: center;">
+                        <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px;">PhishingShield</h1>
+                    </div>
+                    
+                    <!-- Content -->
+                    <div style="padding: 40px 30px; text-align: center;">
+                        <h2 style="color: #1e293b; font-size: 22px; margin-bottom: 10px;">Verification Required</h2>
+                        <p style="color: #64748b; font-size: 16px; line-height: 1.5; margin-bottom: 30px;">
+                            You are registering or signing in to PhishingShield. Please use the verification code below to complete the process.
+                        </p>
+                        
+                        <!-- OTP Code -->
+                        <div style="background-color: #f1f5f9; border: 2px dashed #94a3b8; border-radius: 8px; padding: 20px; margin: 0 auto 30px; width: fit-content; min-width: 200px;">
+                            <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #0d6efd; display: block;">${code}</span>
+                        </div>
+                        
+                        <p style="color: #94a3b8; font-size: 14px; margin-top: 30px;">
+                            This code will expire in 10 minutes.<br>
+                            If you did not request this email, please ignore it.
+                        </p>
+                    </div>
+                    
+                    <!-- Footer -->
+                    <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #e2e8f0;">
+                        <p style="color: #cbd5e1; font-size: 12px; margin: 0;">
+                            &copy; ${new Date().getFullYear()} PhishingShield Security. All rights reserved.
+                        </p>
+                    </div>
                 </div>
-                <p>This code will expire in 10 minutes.</p>
-                <p style="font-size: 12px; color: #888;">If you didn't request this, please ignore this email.</p>
             </div>
         `
     };
@@ -135,13 +159,16 @@ app.post('/api/send-otp', (req, res) => {
 app.post('/api/verify-otp', (req, res) => {
     const { email, otp } = req.body;
 
-    // Check against stored code
-    if (otpStore[email] && otpStore[email] === otp) {
+    // Check against stored code (Robust string comparison)
+    const stored = otpStore[email] ? String(otpStore[email]).trim() : null;
+    const input = otp ? String(otp).trim() : '';
+
+    if (stored && stored === input) {
         console.log(`[OTP] ✅ Verified for ${email}`);
         delete otpStore[email]; // Clear after use
         res.json({ success: true });
     } else {
-        console.warn(`[OTP] ❌ Failed for ${email}. Expected: ${otpStore[email]}, Got: ${otp}`);
+        console.warn(`[OTP] ❌ Failed for ${email}. Expected: ${stored}, Got: ${input}`);
         res.status(400).json({ success: false, message: "Invalid OTP" });
     }
 });

@@ -6,137 +6,167 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PhishingShield</title>
     <link rel="stylesheet" href="css/popup.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 
 <body>
 
-    <!-- Header -->
-    <div class="header">
-        <div class="brand">
-            <img src="images/icon48.png" alt="Logo">
-            <span>PhishingShield</span>
-        </div>
-        <div class="auth-status" id="auth-section">
-            <a href="login.html" target="_blank" id="btn-login">Login</a>
-            <a href="dashboard.html" target="_blank" id="user-profile-link" style="display: none;">
-                Hi, <span id="user-name">User</span> 👤
-            </a>
-        </div>
-    </div>
-
-    <!-- Hero Status -->
-    <div class="hero-status">
-        <div class="shield-icon" id="status-icon">
-            <img src="images/image.png" alt="Status Shield" class="hero-logo">
-        </div>
-        <div class="status-title" id="status-text">System Secure</div>
-        <div class="status-subtitle">Real-time protection active</div>
-    </div>
-
-    <!-- Navigation -->
-    <div class="tabs">
-        <div class="tab active" id="tab-dashboard">Dashboard</div>
-        <div class="tab" id="tab-dojo">Training Dojo</div>
-    </div>
-
-    <!-- VIEW: DASHBOARD -->
-    <div id="view-dashboard" class="content-area">
-
-        <!-- Gamification Stats -->
-        <div class="stats-row">
-            <div class="stat-card">
-                <div class="stat-label">Security Level</div>
-                <div class="stat-value">Lvl <span id="safety-level">1</span></div>
-                <div class="xp-container">
-                    <div class="xp-fill" id="xp-bar-fill" style="width: 0%"></div>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="brand">
+                <div class="logo-glow">
+                    <img src="images/icon48.png" alt="Logo">
                 </div>
-                <div class="xp-text" id="safety-xp">0 XP</div>
+                <span>PhishingShield</span>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Blocked Threats</div>
-                <div class="stat-value" id="blocked-count" style="color:#dc3545">0</div>
-                <div class="stat-label" style="margin-top: 5px;">All Time</div>
+            <div class="header-actions" id="auth-section">
+                <!-- Login Button -->
+                <a href="login.html" target="_blank" id="btn-login" class="btn-micro btn-glow">Login</a>
+
+                <!-- Profile Link (Hidden by default) -->
+                <a href="dashboard.html" target="_blank" id="user-profile-link" class="profile-link"
+                    style="display: none;">
+                    <div class="avatar-circle">
+                        <span id="user-initial">U</span>
+                    </div>
+                </a>
             </div>
+        </header>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" id="tab-dashboard">Dashboard</div>
+            <div class="tab" id="tab-dojo">Training Dojo</div>
         </div>
 
-        <!-- Settings List -->
-        <div class="toggle-list">
-            <div class="toggle-item">
-                <div>
-                    <div class="toggle-label">Link Previews</div>
-                    <span class="toggle-sub">Show destination tooltips</span>
+        <!-- VIEW: DASHBOARD -->
+        <div id="view-dashboard" class="content-area">
+
+            <!-- Hero Status -->
+            <div class="hero-section">
+                <div class="shield-container secure" id="status-icon">
+                    <div class="pulse-ring"></div>
+                    <img src="images/image.png" alt="Status Shield" class="hero-logo">
                 </div>
-                <label class="switch">
-                    <input type="checkbox" id="toggle-preview" checked>
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <div class="toggle-item">
-                <div>
-                    <div class="toggle-label">Login Protection</div>
-                    <span class="toggle-sub">Warn on insecure forms</span>
+                <div class="status-info">
+                    <div class="status-title" id="status-text">System Secure</div>
+                    <div class="status-subtitle">Real-time protection active</div>
                 </div>
-                <label class="switch">
-                    <input type="checkbox" id="toggle-login" checked>
-                    <span class="slider"></span>
-                </label>
             </div>
-            <div class="toggle-item">
-                <div>
-                    <div class="toggle-label">Scan Downloads</div>
-                    <span class="toggle-sub">Check risky file types</span>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="safety-level">1</div>
+                    <div class="stat-label">Level</div>
                 </div>
-                <label class="switch">
-                    <input type="checkbox" id="toggle-downloads" checked>
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <div class="toggle-item fortress-mode">
-                <div>
-                    <div class="toggle-label" style="color:#856404">Fortress Mode 🛡️</div>
-                    <span class="toggle-sub">Max security (Zero Trust)</span>
+                <div class="stat-card">
+                    <div class="stat-value"><span id="safety-xp">0</span></div>
+                    <div class="stat-label">XP Earned</div>
+                    <div class="xp-bar-mini">
+                        <div class="xp-fill" id="xp-bar-fill" style="width: 0%"></div>
+                    </div>
                 </div>
-                <label class="switch">
-                    <input type="checkbox" id="toggle-fortress">
-                    <span class="slider fortress-slider"></span>
-                </label>
+                <div class="stat-card danger-card">
+                    <div class="stat-value" id="blocked-count">0</div>
+                    <div class="stat-label">Threats</div>
+                </div>
             </div>
-            <div class="toggle-item">
-                <div class="toggle-label">History Limit</div>
-                <input type="number" id="history-limit" min="10" max="100" value="50" class="history-input">
+
+            <!-- Controls -->
+            <div class="controls-panel">
+                <div class="control-item">
+                    <div class="control-info">
+                        <div class="control-title">Link Previews</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-preview" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="control-item">
+                    <div class="control-info">
+                        <div class="control-title">Login Protection</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-login" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="control-item">
+                    <div class="control-info">
+                        <div class="control-title">Scan Downloads</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-downloads" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="control-item fortress-item">
+                    <div class="control-info">
+                        <div class="control-title">Fortress Mode 🛡️</div>
+                        <div class="control-desc">Zero Trust Security</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-fortress">
+                        <span class="slider fortress-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Bottom Actions -->
+            <div class="bottom-actions">
+                <div class="history-control">
+                    <label>History Limit</label>
+                    <input type="number" id="history-limit" min="10" max="100" value="50">
+                </div>
+
+                <a href="dashboard.html" target="_blank" id="open-dashboard" class="btn-full btn-glass">
+                    View Full Dashboard
+                </a>
+
+                <button id="btn-logout" class="btn-full btn-text-danger" style="display: none;">
+                    Sign Out
+                </button>
             </div>
         </div>
 
-        <a href="dashboard.html" target="_blank" id="open-dashboard" class="btn-block btn-primary">
-            Open Full Analytics ↗
-        </a>
+        <!-- VIEW: DOJO -->
+        <div id="view-dojo" class="content-area" style="display: none;">
+            <div class="dojo-card">
+                <div class="dojo-header">
+                    <h3>Spot the Phish!</h3>
+                    <p id="dojo-scenario">Analyze the URL below...</p>
+                </div>
 
-        <button id="btn-logout" class="btn-block btn-danger" style="display: none;">
-            Sign Out
-        </button>
-    </div>
-
-    <!-- VIEW: DOJO -->
-    <div id="view-dojo" class="content-area" style="display: none;">
-        <div class="dojo-container">
-            <h3 style="margin-bottom: 10px;">Spot the Phish!</h3>
-            <p id="dojo-scenario" style="color: #6c757d; font-size: 13px; margin-bottom: 10px;">scenario text...</p>
-
-            <div id="dojo-question-area">
-                <div class="dojo-url-box" id="dojo-url">http://example.com</div>
+                <div class="url-display">
+                    <div class="browser-bar">
+                        <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                    </div>
+                    <div class="url-text" id="dojo-url">http://example.com</div>
+                </div>
 
                 <div class="dojo-actions">
-                    <button class="btn-dojo btn-safe" id="btn-safe">Safe ✅</button>
-                    <button class="btn-dojo btn-phish" id="btn-phish">Phish 🎣</button>
+                    <button class="btn-dojo btn-safe" id="btn-safe">
+                        <span class="icon">✅</span> Safe
+                    </button>
+                    <button class="btn-dojo btn-phish" id="btn-phish">
+                        <span class="icon">🎣</span> Phish
+                    </button>
                 </div>
+
+                <div id="dojo-feedback" class="feedback-msg" style="display: none;"></div>
+
+                <button id="btn-next" class="btn-full btn-primary" style="margin-top: 15px; display: none;">
+                    Next Challenge &rarr;
+                </button>
             </div>
-
-            <div id="dojo-feedback" class="feedback-msg" style="display: none;"></div>
-
-            <button id="btn-next" class="btn-block btn-primary" style="margin-top: 15px; display: none;">
-                Next Challenge &rarr;
-            </button>
         </div>
+
     </div>
 
     <script src="js/auth.js"></script>

@@ -44,25 +44,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // 3. LOAD DATA & STATS
-        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-            chrome.storage.local.get(['visitLog', 'theme', 'users', 'suspectedExtensions'], (result) => {
-                const log = result.visitLog || [];
-                const users = result.users || [];
-                const extLog = result.suspectedExtensions || [];
+        function loadDashboardData() {
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.get(['visitLog', 'theme', 'users', 'suspectedExtensions', 'userXP', 'userLevel'], (result) => {
+                    const log = result.visitLog || [];
+                    const users = result.users || [];
+                    const extLog = result.suspectedExtensions || [];
 
-                updateStats(log);
-                renderTable(log);
-                renderExtensionTable(extLog); // New Function
-                renderLeaderboard(users);
+                    updateStats(log);
+                    renderTable(log);
+                    renderExtensionTable(extLog); // New Function
+                    renderLeaderboard(users);
 
-                if (result.theme === 'dark') {
-                    document.body.classList.add('dark-theme');
-                    const themeBtn = document.getElementById('theme-toggle');
-                    if (themeBtn) themeBtn.innerText = '☀️';
+                    if (result.theme === 'dark') {
+                        document.body.classList.add('dark-theme');
+                        const themeBtn = document.getElementById('theme-toggle');
+                        if (themeBtn) themeBtn.innerText = '☀️';
+                    }
+                });
+            } else {
+                console.warn("Chrome Storage not available.");
+            }
+        }
+
+        // Load initial data
+        loadDashboardData();
+
+        // Listen for storage changes to update in real-time
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+            chrome.storage.onChanged.addListener((changes, areaName) => {
+                if (areaName === 'local') {
+                    // Update if visitLog, userXP, userLevel, or users changed
+                    if (changes.visitLog || changes.userXP || changes.userLevel || changes.users) {
+                        loadDashboardData();
+                    }
                 }
             });
-        } else {
-            console.warn("Chrome Storage not available.");
         }
 
         // 4. AUTH & PROFILE
@@ -351,7 +368,8 @@ function renderTable(log) {
         return;
     }
 
-    [...log].slice(0, 50).forEach(e => {
+    // Sort by timestamp (newest first) and show most recent 50
+    [...log].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 50).forEach(e => {
         const tr = document.createElement('tr');
         const status = e.score > 20 ? 'Critical' : 'Safe';
         const badgeClass = e.score > 20 ? 'risk-high' : 'risk-low';

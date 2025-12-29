@@ -121,16 +121,14 @@ const Dojo = {
     switchTab: function (tabName) {
         document.querySelectorAll('.tab').forEach(t => {
             t.classList.remove('active');
-            t.style.borderBottom = 'none';
-            t.style.color = '#6c757d';
+            // Removed inline style resets to allow CSS to control appearance
+            t.removeAttribute('style');
         });
         document.querySelectorAll('[id^="view-"]').forEach(v => v.style.display = 'none');
 
         const tab = document.getElementById(`tab-${tabName}`);
         tab.classList.add('active');
-        tab.style.borderBottom = '2px solid #28a745';
-        tab.style.color = 'black';
-        tab.style.fontWeight = 'bold';
+        // Removed inline active styles
 
         document.getElementById(`view-${tabName}`).style.display = 'block';
     },
@@ -177,8 +175,8 @@ const Dojo = {
             const nextLevelXp = Math.pow(level, 2) * 100;
             if (xp >= nextLevelXp) {
                 level++;
-                xp = 0; // Or keep overflow? Simple reset for now.
-                // alert(`Level Up! You are now Level ${level}`); // Annoying in popup
+                // xp = 0; // FIXED: Do not reset XP, it is cumulative!
+                // alert(`Level Up! You are now Level ${level}`); 
             }
 
             chrome.storage.local.set({ userXP: xp, userLevel: level, pendingXPSync: true }, () => {

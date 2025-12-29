@@ -86,13 +86,23 @@ if (chrome.management && chrome.management.onInstalled) {
 // -----------------------------------------------------------------------------
 // MESSAGE LISTENERS
 // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// MESSAGE LISTENERS
+// -----------------------------------------------------------------------------
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    console.log("[PhishingShield] 🔵 Message received:", request.type, request);
+    console.log("[PhishingShield] Service Worker is ACTIVE at:", new Date().toISOString());
 
-    // NEW: 3-Tier Extension Security Check
+    // PING to wake up service worker
+    if (request.type === "PING") {
+        console.log("[PhishingShield] PING received - Service Worker is awake");
+        if (sendResponse) sendResponse({ success: true, awake: true });
+        return true;
+    }
+
+    // 1. EXTENSION SECURITY CHECK (Async)
     if (request.type === "CHECK_EXTENSION_ID") {
         const extId = request.id;
-
-        // We still need management API to get info if not passed
         chrome.management.get(extId, (info) => {
             if (chrome.runtime.lastError) {
                 console.warn(`[PhishingShield] Could not query extension ${extId}:`, chrome.runtime.lastError);
@@ -102,24 +112,54 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             const result = checkExtensionRisk(extId, info);
             sendResponse(result);
         });
-
-        return true; // Keep channel open for async response
+        return true; // Keep channel open
     }
 
+    // 2. LOG VISIT
     if (request.type === "LOG_VISIT") {
-        console.log("[PhishingShield] LOG_VISIT received.");
-        updateXP(5); // +5 XP per visit
-    } else if (request.type === "ADD_XP") {
-        console.log("[PhishingShield] ADD_XP received:", request.amount);
-        updateXP(request.amount || 10);
-    } else if (request.type === "REPORT_SITE") {
+        console.log("[PhishingShield] LOG_VISIT handler triggered");
+        console.log("[PhishingShield] LOG_VISIT data:", request.data);
+        
+        // Respond immediately to prevent timeout
+        if (sendResponse) {
+            sendResponse({ success: true });
+        }
 
-        // 1. Fetch Reporter Info
+        // Award XP for visiting a website (async, but we already responded)
+        console.log("[PhishingShield] Calling updateXP(5)");
+        updateXP(5);
+
+        // Save visit to log (async)
+        chrome.storage.local.get(['visitLog'], (res) => {
+            const logs = Array.isArray(res.visitLog) ? res.visitLog : [];
+            if (logs.length > 50) logs.shift();
+            if (request.data) {
+                logs.push(request.data);
+            }
+            chrome.storage.local.set({ visitLog: logs }, () => {
+                console.log("[PhishingShield] Visit log saved, total:", logs.length);
+            });
+        });
+
+        return true; // Keep channel open for potential async response
+    }
+
+    // 3. ADD XP
+    else if (request.type === "ADD_XP") {
+        const amount = request.amount || 10;
+        console.log("[PhishingShield] ADD_XP handler triggered, amount:", amount);
+        updateXP(amount);
+        if (sendResponse) sendResponse({ success: true });
+        return true;
+    }
+
+    // 4. REPORT SITE (Async Fetch)
+    else if (request.type === "REPORT_SITE") {
+
+        // Fetch User Info first
         chrome.storage.local.get(['currentUser'], (data) => {
             const user = data.currentUser || {};
-            const reporterName = user.name || 'Anonymous';
-            const reporterEmail = user.email ? ` (${user.email})` : '';
-            const reporterDisplay = reporterName + reporterEmail;
+            const reporterDisplay = (user.name || 'Anonymous') + (user.email ? ` (${user.email})` : '');
 
             const reportPayload = {
                 url: request.url,
@@ -127,23 +167,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 reporter: reporterDisplay
             };
 
-            // 2. Send to Node.js Backend
+            // Send to Backend
             fetch('http://localhost:3000/api/reports', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(reportPayload)
             })
-                .then(response => response.json())
+                .then(res => res.json())
                 .then(data => {
-                    console.log("[PhishingShield] Report Sent to Server:", data);
+                    console.log("[PhishingShield] Report Sent:", data);
                     sendResponse({ success: true, data: data });
                 })
                 .catch(err => {
-                    console.error("[PhishingShield] Reporting Failed:", err);
+                    console.error("[PhishingShield] Report Failed:", err);
                     sendResponse({ success: false, error: err.toString() });
                 });
 
-            // 3. Keep Local Backup (Optional, for offline viewing)
+            // Local Backup
             chrome.storage.local.get(['reportedSites'], (res) => {
                 const logs = res.reportedSites || [];
                 logs.push({ ...reportPayload, status: 'pending', timestamp: Date.now() });
@@ -151,86 +191,127 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             });
         });
 
+        return true; // Keep channel open for async fetch
+    }
+
+    // 5. UPDATE BLOCKLIST
+    else if (request.type === "UPDATE_BLOCKLIST") {
+        updateBlocklistFromStorage();
+        if (sendResponse) sendResponse({ success: true });
         return true;
     }
+
+    return true; // Default keep-open to be safe
 });
 
 /**
- * Updates User XP and checks for Level Up
+ * Simple and Reliable XP System
  */
-// Helper: Level Calculation (Square Root Curve)
 function calculateLevel(xp) {
     return Math.floor(Math.sqrt(xp / 100)) + 1;
 }
 
 function updateXP(amount) {
-    // Silent Ticker: Update Badge
-    if (amount > 0) {
-        chrome.action.setBadgeText({ text: `+${amount}` });
-        chrome.action.setBadgeBackgroundColor({ color: '#28a745' });
-        setTimeout(() => {
-            chrome.action.setBadgeText({ text: "" });
-        }, 2000);
+    console.log("[PhishingShield] ========== updateXP CALLED ==========");
+    console.log("[PhishingShield] Amount:", amount);
+    
+    if (!amount || amount <= 0) {
+        console.warn("[PhishingShield] Invalid XP amount:", amount);
+        return;
     }
 
-    chrome.storage.local.get(['userXP', 'userLevel'], (result) => {
-        let currentXP = result.userXP || 0;
-        let currentLevel = result.userLevel || 1;
+    // Show badge notification
+    try {
+        chrome.action.setBadgeText({ text: `+${amount}` });
+        chrome.action.setBadgeBackgroundColor({ color: '#28a745' });
+        setTimeout(() => chrome.action.setBadgeText({ text: "" }), 2000);
+    } catch (e) {
+        console.warn("[PhishingShield] Badge update failed:", e);
+    }
 
-        let users = result.users || [];
-        let currentEmail = result.currentUser ? result.currentUser.email : null;
+    // Get current XP and update it
+    console.log("[PhishingShield] Reading storage...");
+    chrome.storage.local.get(['userXP', 'userLevel', 'users', 'currentUser'], (data) => {
+        console.log("[PhishingShield] Storage data received:", data);
+        // Initialize if not set
+        let currentXP = typeof data.userXP === 'number' ? data.userXP : 0;
+        let currentLevel = typeof data.userLevel === 'number' ? data.userLevel : 1;
+        let users = Array.isArray(data.users) ? data.users : [];
+        let currentUser = data.currentUser || null;
 
-        currentXP += amount;
-
-        // Recalculate Level strictly based on XP
+        // Add XP
+        currentXP = currentXP + amount;
         const newLevel = calculateLevel(currentXP);
-        const oldLevel = result.userLevel || 1;
 
-        if (newLevel > oldLevel) {
-            // Level Up!
+        console.log("[PhishingShield] XP Update: " + (currentXP - amount) + " + " + amount + " = " + currentXP + " (Level " + newLevel + ")");
+
+        // Check for level up
+        if (newLevel > currentLevel) {
             chrome.notifications.create({
                 type: 'basic',
                 iconUrl: 'images/icon48.png',
                 title: '🎉 Level Up!',
                 message: `Congratulations! You reached Level ${newLevel}.`
             });
-            // Broadcast Level Up to all tabs
+            
+            // Broadcast to all tabs
             chrome.tabs.query({}, (tabs) => {
                 tabs.forEach(tab => {
-                    if (tab.id) { // Ensure tab.id exists
+                    if (tab.id) {
                         chrome.tabs.sendMessage(tab.id, {
                             type: "LEVEL_UP",
                             level: newLevel
-                        }).catch(e => console.warn("Could not send LEVEL_UP message to tab:", tab.id, e));
+                        }).catch(() => {});
                     }
                 });
             });
         }
 
-        // Save Global State
-        const updates = { userXP: currentXP, userLevel: newLevel, pendingXPSync: true }; // Flag for Sync
+        // Prepare update object
+        const updateData = {
+            userXP: currentXP,
+            userLevel: newLevel,
+            pendingXPSync: true
+        };
 
-        // Sync with User Registry (Consistency Check)
-        if (currentEmail) {
-            const userIndex = users.findIndex(u => u.email === currentEmail);
-            if (userIndex !== -1) {
+        // Update user in users array if logged in
+        if (currentUser && currentUser.email) {
+            const userIndex = users.findIndex(u => u && u.email === currentUser.email);
+            if (userIndex >= 0) {
                 users[userIndex].xp = currentXP;
                 users[userIndex].level = newLevel;
-                updates.users = users; // Save users too
-                console.log(`[PhishingShield] Synced User ${currentEmail}: XP=${currentXP}, Lvl=${newLevel}`);
+                updateData.users = users;
 
-                // PUSH TO SERVER IMMEDIATELY
+                // Sync to server
                 fetch('http://localhost:3000/api/users/sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(users[userIndex])
-                }).then(() => console.log("[PhishingShield] XP Saved to Server"))
-                    .catch(e => console.error("[PhishingShield] XP Sync Failed:", e));
+                }).catch(() => {});
             }
         }
 
-        chrome.storage.local.set(updates);
+        // Save to storage
+        console.log("[PhishingShield] Saving to storage:", updateData);
+        chrome.storage.local.set(updateData, () => {
+            if (chrome.runtime.lastError) {
+                console.error("[PhishingShield] ❌ FAILED to save XP:", chrome.runtime.lastError);
+            } else {
+                console.log("[PhishingShield] ✅ XP saved successfully:", currentXP);
+                
+                // Double-check by reading it back
+                chrome.storage.local.get(['userXP'], (verify) => {
+                    console.log("[PhishingShield] Verification - XP in storage:", verify.userXP);
+                    if (verify.userXP !== currentXP) {
+                        console.error("[PhishingShield] ⚠️ MISMATCH! Expected:", currentXP, "Got:", verify.userXP);
+                    } else {
+                        console.log("[PhishingShield] ✅✅✅ XP VERIFIED IN STORAGE!");
+                    }
+                });
+            }
+        });
     });
+    console.log("[PhishingShield] ========== updateXP EXIT ==========");
 }
 
 function updateSafeStreak(isCritical) {
@@ -274,7 +355,44 @@ function updateFortressRules(enabled) {
     }
 }
 
-console.log("PhishingShield Service Worker Loaded");
+console.log("PhishingShield Service Worker Loaded - " + new Date().toISOString());
+
+// Keep service worker alive by listening to events
+chrome.runtime.onInstalled.addListener(() => {
+    console.log("[PhishingShield] Extension installed/updated");
+});
+
+chrome.runtime.onStartup.addListener(() => {
+    console.log("[PhishingShield] Browser startup");
+});
+
+// Initialize XP system on startup
+chrome.storage.local.get(['userXP', 'userLevel'], (result) => {
+    console.log("[PhishingShield] Startup - Current XP:", result.userXP, "Level:", result.userLevel);
+    if (result.userXP === undefined || result.userXP === null) {
+        chrome.storage.local.set({ userXP: 0, userLevel: 1 }, () => {
+            console.log("[PhishingShield] ✅ XP system initialized to 0");
+        });
+    } else {
+        console.log("[PhishingShield] XP system already initialized:", result.userXP);
+    }
+});
+
+// Listen for storage changes to debug
+chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes.userXP) {
+        console.log("[PhishingShield] 🔔 Storage changed - userXP:", changes.userXP.newValue, "(was:", changes.userXP.oldValue, ")");
+    }
+});
+
+// Test function - call this from console to verify service worker is active
+self.testServiceWorker = function() {
+    console.log("[PhishingShield] ✅ Service Worker is ACTIVE!");
+    chrome.storage.local.get(['userXP', 'userLevel'], (r) => {
+        console.log("[PhishingShield] Current XP:", r.userXP, "Level:", r.userLevel);
+    });
+    return true;
+};
 
 /**
  * COMMUNITY BLOCKLIST
@@ -316,7 +434,4 @@ function updateBlocklistFromStorage() {
 chrome.runtime.onStartup.addListener(updateBlocklistFromStorage);
 chrome.runtime.onInstalled.addListener(updateBlocklistFromStorage);
 
-// Also listen for manual update trigger
-chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.type === "UPDATE_BLOCKLIST") updateBlocklistFromStorage();
-});
+// UPDATE_BLOCKLIST is handled in the main message listener above

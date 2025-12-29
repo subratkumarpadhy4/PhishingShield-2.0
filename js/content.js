@@ -66,15 +66,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  */
 function initRiskAnalysis(isFortressMode) {
     if (window.location.href.includes('warning.html')) return;
+    if (window.location.protocol === 'chrome-extension:') return; // Skip extension pages
+    if (window.location.protocol === 'chrome:') return; // Skip chrome:// pages
 
     setTimeout(async () => {
-        // RiskEngine is loaded via manifest content_scripts
-        if (typeof RiskEngine === 'undefined') {
-            console.error("RiskEngine not found!");
-            return;
-        }
+        // Fail-safe: Try to get engine from window if implicit fail
+        const Engine = window.RiskEngine || RiskEngine;
 
-        const analysis = RiskEngine.analyzePage();
+        // Default Analysis
+        let analysis = {
+            score: 0,
+            reasons: [],
+            primaryThreat: "Analysis Failed (Engine Missing)"
+        };
+
+        if (typeof Engine !== 'undefined' && Engine.analyzePage) {
+            try {
+                analysis = Engine.analyzePage();
+            } catch (e) {
+                console.error("Risk Engine Crashed:", e);
+                analysis.reasons.push("Error: " + e.message);
+            }
+        } else {
+            console.warn("RiskEngine Missing - Sending fallback log.");
+        }
 
         // Fortress Mode: Heightened Sensitivity
         if (isFortressMode) {
@@ -88,19 +103,67 @@ function initRiskAnalysis(isFortressMode) {
         // Cap score at 100
         analysis.score = Math.min(analysis.score, 100);
 
+        console.log("[Content] Sending LOG_VISIT message...");
+        
+        const visitData = {
+            url: window.location.href,
+            hostname: window.location.hostname || window.location.pathname.split('/').pop(),
+            score: analysis.score,
+            reasons: analysis.reasons,
+            primaryThreat: analysis.primaryThreat,
+            timestamp: Date.now()
+        };
+        
+        // Send LOG_VISIT message with timeout fallback
+        let messageReceived = false;
+        const timeout = setTimeout(() => {
+            if (!messageReceived) {
+                console.warn("[Content] Service worker not responding, updating XP directly");
+                // Fallback: Update XP directly
+                chrome.storage.local.get(['userXP', 'userLevel', 'users', 'currentUser', 'visitLog'], (data) => {
+                    let currentXP = typeof data.userXP === 'number' ? data.userXP : 0;
+                    currentXP += 5; // +5 XP for visit
+                    const newLevel = Math.floor(Math.sqrt(currentXP / 100)) + 1;
+                    
+                    const logs = Array.isArray(data.visitLog) ? data.visitLog : [];
+                    if (logs.length > 50) logs.shift();
+                    logs.push(visitData);
+                    
+                    const updateData = {
+                        userXP: currentXP,
+                        userLevel: newLevel,
+                        visitLog: logs,
+                        pendingXPSync: true
+                    };
+                    
+                    // Update user in users array if logged in
+                    if (data.currentUser && data.currentUser.email && Array.isArray(data.users)) {
+                        const users = [...data.users];
+                        const userIndex = users.findIndex(u => u && u.email === data.currentUser.email);
+                        if (userIndex >= 0) {
+                            users[userIndex].xp = currentXP;
+                            users[userIndex].level = newLevel;
+                            updateData.users = users;
+                        }
+                    }
+                    
+                    chrome.storage.local.set(updateData, () => {
+                        console.log("[Content] ✅ XP updated directly (fallback):", currentXP);
+                    });
+                });
+            }
+        }, 1000);
+        
         chrome.runtime.sendMessage({
             type: "LOG_VISIT",
-            data: {
-                url: window.location.href,
-                hostname: window.location.hostname || window.location.pathname.split('/').pop(),
-                score: analysis.score,
-                reasons: analysis.reasons,
-                primaryThreat: analysis.primaryThreat, // New Analytics Field
-                timestamp: Date.now()
-            }
+            data: visitData
         }, (response) => {
+            clearTimeout(timeout);
+            messageReceived = true;
             if (chrome.runtime.lastError) {
-                console.error("PhishingShield Log Error:", chrome.runtime.lastError.message);
+                console.error("[Content] ❌ LOG_VISIT Error:", chrome.runtime.lastError.message);
+            } else {
+                console.log("[Content] ✅ LOG_VISIT Sent Success, response:", response);
             }
         });
 
@@ -110,7 +173,51 @@ function initRiskAnalysis(isFortressMode) {
 
         if (analysis.score < 20) {
             // Award 10 XP for safe site browsing
-            chrome.runtime.sendMessage({ type: "ADD_XP", amount: 10 });
+            console.log("[Content] Sending ADD_XP message (safe site)...");
+            
+            let xpMessageReceived = false;
+            const xpTimeout = setTimeout(() => {
+                if (!xpMessageReceived) {
+                    console.warn("[Content] Service worker not responding for ADD_XP, updating directly");
+                    // Fallback: Update XP directly
+                    chrome.storage.local.get(['userXP', 'userLevel', 'users', 'currentUser'], (data) => {
+                        let currentXP = typeof data.userXP === 'number' ? data.userXP : 0;
+                        currentXP += 10; // +10 XP for safe site
+                        const newLevel = Math.floor(Math.sqrt(currentXP / 100)) + 1;
+                        
+                        const updateData = {
+                            userXP: currentXP,
+                            userLevel: newLevel,
+                            pendingXPSync: true
+                        };
+                        
+                        // Update user in users array if logged in
+                        if (data.currentUser && data.currentUser.email && Array.isArray(data.users)) {
+                            const users = [...data.users];
+                            const userIndex = users.findIndex(u => u && u.email === data.currentUser.email);
+                            if (userIndex >= 0) {
+                                users[userIndex].xp = currentXP;
+                                users[userIndex].level = newLevel;
+                                updateData.users = users;
+                            }
+                        }
+                        
+                        chrome.storage.local.set(updateData, () => {
+                            console.log("[Content] ✅ ADD_XP updated directly (fallback):", currentXP);
+                        });
+                    });
+                }
+            }, 1000);
+            
+            chrome.runtime.sendMessage({ type: "ADD_XP", amount: 10 }, (response) => {
+                clearTimeout(xpTimeout);
+                xpMessageReceived = true;
+                if (chrome.runtime.lastError) {
+                    console.error("[Content] ❌ ADD_XP Error:", chrome.runtime.lastError.message);
+                } else {
+                    console.log("[Content] ✅ ADD_XP Sent Success, response:", response);
+                }
+            });
         }
 
         if (analysis.score > threshold) {

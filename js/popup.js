@@ -69,19 +69,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const btnLogin = document.getElementById('btn-login');
         const userProfileLink = document.getElementById('user-profile-link');
-        const userName = document.getElementById('user-name');
+        const userInitial = document.getElementById('user-initial');
         const btnLogout = document.getElementById('btn-logout');
 
-        // Check if elements exist (btnLogout might be hidden/missing in some states but we expect it now)
-        if (!btnLogin || !userProfileLink || !userName) return;
+        // Check if essential elements exist
+        if (!btnLogin || !userProfileLink) return;
 
         function updateAuthUI() {
             Auth.checkSession((user) => {
                 if (user) {
                     // Logged In
                     btnLogin.style.display = 'none';
-                    userProfileLink.style.display = 'inline';
-                    userName.textContent = user.name ? user.name.split(' ')[0] : 'User';
+                    if (userProfileLink) userProfileLink.style.display = 'flex';
+
+                    if (userInitial) {
+                        const name = user.name || 'User';
+                        userInitial.textContent = name.charAt(0).toUpperCase();
+                    }
 
                     if (btnLogout) btnLogout.style.display = 'block';
 
@@ -99,8 +103,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 } else {
                     // Logged Out
-                    btnLogin.style.display = 'inline';
-                    userProfileLink.style.display = 'none';
+                    btnLogin.style.display = 'inline-block';
+                    if (userProfileLink) userProfileLink.style.display = 'none';
 
                     if (btnLogout) btnLogout.style.display = 'none';
                 }
@@ -173,12 +177,18 @@ document.addEventListener('DOMContentLoaded', () => {
         Dojo.init();
     }
 
-    // --- 6. GUEST TRACKING ---
-    chrome.storage.local.get(['currentUser', 'stats_guest_count'], (res) => {
+    // --- 6. GUEST TRACKING & DEBUG ---
+    chrome.storage.local.get(['currentUser', 'stats_guest_count', 'visitLog'], (res) => {
         if (!res.currentUser) {
             const newCount = (res.stats_guest_count || 0) + 1;
             chrome.storage.local.set({ stats_guest_count: newCount });
         }
+        // Update Log Count
+        const logs = res.visitLog || [];
+        const logCountEl = document.getElementById('debug-log-count');
+        if (logCountEl) logCountEl.textContent = logs.length;
     });
+
+
 
 });

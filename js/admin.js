@@ -38,7 +38,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3. Load Data from Storage
     loadDashboardData();
+
+    // 4. Debug / Simulation Tools
+    setupDebugTools();
 });
+
+function setupDebugTools() {
+    // Check Environment
+    if (!chrome.runtime || !chrome.runtime.id) {
+        const header = document.querySelector('header');
+        const alert = document.createElement('div');
+        alert.style.cssText = "background:#dc3545; color:white; padding:15px; margin-bottom:20px; border-radius:8px; font-weight:bold; display:flex; align-items:center; gap:10px;";
+        alert.innerHTML = "<span>⚠️ RUNNING IN FILE MODE. STORAGE IS DISCONNECTED. PLEASE OPEN VIA EXTENSION POPUP.</span>";
+        header.prepend(alert);
+    }
+
+    // Add Debug Button
+    const container = document.querySelector('#settings .table-container');
+    if (container) {
+        const btn = document.createElement('button');
+        btn.className = "btn btn-outline";
+        btn.textContent = "🛠️ Inject Fake Data (Debug)";
+        btn.style.marginTop = "10px";
+        btn.onclick = injectFakeData;
+        container.appendChild(btn);
+    }
+}
+
+function injectFakeData() {
+    const fakeLogs = [
+        { timestamp: Date.now(), url: "http://malicious-test.com", hostname: "malicious-test.com", score: 85, reasons: ["High Risk Geo", "Unusual Script"], reporter: "test@user.com" },
+        { timestamp: Date.now() - 50000, url: "http://google.com", hostname: "google.com", score: 5, reasons: ["Safe"], reporter: "me@gmail.com" }
+    ];
+
+    // Save to storage (Polyfill aware)
+    if (chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ visitLog: fakeLogs }, () => {
+            alert('Fake Data Injected. Reloading...');
+            loadDashboardData();
+        });
+    } else {
+        localStorage.setItem('visitLog', JSON.stringify(fakeLogs));
+        alert('Fake Data Injected into LocalStorage. Reloading...');
+        loadDashboardData();
+    }
+}
 
 function checkAdminAccess() {
     const lockScreen = document.getElementById('lock-screen');

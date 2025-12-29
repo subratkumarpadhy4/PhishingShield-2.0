@@ -2,7 +2,7 @@
  * PhishingShield Risk Engine
  * Analyzes page content for signs of phishing/social engineering.
  */
-const RiskEngine = {
+window.RiskEngine = {
     // Keywords often found in phishing attacks to create urgency
     urgencyKeywords: [
         "suspended", "suspend", "24 hours", "immediate action",
