@@ -18,7 +18,17 @@ const JWT_SECRET = process.env.JWT_SECRET || 'phishingshield-secret-key-change-i
 const JWT_EXPIRY_ADMIN = '2h'; // Admin sessions expire in 2 hours
 
 // Middleware
-app.use(cors());
+// Enhanced CORS configuration for Chrome extension and web access
+app.use(cors({
+    origin: '*', // Allow all origins (Chrome extensions use chrome-extension:// URLs)
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: false
+}));
+
+// Handle preflight requests
+app.options('*', cors());
+
 app.use(bodyParser.json());
 
 // PREVENT CRASHES: Global Error Handlers
