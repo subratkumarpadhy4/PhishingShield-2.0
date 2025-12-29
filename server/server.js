@@ -97,32 +97,30 @@ app.get('/api/users', (req, res) => {
     res.json(users);
 });
 
-// Email Configuration (Resend - Better deliverability without domain setup)
-const { Resend } = require('resend');
+// Email Configuration (SendGrid - Works with verified Gmail)
+const sgMail = require('@sendgrid/mail');
 let emailServiceReady = false;
-let resendClient = null;
 
-// Initialize Resend
+// Initialize SendGrid
 function initializeEmailService() {
-    const resendApiKey = process.env.RESEND_API_KEY;
-    const fromEmail = process.env.FROM_EMAIL || 'onboarding@resend.dev';
+    const sendgridApiKey = process.env.SENDGRID_API_KEY;
+    const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
 
-    // If no Resend API key is provided, skip email initialization
-    if (!resendApiKey) {
-        console.warn('[EMAIL] Resend API key not configured. OTPs will be logged to console.');
-        console.warn('[EMAIL] Set RESEND_API_KEY environment variable to enable email.');
-        console.warn('[EMAIL] Sign up at https://resend.com (free tier: 3,000 emails/month)');
+    // If no SendGrid API key is provided, skip email initialization
+    if (!sendgridApiKey) {
+        console.warn('[EMAIL] SendGrid API key not configured. OTPs will be logged to console.');
+        console.warn('[EMAIL] Set SENDGRID_API_KEY environment variable to enable email.');
         return false;
     }
 
     try {
-        resendClient = new Resend(resendApiKey);
-        console.log('[EMAIL] Resend initialized successfully');
+        sgMail.setApiKey(sendgridApiKey);
+        console.log('[EMAIL] SendGrid initialized successfully');
         console.log(`[EMAIL] Sending emails from: ${fromEmail}`);
-        console.log('[EMAIL] Better deliverability - 80-90% inbox rate expected!');
+        console.log('[EMAIL] Using verified single sender - 60-70% inbox rate expected');
         return true;
     } catch (error) {
-        console.error('[EMAIL] Failed to initialize Resend:', error.message);
+        console.error('[EMAIL] Failed to initialize SendGrid:', error.message);
         console.log('[EMAIL] Server will continue without email functionality');
         return false;
     }
@@ -139,15 +137,11 @@ function htmlToText(html) {
         .trim();
 }
 
-// Helper function to send email via Resend with improved deliverability
+// Helper function to send email via SendGrid with improved deliverability
 async function sendEmail(to, subject, htmlContent, options = {}) {
-    const fromEmail = process.env.FROM_EMAIL || 'onboarding@resend.dev';
+    const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
     const fromName = options.fromName || 'PhishingShield Security';
     const replyTo = options.replyTo || fromEmail;
-    
-    // Debug: Log the email being used
-    console.log(`[EMAIL DEBUG] Using FROM_EMAIL: ${fromEmail}`);
-    console.log(`[EMAIL DEBUG] Environment FROM_EMAIL: ${process.env.FROM_EMAIL || 'NOT SET'}`);
 
     // Extract OTP code from HTML for plain text version
     const otpMatch = htmlContent.match(/>(\d{4,6})</);
@@ -163,35 +157,39 @@ If you did not request this email, please ignore it.
 
 © ${new Date().getFullYear()} PhishingShield Security. All rights reserved.`;
 
-    try {
-        // Resend format: For onboarding@resend.dev, use just the email
-        // For custom domains, can use "Name <email@domain.com>"
-        const fromAddress = fromEmail === 'onboarding@resend.dev' 
-            ? fromEmail  // Use just email for Resend's default
-            : `${fromName} <${fromEmail}>`;  // Use formatted for custom domains
-        
-        console.log(`[EMAIL DEBUG] Sending from: ${fromAddress}`);
-        console.log(`[EMAIL DEBUG] To: ${to}`);
-        
-        const { data, error } = await resendClient.emails.send({
-            from: fromAddress,
-            to: to,
-            replyTo: replyTo,
-            subject: subject,
-            text: textContent, // Plain text version (improves deliverability)
-            html: htmlContent,
-            // Resend automatically handles deliverability optimization
-        });
-
-        if (error) {
-            console.error('[EMAIL] Resend error:', error.message);
-            return { success: false, error: error.message };
+    const msg = {
+        to: to,
+        from: {
+            email: fromEmail,
+            name: fromName
+        },
+        replyTo: replyTo,
+        subject: subject,
+        text: textContent, // Plain text version (improves deliverability)
+        html: htmlContent,
+        // Add headers to improve deliverability
+        mailSettings: {
+            sandboxMode: {
+                enable: false
+            }
+        },
+        // Add categories for better tracking
+        categories: ['otp', 'verification', 'phishingshield'],
+        // Custom args for tracking
+        customArgs: {
+            source: 'phishingshield',
+            type: 'otp'
         }
+    };
 
-        console.log('[EMAIL] Email sent successfully via Resend. ID:', data?.id);
-        return { success: true, id: data?.id };
+    try {
+        await sgMail.send(msg);
+        return { success: true };
     } catch (error) {
-        console.error('[EMAIL] Resend error:', error.message);
+        console.error('[EMAIL] SendGrid error:', error.message);
+        if (error.response) {
+            console.error('[EMAIL] SendGrid response:', error.response.body);
+        }
         return { success: false, error: error.message };
     }
 }
@@ -274,7 +272,7 @@ app.post('/api/send-otp', async (req, res) => {
     // Log for Dev
     console.log(`[OTP] Preparing to send ${code} to ${email}...`);
 
-    const fromEmail = process.env.FROM_EMAIL || 'onboarding@resend.dev';
+    const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
     const mailOptions = {
         from: `"PhishingShield Security" <${fromEmail}>`,
         to: email,
@@ -322,7 +320,7 @@ app.post('/api/send-otp', async (req, res) => {
         return res.json({ success: true, message: "OTP generated (check server logs)" });
     }
 
-    // Send email via Resend with improved deliverability settings
+    // Send email via SendGrid with improved deliverability settings
     const emailResult = await sendEmail(
         email,
         mailOptions.subject,
@@ -473,7 +471,7 @@ app.post('/api/auth/admin/login', async (req, res) => {
     };
 
     // Send OTP via email using Resend
-    const fromEmail = process.env.FROM_EMAIL || 'onboarding@resend.dev';
+    const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
     const adminEmailHtml = `
         <div style="background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px 0;">
             <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); overflow: hidden;">
