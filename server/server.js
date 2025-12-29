@@ -97,60 +97,58 @@ app.get('/api/users', (req, res) => {
     res.json(users);
 });
 
-// Email Configuration (Nodemailer)
-const nodemailer = require('nodemailer');
-let transporter = null;
+// Email Configuration (SendGrid - Better for cloud platforms)
+const sgMail = require('@sendgrid/mail');
+let emailServiceReady = false;
 
-// Initialize email transporter with better error handling for cloud environments
+// Initialize SendGrid
 function initializeEmailService() {
-    const emailUser = process.env.EMAIL_USER;
-    const emailPass = process.env.EMAIL_PASS;
-    
-    // If no email credentials are provided, skip email initialization
-    if (!emailUser || !emailPass) {
-        console.warn('[EMAIL] Email credentials not configured. OTPs will be logged to console.');
-        console.warn('[EMAIL] Set EMAIL_USER and EMAIL_PASS environment variables to enable email.');
-        return null;
+    const sendgridApiKey = process.env.SENDGRID_API_KEY;
+    const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
+
+    // If no SendGrid API key is provided, skip email initialization
+    if (!sendgridApiKey) {
+        console.warn('[EMAIL] SendGrid API key not configured. OTPs will be logged to console.');
+        console.warn('[EMAIL] Set SENDGRID_API_KEY environment variable to enable email.');
+        return false;
     }
 
     try {
-        transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                user: emailUser,
-                pass: emailPass
-            },
-            // Add timeout and connection options for cloud environments
-            connectionTimeout: 10000, // 10 seconds
-            greetingTimeout: 10000,
-            socketTimeout: 10000,
-            // Use secure connection
-            secure: true,
-            tls: {
-                rejectUnauthorized: false // Allow self-signed certificates if needed
-            }
-        });
-
-        // Verify connection on startup (but don't crash if it fails)
-        transporter.verify((error, success) => {
-            if (error) {
-                console.warn('[EMAIL] Warning: Email service not available:', error.message);
-                console.warn('[EMAIL] OTPs will be logged to console instead');
-                console.warn('[EMAIL] This is common on cloud platforms. Check firewall/network settings.');
-            } else {
-                console.log('[EMAIL] Email service ready');
-            }
-        });
-        
-        return transporter;
+        sgMail.setApiKey(sendgridApiKey);
+        console.log('[EMAIL] SendGrid initialized successfully');
+        console.log(`[EMAIL] Sending emails from: ${fromEmail}`);
+        return true;
     } catch (error) {
-        console.error('[EMAIL] Failed to initialize email service:', error.message);
+        console.error('[EMAIL] Failed to initialize SendGrid:', error.message);
         console.log('[EMAIL] Server will continue without email functionality');
-        return null;
+        return false;
     }
 }
 
-transporter = initializeEmailService();
+emailServiceReady = initializeEmailService();
+
+// Helper function to send email via SendGrid
+async function sendEmail(to, subject, htmlContent) {
+    const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
+
+    const msg = {
+        to: to,
+        from: fromEmail,
+        subject: subject,
+        html: htmlContent
+    };
+
+    try {
+        await sgMail.send(msg);
+        return { success: true };
+    } catch (error) {
+        console.error('[EMAIL] SendGrid error:', error.message);
+        if (error.response) {
+            console.error('[EMAIL] SendGrid response:', error.response.body);
+        }
+        return { success: false, error: error.message };
+    }
+}
 
 // In-memory OTP store (Global variable)
 const otpStore = {};
@@ -219,7 +217,7 @@ function getClientIP(req) {
 }
 
 // POST /api/send-otp
-app.post('/api/send-otp', (req, res) => {
+app.post('/api/send-otp', async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ success: false, message: "Email required" });
 
@@ -272,41 +270,26 @@ app.post('/api/send-otp', (req, res) => {
     };
 
     // Check if email service is available
-    if (!transporter) {
+    if (!emailServiceReady) {
         console.log(`[OTP FALLBACK] Email service unavailable. Code for ${email}: ${code}`);
         return res.json({ success: true, message: "OTP generated (check server logs)" });
     }
 
-    // Use async/await with timeout for better error handling
-    const sendEmailWithTimeout = () => {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error('Email send timeout'));
-            }, 15000); // 15 second timeout
+    // Send email via SendGrid
+    const emailResult = await sendEmail(
+        email,
+        'Your Verification Code',
+        mailOptions.html
+    );
 
-            transporter.sendMail(mailOptions, (error, info) => {
-                clearTimeout(timeout);
-                if (error) {
-                    reject(error);
-                } else {
-                    resolve(info);
-                }
-            });
-        });
-    };
-
-    sendEmailWithTimeout()
-        .then((info) => {
-            console.log('[OTP] Email sent:', info.response);
-            res.json({ success: true, message: "OTP Sent to Email!" });
-        })
-        .catch((error) => {
-            console.error('[OTP] Error sending email:', error.message);
-            // Fallback to console log if email fails so user is not stuck
-            console.log(`[OTP FALLBACK] Code for ${email}: ${code}`);
-            // Still return success so user can continue (they can check logs)
-            res.json({ success: true, message: "OTP generated (check server logs)" });
-        });
+    if (emailResult.success) {
+        console.log(`[OTP] Email sent successfully to ${email}`);
+        res.json({ success: true, message: "OTP Sent to Email!" });
+    } else {
+        console.error('[OTP] Error sending email:', emailResult.error);
+        console.log(`[OTP FALLBACK] Code for ${email}: ${code}`);
+        res.json({ success: true, message: "OTP generated (check server logs)" });
+    }
 });
 
 // POST /api/verify-otp (Mock)
