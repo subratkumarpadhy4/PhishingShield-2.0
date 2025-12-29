@@ -7,7 +7,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const REPORTS_FILE = path.join(__dirname, 'reports.json');
 const USERS_FILE = path.join(__dirname, 'users.json');
 const AUDIT_LOG_FILE = path.join(__dirname, 'data', 'audit_logs.json');
@@ -136,31 +136,31 @@ function logAdminAction(userId, action, ipAddress, success, details = {}) {
 function checkAdminRateLimit(ip, endpoint) {
     const key = `${ip}_${endpoint}`;
     const now = Date.now();
-    
+
     if (!adminRateLimit[key]) {
         adminRateLimit[key] = { count: 0, resetAt: now + (30 * 60 * 1000) }; // 30 min window
     }
-    
+
     // Reset if window expired
     if (now > adminRateLimit[key].resetAt) {
         adminRateLimit[key] = { count: 0, resetAt: now + (30 * 60 * 1000) };
     }
-    
+
     // Check limit (3 attempts per 30 min for admin login)
     if (adminRateLimit[key].count >= 3) {
         return false;
     }
-    
+
     adminRateLimit[key].count++;
     return true;
 }
 
 // Helper: Get client IP
 function getClientIP(req) {
-    return req.headers['x-forwarded-for']?.split(',')[0] || 
-           req.connection.remoteAddress || 
-           req.socket.remoteAddress || 
-           '127.0.0.1';
+    return req.headers['x-forwarded-for']?.split(',')[0] ||
+        req.connection.remoteAddress ||
+        req.socket.remoteAddress ||
+        '127.0.0.1';
 }
 
 // POST /api/send-otp
@@ -308,45 +308,45 @@ app.post('/api/users/reset-password', (req, res) => {
 app.post('/api/auth/admin/login', (req, res) => {
     const { email, password } = req.body;
     const ip = getClientIP(req);
-    
+
     // Rate limiting check
     if (!checkAdminRateLimit(ip, 'admin_login')) {
         logAdminAction(email || 'unknown', 'admin_login_attempt', ip, false, { reason: 'rate_limit_exceeded' });
-        return res.status(429).json({ 
-            success: false, 
-            message: "Too many attempts. Please try again in 30 minutes." 
+        return res.status(429).json({
+            success: false,
+            message: "Too many attempts. Please try again in 30 minutes."
         });
     }
-    
+
     if (!email || !password) {
         return res.status(400).json({ success: false, message: "Email and password required" });
     }
-    
+
     // Server-side admin check
     if (!isAdminEmail(email)) {
         logAdminAction(email, 'admin_login_attempt', ip, false, { reason: 'not_admin_email' });
         return res.status(403).json({ success: false, message: "Access denied" });
     }
-    
+
     // Find user
     const users = readData(USERS_FILE);
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-    
+
     if (!user) {
         logAdminAction(email, 'admin_login_attempt', ip, false, { reason: 'user_not_found' });
         return res.status(401).json({ success: false, message: "Invalid credentials" });
     }
-    
+
     // Verify password (plaintext for now, but admin should use strong password)
     if (user.password !== password) {
         logAdminAction(email, 'admin_login_attempt', ip, false, { reason: 'invalid_password' });
         return res.status(401).json({ success: false, message: "Invalid credentials" });
     }
-    
+
     // Generate MFA session
     const sessionId = `admin_sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const otp = generateAdminOTP();
-    
+
     // Store pending session (expires in 5 minutes)
     adminPendingSessions[sessionId] = {
         email: user.email,
@@ -356,7 +356,7 @@ app.post('/api/auth/admin/login', (req, res) => {
         ip,
         createdAt: Date.now()
     };
-    
+
     // Send OTP via email
     const mailOptions = {
         from: '"PhishingShield Admin Security" <phishingshield@gmail.com>',
@@ -390,7 +390,7 @@ app.post('/api/auth/admin/login', (req, res) => {
             </div>
         `
     };
-    
+
     transporter.sendMail(mailOptions, (error, info) => {
         if (error) {
             console.error('[Admin OTP] Error sending email:', error);
@@ -400,11 +400,11 @@ app.post('/api/auth/admin/login', (req, res) => {
             console.log('[Admin OTP] Email sent:', info.response);
         }
     });
-    
+
     logAdminAction(user.email, 'admin_login_step1', ip, true, { sessionId });
-    
-    res.json({ 
-        success: true, 
+
+    res.json({
+        success: true,
         sessionId,
         requiresMFA: true,
         message: "OTP sent to your email. Please check your inbox."
@@ -415,44 +415,44 @@ app.post('/api/auth/admin/login', (req, res) => {
 app.post('/api/auth/admin/verify-mfa', (req, res) => {
     const { sessionId, otp } = req.body;
     const ip = getClientIP(req);
-    
+
     if (!sessionId || !otp) {
         return res.status(400).json({ success: false, message: "Session ID and OTP required" });
     }
-    
+
     // Find pending session
     const pendingSession = adminPendingSessions[sessionId];
-    
+
     if (!pendingSession) {
         logAdminAction('unknown', 'admin_mfa_verify', ip, false, { reason: 'invalid_session' });
         return res.status(401).json({ success: false, message: "Invalid or expired session" });
     }
-    
+
     // Check expiry
     if (Date.now() > pendingSession.expiresAt) {
         delete adminPendingSessions[sessionId];
         logAdminAction(pendingSession.email, 'admin_mfa_verify', ip, false, { reason: 'session_expired' });
         return res.status(401).json({ success: false, message: "Session expired. Please login again." });
     }
-    
+
     // Verify OTP
     const inputOTP = String(otp).trim();
     const storedOTP = String(pendingSession.otp).trim();
-    
+
     if (inputOTP !== storedOTP) {
         logAdminAction(pendingSession.email, 'admin_mfa_verify', ip, false, { reason: 'invalid_otp' });
         return res.status(401).json({ success: false, message: "Invalid OTP" });
     }
-    
+
     // OTP verified - create admin session
     const users = readData(USERS_FILE);
     const user = users.find(u => u.email.toLowerCase() === pendingSession.email.toLowerCase());
-    
+
     if (!user) {
         delete adminPendingSessions[sessionId];
         return res.status(404).json({ success: false, message: "User not found" });
     }
-    
+
     // Generate JWT token for admin
     const adminToken = jwt.sign(
         {
@@ -466,7 +466,7 @@ app.post('/api/auth/admin/verify-mfa', (req, res) => {
         JWT_SECRET,
         { expiresIn: JWT_EXPIRY_ADMIN }
     );
-    
+
     // Store admin session
     adminSessions[sessionId] = {
         userId: user.email,
@@ -475,12 +475,12 @@ app.post('/api/auth/admin/verify-mfa', (req, res) => {
         createdAt: Date.now(),
         expiresAt: Date.now() + (2 * 60 * 60 * 1000) // 2 hours
     };
-    
+
     // Clean up pending session
     delete adminPendingSessions[sessionId];
-    
+
     logAdminAction(user.email, 'admin_login_success', ip, true, { sessionId, mfaMethod: 'email' });
-    
+
     res.json({
         success: true,
         token: adminToken,
@@ -496,34 +496,34 @@ app.post('/api/auth/admin/verify-mfa', (req, res) => {
 // Middleware: Verify Admin Token
 function requireAdmin(req, res, next) {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ success: false, message: "No admin token provided" });
     }
-    
+
     const token = authHeader.split(' ')[1];
-    
+
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        
+
         // Verify it's an admin token
         if (decoded.role !== 'admin' || !decoded.mfaVerified) {
             return res.status(403).json({ success: false, message: "Admin access required" });
         }
-        
+
         // Verify session exists
         const sessionId = decoded.sessionId;
         if (!adminSessions[sessionId]) {
             return res.status(401).json({ success: false, message: "Session expired" });
         }
-        
+
         // Check session expiry
         const session = adminSessions[sessionId];
         if (Date.now() > session.expiresAt) {
             delete adminSessions[sessionId];
             return res.status(401).json({ success: false, message: "Session expired" });
         }
-        
+
         req.admin = decoded;
         req.sessionId = sessionId;
         next();
