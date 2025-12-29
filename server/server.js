@@ -127,15 +127,58 @@ function initializeEmailService() {
 
 emailServiceReady = initializeEmailService();
 
-// Helper function to send email via SendGrid
-async function sendEmail(to, subject, htmlContent) {
+// Helper function to convert HTML to plain text (simple version)
+function htmlToText(html) {
+    return html
+        .replace(/<style[^>]*>.*?<\/style>/gi, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/\n\s*\n/g, '\n')
+        .trim();
+}
+
+// Helper function to send email via SendGrid with improved deliverability
+async function sendEmail(to, subject, htmlContent, options = {}) {
     const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
+    const fromName = options.fromName || 'PhishingShield Security';
+    const replyTo = options.replyTo || fromEmail;
+
+    // Extract OTP code from HTML for plain text version
+    const otpMatch = htmlContent.match(/>(\d{4,6})</);
+    const otpCode = otpMatch ? otpMatch[1] : 'XXXX';
+    
+    // Create plain text version
+    const textContent = `PhishingShield Security Verification
+
+Your verification code is: ${otpCode}
+
+This code will expire in 10 minutes.
+If you did not request this email, please ignore it.
+
+© ${new Date().getFullYear()} PhishingShield Security. All rights reserved.`;
 
     const msg = {
         to: to,
-        from: fromEmail,
+        from: {
+            email: fromEmail,
+            name: fromName
+        },
+        replyTo: replyTo,
         subject: subject,
-        html: htmlContent
+        text: textContent, // Plain text version (improves deliverability)
+        html: htmlContent,
+        // Add headers to improve deliverability
+        mailSettings: {
+            sandboxMode: {
+                enable: false
+            }
+        },
+        // Add categories for better tracking
+        categories: ['otp', 'verification', 'phishingshield'],
+        // Custom args for tracking
+        customArgs: {
+            source: 'phishingshield',
+            type: 'otp'
+        }
     };
 
     try {
@@ -228,8 +271,9 @@ app.post('/api/send-otp', async (req, res) => {
     // Log for Dev
     console.log(`[OTP] Preparing to send ${code} to ${email}...`);
 
+    const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
     const mailOptions = {
-        from: '"PhishingShield Security" <phishingshield@gmail.com>',
+        from: `"PhishingShield Security" <${fromEmail}>`,
         to: email,
         subject: 'Your Verification Code',
         html: `
@@ -275,11 +319,15 @@ app.post('/api/send-otp', async (req, res) => {
         return res.json({ success: true, message: "OTP generated (check server logs)" });
     }
 
-    // Send email via SendGrid
+    // Send email via SendGrid with improved deliverability settings
     const emailResult = await sendEmail(
         email,
-        'Your Verification Code',
-        mailOptions.html
+        mailOptions.subject,
+        mailOptions.html,
+        {
+            fromName: 'PhishingShield Security',
+            replyTo: fromEmail
+        }
     );
 
     if (emailResult.success) {
@@ -421,67 +469,53 @@ app.post('/api/auth/admin/login', (req, res) => {
         createdAt: Date.now()
     };
 
-    // Send OTP via email
-    const mailOptions = {
-        from: '"PhishingShield Admin Security" <phishingshield@gmail.com>',
-        to: user.email,
-        subject: '🔐 Your PhishingShield Admin Login Code',
-        html: `
-            <div style="background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px 0;">
-                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); overflow: hidden;">
-                    <div style="background-color: #dc3545; padding: 30px; text-align: center;">
-                        <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px;">🔒 Admin Access</h1>
+    // Send OTP via email using SendGrid
+    const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
+    const adminEmailHtml = `
+        <div style="background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px 0;">
+            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); overflow: hidden;">
+                <div style="background-color: #dc3545; padding: 30px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px;">🔒 Admin Access</h1>
+                </div>
+                <div style="padding: 40px 30px; text-align: center;">
+                    <h2 style="color: #1e293b; font-size: 22px; margin-bottom: 10px;">Admin Login Verification</h2>
+                    <p style="color: #64748b; font-size: 16px; line-height: 1.5; margin-bottom: 30px;">
+                        Someone is attempting to access the PhishingShield Admin Portal. If this was you, use the code below to complete login.
+                    </p>
+                    <div style="background-color: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 20px; margin: 0 auto 30px; width: fit-content; min-width: 250px;">
+                        <span style="font-size: 36px; font-weight: 800; letter-spacing: 12px; color: #dc3545; display: block;">${otp}</span>
                     </div>
-                    <div style="padding: 40px 30px; text-align: center;">
-                        <h2 style="color: #1e293b; font-size: 22px; margin-bottom: 10px;">Admin Login Verification</h2>
-                        <p style="color: #64748b; font-size: 16px; line-height: 1.5; margin-bottom: 30px;">
-                            Someone is attempting to access the PhishingShield Admin Portal. If this was you, use the code below to complete login.
-                        </p>
-                        <div style="background-color: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 20px; margin: 0 auto 30px; width: fit-content; min-width: 250px;">
-                            <span style="font-size: 36px; font-weight: 800; letter-spacing: 12px; color: #dc3545; display: block;">${otp}</span>
-                        </div>
-                        <p style="color: #dc3545; font-size: 14px; font-weight: 600; margin-top: 30px;">
-                            ⚠️ This code expires in 5 minutes.<br>
-                            ⚠️ If you did not request this, secure your account immediately.
-                        </p>
-                    </div>
-                    <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #e2e8f0;">
-                        <p style="color: #cbd5e1; font-size: 12px; margin: 0;">
-                            &copy; ${new Date().getFullYear()} PhishingShield Security. All rights reserved.
-                        </p>
-                    </div>
+                    <p style="color: #dc3545; font-size: 14px; font-weight: 600; margin-top: 30px;">
+                        ⚠️ This code expires in 5 minutes.<br>
+                        ⚠️ If you did not request this, secure your account immediately.
+                    </p>
+                </div>
+                <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #e2e8f0;">
+                    <p style="color: #cbd5e1; font-size: 12px; margin: 0;">
+                        &copy; ${new Date().getFullYear()} PhishingShield Security. All rights reserved.
+                    </p>
                 </div>
             </div>
-        `
-    };
+        </div>
+    `;
 
-    // Use async/await with timeout for better error handling
-    if (transporter) {
-        const sendEmailWithTimeout = () => {
-            return new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    reject(new Error('Email send timeout'));
-                }, 15000); // 15 second timeout
+    if (emailServiceReady) {
+        const emailResult = await sendEmail(
+            user.email,
+            '🔐 Your PhishingShield Admin Login Code',
+            adminEmailHtml,
+            {
+                fromName: 'PhishingShield Admin Security',
+                replyTo: fromEmail
+            }
+        );
 
-                transporter.sendMail(mailOptions, (error, info) => {
-                    clearTimeout(timeout);
-                    if (error) {
-                        reject(error);
-                    } else {
-                        resolve(info);
-                    }
-                });
-            });
-        };
-
-        sendEmailWithTimeout()
-            .then((info) => {
-                console.log('[Admin OTP] Email sent:', info.response);
-            })
-            .catch((error) => {
-                console.error('[Admin OTP] Error sending email:', error.message);
-                console.log(`[Admin OTP FALLBACK] Code for ${user.email}: ${otp}`);
-            });
+        if (emailResult.success) {
+            console.log(`[Admin OTP] Email sent successfully to ${user.email}`);
+        } else {
+            console.error('[Admin OTP] Error sending email:', emailResult.error);
+            console.log(`[Admin OTP FALLBACK] Code for ${user.email}: ${otp}`);
+        }
     } else {
         console.log(`[Admin OTP FALLBACK] Email service unavailable. Code for ${user.email}: ${otp}`);
     }
