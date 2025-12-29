@@ -144,6 +144,10 @@ async function sendEmail(to, subject, htmlContent, options = {}) {
     const fromEmail = process.env.FROM_EMAIL || 'onboarding@resend.dev';
     const fromName = options.fromName || 'PhishingShield Security';
     const replyTo = options.replyTo || fromEmail;
+    
+    // Debug: Log the email being used
+    console.log(`[EMAIL DEBUG] Using FROM_EMAIL: ${fromEmail}`);
+    console.log(`[EMAIL DEBUG] Environment FROM_EMAIL: ${process.env.FROM_EMAIL || 'NOT SET'}`);
 
     // Extract OTP code from HTML for plain text version
     const otpMatch = htmlContent.match(/>(\d{4,6})</);
@@ -160,8 +164,17 @@ If you did not request this email, please ignore it.
 © ${new Date().getFullYear()} PhishingShield Security. All rights reserved.`;
 
     try {
+        // Resend format: For onboarding@resend.dev, use just the email
+        // For custom domains, can use "Name <email@domain.com>"
+        const fromAddress = fromEmail === 'onboarding@resend.dev' 
+            ? fromEmail  // Use just email for Resend's default
+            : `${fromName} <${fromEmail}>`;  // Use formatted for custom domains
+        
+        console.log(`[EMAIL DEBUG] Sending from: ${fromAddress}`);
+        console.log(`[EMAIL DEBUG] To: ${to}`);
+        
         const { data, error } = await resendClient.emails.send({
-            from: `${fromName} <${fromEmail}>`,
+            from: fromAddress,
             to: to,
             replyTo: replyTo,
             subject: subject,
@@ -309,7 +322,7 @@ app.post('/api/send-otp', async (req, res) => {
         return res.json({ success: true, message: "OTP generated (check server logs)" });
     }
 
-    // Send email via SendGrid with improved deliverability settings
+    // Send email via Resend with improved deliverability settings
     const emailResult = await sendEmail(
         email,
         mailOptions.subject,
