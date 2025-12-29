@@ -417,7 +417,7 @@ app.post('/api/users/reset-password', (req, res) => {
 // ============================================
 
 // POST /api/auth/admin/login - Step 1: Primary Authentication
-app.post('/api/auth/admin/login', (req, res) => {
+app.post('/api/auth/admin/login', async (req, res) => {
     const { email, password } = req.body;
     const ip = getClientIP(req);
 
