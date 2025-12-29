@@ -261,7 +261,7 @@ app.post('/api/send-otp', async (req, res) => {
     // Log for Dev
     console.log(`[OTP] Preparing to send ${code} to ${email}...`);
 
-    const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
+    const fromEmail = process.env.FROM_EMAIL || 'onboarding@resend.dev';
     const mailOptions = {
         from: `"PhishingShield Security" <${fromEmail}>`,
         to: email,
@@ -459,8 +459,8 @@ app.post('/api/auth/admin/login', async (req, res) => {
         createdAt: Date.now()
     };
 
-    // Send OTP via email using SendGrid
-    const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
+    // Send OTP via email using Resend
+    const fromEmail = process.env.FROM_EMAIL || 'onboarding@resend.dev';
     const adminEmailHtml = `
         <div style="background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px 0;">
             <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); overflow: hidden;">
