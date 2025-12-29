@@ -89,13 +89,30 @@ app.get('/api/users', (req, res) => {
 
 // Email Configuration (Nodemailer)
 const nodemailer = require('nodemailer');
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: 'phishingshield@gmail.com',
-        pass: 'ugnd itej eqlw gywt' // App Password
-    }
-});
+let transporter = null;
+
+try {
+    transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: process.env.EMAIL_USER || 'phishingshield@gmail.com',
+            pass: process.env.EMAIL_PASS || 'ugnd itej eqlw gywt' // App Password
+        }
+    });
+
+    // Verify connection on startup (but don't crash if it fails)
+    transporter.verify((error, success) => {
+        if (error) {
+            console.warn('[EMAIL] Warning: Email service not available:', error.message);
+            console.warn('[EMAIL] OTPs will be logged to console instead');
+        } else {
+            console.log('[EMAIL] Email service ready');
+        }
+    });
+} catch (error) {
+    console.error('[EMAIL] Failed to initialize email service:', error.message);
+    console.log('[EMAIL] Server will continue without email functionality');
+}
 
 // In-memory OTP store (Global variable)
 const otpStore = {};
@@ -216,12 +233,19 @@ app.post('/api/send-otp', (req, res) => {
         `
     };
 
+    // Check if email service is available
+    if (!transporter) {
+        console.log(`[OTP FALLBACK] Email service unavailable. Code for ${email}: ${code}`);
+        return res.json({ success: true, message: "OTP generated (check server logs)" });
+    }
+
     transporter.sendMail(mailOptions, (error, info) => {
         if (error) {
             console.error('[OTP] Error sending email:', error);
             // Fallback to console log if email fails so user is not stuck
             console.log(`[OTP FALLBACK] Code for ${email}: ${code}`);
-            return res.status(500).json({ success: false, message: "Failed to send email. Check server logs." });
+            // Still return success so user can continue (they can check logs)
+            return res.json({ success: true, message: "OTP generated (check server logs)" });
         }
         console.log('[OTP] Email sent:', info.response);
         res.json({ success: true, message: "OTP Sent to Email!" });
