@@ -97,30 +97,31 @@ app.get('/api/users', (req, res) => {
     res.json(users);
 });
 
-// Email Configuration (SendGrid - Works with verified Gmail)
-const sgMail = require('@sendgrid/mail');
+// Email Configuration (EmailJS - Works with Gmail, no domain verification needed)
+const axios = require('axios');
 let emailServiceReady = false;
 
-// Initialize SendGrid
-function initializeEmailService() {
-    const sendgridApiKey = process.env.SENDGRID_API_KEY;
-    const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
+// EmailJS Configuration
+const EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID || "service_orcv7av";
+const EMAILJS_TEMPLATE_ID = process.env.EMAILJS_TEMPLATE_ID || "template_f0lfm5h";
+const EMAILJS_PUBLIC_KEY = process.env.EMAILJS_PUBLIC_KEY || "BxDgzDbuSkLEs4H_9";
 
-    // If no SendGrid API key is provided, skip email initialization
-    if (!sendgridApiKey) {
-        console.warn('[EMAIL] SendGrid API key not configured. OTPs will be logged to console.');
-        console.warn('[EMAIL] Set SENDGRID_API_KEY environment variable to enable email.');
+// Initialize EmailJS
+function initializeEmailService() {
+    if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
+        console.warn('[EMAIL] EmailJS not fully configured. OTPs will be logged to console.');
+        console.warn('[EMAIL] Set EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, and EMAILJS_PUBLIC_KEY environment variables.');
         return false;
     }
 
     try {
-        sgMail.setApiKey(sendgridApiKey);
-        console.log('[EMAIL] SendGrid initialized successfully');
-        console.log(`[EMAIL] Sending emails from: ${fromEmail}`);
-        console.log('[EMAIL] Using verified single sender - 60-70% inbox rate expected');
+        console.log('[EMAIL] EmailJS initialized successfully');
+        console.log(`[EMAIL] Service ID: ${EMAILJS_SERVICE_ID}`);
+        console.log('[EMAIL] No domain verification needed - works with Gmail!');
+        console.log('[EMAIL] Free tier: 200 emails/month');
         return true;
     } catch (error) {
-        console.error('[EMAIL] Failed to initialize SendGrid:', error.message);
+        console.error('[EMAIL] Failed to initialize EmailJS:', error.message);
         console.log('[EMAIL] Server will continue without email functionality');
         return false;
     }
@@ -137,58 +138,45 @@ function htmlToText(html) {
         .trim();
 }
 
-// Helper function to send email via SendGrid with improved deliverability
+// Helper function to send email via EmailJS
 async function sendEmail(to, subject, htmlContent, options = {}) {
-    const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
-    const fromName = options.fromName || 'PhishingShield Security';
-    const replyTo = options.replyTo || fromEmail;
-
-    // Extract OTP code from HTML for plain text version
+    // Extract OTP code from HTML
     const otpMatch = htmlContent.match(/>(\d{4,6})</);
     const otpCode = otpMatch ? otpMatch[1] : 'XXXX';
     
-    // Create plain text version
-    const textContent = `PhishingShield Security Verification
-
-Your verification code is: ${otpCode}
-
-This code will expire in 10 minutes.
-If you did not request this email, please ignore it.
-
-© ${new Date().getFullYear()} PhishingShield Security. All rights reserved.`;
-
-    const msg = {
-        to: to,
-        from: {
-            email: fromEmail,
-            name: fromName
-        },
-        replyTo: replyTo,
-        subject: subject,
-        text: textContent, // Plain text version (improves deliverability)
-        html: htmlContent,
-        // Add headers to improve deliverability
-        mailSettings: {
-            sandboxMode: {
-                enable: false
-            }
-        },
-        // Add categories for better tracking
-        categories: ['otp', 'verification', 'phishingshield'],
-        // Custom args for tracking
-        customArgs: {
-            source: 'phishingshield',
-            type: 'otp'
-        }
-    };
-
+    // Extract recipient name if available
+    const toName = options.toName || "User";
+    
     try {
-        await sgMail.send(msg);
-        return { success: true };
+        const payload = {
+            service_id: EMAILJS_SERVICE_ID,
+            template_id: EMAILJS_TEMPLATE_ID,
+            user_id: EMAILJS_PUBLIC_KEY,
+            template_params: {
+                to_name: toName,
+                to_email: to,
+                email: to,
+                otp: otpCode,
+                subject: subject,
+                message: htmlContent
+            }
+        };
+
+        const config = {
+            headers: {
+                'Content-Type': 'application/json',
+                'Origin': 'https://phishingshield.onrender.com'
+            }
+        };
+
+        const response = await axios.post('https://api.emailjs.com/api/v1.0/email/send', payload, config);
+        
+        console.log('[EMAIL] Email sent successfully via EmailJS');
+        return { success: true, response: response.data };
     } catch (error) {
-        console.error('[EMAIL] SendGrid error:', error.message);
+        console.error('[EMAIL] EmailJS error:', error.message);
         if (error.response) {
-            console.error('[EMAIL] SendGrid response:', error.response.body);
+            console.error('[EMAIL] EmailJS response:', error.response.data);
         }
         return { success: false, error: error.message };
     }
@@ -272,6 +260,7 @@ app.post('/api/send-otp', async (req, res) => {
     // Log for Dev
     console.log(`[OTP] Preparing to send ${code} to ${email}...`);
 
+    // EmailJS uses template, so FROM_EMAIL is set in EmailJS dashboard
     const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
     const mailOptions = {
         from: `"PhishingShield Security" <${fromEmail}>`,
@@ -320,14 +309,13 @@ app.post('/api/send-otp', async (req, res) => {
         return res.json({ success: true, message: "OTP generated (check server logs)" });
     }
 
-    // Send email via SendGrid with improved deliverability settings
+    // Send email via EmailJS
     const emailResult = await sendEmail(
         email,
         mailOptions.subject,
         mailOptions.html,
         {
-            fromName: 'PhishingShield Security',
-            replyTo: fromEmail
+            toName: req.body.name || "User"
         }
     );
 
@@ -471,6 +459,7 @@ app.post('/api/auth/admin/login', async (req, res) => {
     };
 
     // Send OTP via email using Resend
+    // EmailJS uses template, so FROM_EMAIL is set in EmailJS dashboard
     const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
     const adminEmailHtml = `
         <div style="background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px 0;">
@@ -506,8 +495,7 @@ app.post('/api/auth/admin/login', async (req, res) => {
             '🔐 Your PhishingShield Admin Login Code',
             adminEmailHtml,
             {
-                fromName: 'PhishingShield Admin Security',
-                replyTo: fromEmail
+                toName: user.name || "Admin"
             }
         );
 
