@@ -108,7 +108,7 @@ function injectFakeData() {
 async function checkAdminAccess() {
     const lockScreen = document.getElementById('lock-screen');
     const lockStatus = document.getElementById('lock-status');
-    const API_BASE = "http://localhost:3000/api";
+    const API_BASE = "https://phishingshield.onrender.com/api";
 
     if (!lockScreen) return;
 
@@ -332,7 +332,7 @@ function loadDashboardData() {
 
             // --- Populate Reports Table ---
             // Fetch from Node.js Backend
-            fetch('http://localhost:3000/api/reports')
+            fetch('https://phishingshield.onrender.com/api/reports')
                 .then(res => res.json())
                 .then(serverReports => {
                     console.log("[Admin] Fetched Global Reports:", serverReports);
@@ -355,7 +355,7 @@ function loadDashboardData() {
                     btn.style.marginLeft = '10px';
                     btn.onclick = () => {
                         // Send Test Report to Server
-                        fetch('http://localhost:3000/api/reports', {
+                        fetch('https://phishingshield.onrender.com/api/reports', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -610,7 +610,7 @@ function renderUsers(users, allLogs) {
                     // Sync Logic
                     const updatedUser = { ...user, xp: newXP, level: Math.floor(Math.sqrt(newXP / 100)) + 1 };
 
-                    fetch('http://localhost:3000/api/users/sync', {
+                    fetch('https://phishingshield.onrender.com/api/users/sync', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(updatedUser)
@@ -639,7 +639,7 @@ function renderUsers(users, allLogs) {
                 deleteUserBtn.style.borderColor = '#dc3545';
                 deleteUserBtn.onclick = () => {
                     if (confirm(`Delete ${name}? This cannot be undone.`)) {
-                        fetch('http://localhost:3000/api/users/delete', {
+                        fetch('https://phishingshield.onrender.com/api/users/delete', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ email: email })

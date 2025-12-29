@@ -1,8 +1,8 @@
 // Admin Login Script - External file to comply with CSP
-(function() {
+(function () {
     'use strict';
-    
-    const API_BASE = "http://localhost:3000/api";
+
+    const API_BASE = "https://phishingshield.onrender.com/api";
     let currentSessionId = null;
 
     function showAlert(message, type = 'info') {
@@ -15,18 +15,18 @@
         }
     }
 
-    window.handleStep1 = async function() {
+    window.handleStep1 = async function () {
         console.log('[Admin Login] handleStep1 called');
-        
+
         const emailInput = document.getElementById('email');
         const passwordInput = document.getElementById('password');
         const btn = document.getElementById('btn-step1');
-        
+
         if (!emailInput || !passwordInput) {
             showAlert('Error: Form fields not found. Please refresh the page.', 'danger');
             return;
         }
-        
+
         const email = emailInput.value.trim();
         const password = passwordInput.value;
 
@@ -43,7 +43,7 @@
             showAlert('Error: Button not found. Please refresh the page.', 'danger');
             return;
         }
-        
+
         btn.disabled = true;
         btn.textContent = 'Verifying...';
 
@@ -58,7 +58,7 @@
 
             if (data.success) {
                 currentSessionId = data.sessionId;
-                
+
                 // Update UI to step 2
                 document.getElementById('step1').classList.remove('active');
                 document.getElementById('step1').classList.add('completed');
@@ -85,15 +85,15 @@
         }
     };
 
-    window.handleStep2 = async function() {
+    window.handleStep2 = async function () {
         const otpInput = document.getElementById('otp');
         const btn = document.getElementById('btn-step2');
-        
+
         if (!otpInput) {
             showAlert('Error: OTP input not found. Please refresh the page.', 'danger');
             return;
         }
-        
+
         const otp = otpInput.value.trim();
 
         if (!otp || otp.length !== 6) {
@@ -111,7 +111,7 @@
             showAlert('Error: Button not found. Please refresh the page.', 'danger');
             return;
         }
-        
+
         btn.disabled = true;
         btn.textContent = 'Verifying...';
 
@@ -164,13 +164,13 @@
         }
     };
 
-    window.resendOTP = async function() {
+    window.resendOTP = async function () {
         const emailInput = document.getElementById('email');
         if (!emailInput) {
             showAlert('Please enter your email first', 'danger');
             return;
         }
-        
+
         const email = emailInput.value.trim();
         if (!email) {
             showAlert('Please enter your email first', 'danger');
@@ -249,10 +249,10 @@
     // Initialize immediately and also on DOM ready
     console.log('[Admin Login] Script loaded');
     console.log('[Admin Login] Document ready state:', document.readyState);
-    
+
     // Try immediately
     initEventListeners();
-    
+
     // Also try on DOMContentLoaded as backup
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
@@ -260,7 +260,7 @@
             initEventListeners();
         });
     }
-    
+
     // Also try on window load as final backup
     window.addEventListener('load', () => {
         console.log('[Admin Login] Window load fired, re-initializing listeners');

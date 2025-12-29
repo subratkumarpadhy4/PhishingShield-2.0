@@ -8,7 +8,7 @@ if (typeof emailjs !== 'undefined') {
     try { emailjs.init({ publicKey: "BxDgzDbuSkLEs4H_9" }); } catch (e) { console.warn(e); }
 }
 
-const API_BASE = "http://localhost:3000/api";
+const API_BASE = "https://phishingshield.onrender.com/api";
 
 const Auth = {
     // 1. REGISTER: Check Backend if email exists

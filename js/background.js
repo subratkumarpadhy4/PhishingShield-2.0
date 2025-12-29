@@ -1,5 +1,5 @@
 // Service Worker Window Polyfill for Firebase (Legacy support removed)
-// Running entirely on local Node.js backend (http://localhost:3000)
+// Running on cloud backend (https://phishingshield.onrender.com)
 
 let db = null; // No longer used
 
@@ -119,7 +119,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === "LOG_VISIT") {
         console.log("[PhishingShield] LOG_VISIT handler triggered");
         console.log("[PhishingShield] LOG_VISIT data:", request.data);
-        
+
         // Respond immediately to prevent timeout
         if (sendResponse) {
             sendResponse({ success: true });
@@ -168,7 +168,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             };
 
             // Send to Backend
-            fetch('http://localhost:3000/api/reports', {
+            fetch('https://phishingshield.onrender.com/api/reports', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(reportPayload)
@@ -214,7 +214,7 @@ function calculateLevel(xp) {
 function updateXP(amount) {
     console.log("[PhishingShield] ========== updateXP CALLED ==========");
     console.log("[PhishingShield] Amount:", amount);
-    
+
     if (!amount || amount <= 0) {
         console.warn("[PhishingShield] Invalid XP amount:", amount);
         return;
@@ -253,7 +253,7 @@ function updateXP(amount) {
                 title: '🎉 Level Up!',
                 message: `Congratulations! You reached Level ${newLevel}.`
             });
-            
+
             // Broadcast to all tabs
             chrome.tabs.query({}, (tabs) => {
                 tabs.forEach(tab => {
@@ -261,7 +261,7 @@ function updateXP(amount) {
                         chrome.tabs.sendMessage(tab.id, {
                             type: "LEVEL_UP",
                             level: newLevel
-                        }).catch(() => {});
+                        }).catch(() => { });
                     }
                 });
             });
@@ -283,11 +283,11 @@ function updateXP(amount) {
                 updateData.users = users;
 
                 // Sync to server
-                fetch('http://localhost:3000/api/users/sync', {
+                fetch('https://phishingshield.onrender.com/api/users/sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(users[userIndex])
-                }).catch(() => {});
+                }).catch(() => { });
             }
         }
 
@@ -298,7 +298,7 @@ function updateXP(amount) {
                 console.error("[PhishingShield] ❌ FAILED to save XP:", chrome.runtime.lastError);
             } else {
                 console.log("[PhishingShield] ✅ XP saved successfully:", currentXP);
-                
+
                 // Double-check by reading it back
                 chrome.storage.local.get(['userXP'], (verify) => {
                     console.log("[PhishingShield] Verification - XP in storage:", verify.userXP);
@@ -386,7 +386,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 });
 
 // Test function - call this from console to verify service worker is active
-self.testServiceWorker = function() {
+self.testServiceWorker = function () {
     console.log("[PhishingShield] ✅ Service Worker is ACTIVE!");
     chrome.storage.local.get(['userXP', 'userLevel'], (r) => {
         console.log("[PhishingShield] Current XP:", r.userXP, "Level:", r.userLevel);
