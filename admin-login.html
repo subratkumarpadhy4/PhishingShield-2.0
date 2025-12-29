@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishingShield - Admin Login</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 450px;
+            padding: 40px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo h1 {
+            color: #0d6efd;
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+
+        .logo p {
+            color: #6c757d;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        .step {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            background: #e9ecef;
+            color: #6c757d;
+        }
+
+        .step.active {
+            background: #0d6efd;
+            color: white;
+        }
+
+        .step.completed {
+            background: #198754;
+            color: white;
+        }
+
+        .step-line {
+            width: 30px;
+            height: 2px;
+            background: #e9ecef;
+            margin-top: 19px;
+        }
+
+        .step-line.completed {
+            background: #198754;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #212529;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #0d6efd;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #0b5ed7;
+        }
+
+        .btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .alert-success {
+            background: #d1e7dd;
+            color: #0f5132;
+            border: 1px solid #badbcc;
+        }
+
+        .alert-danger {
+            background: #f8d7da;
+            color: #842029;
+            border: 1px solid #f5c2c7;
+        }
+
+        .alert-info {
+            background: #cff4fc;
+            color: #055160;
+            border: 1px solid #b6effb;
+        }
+
+        .otp-input {
+            text-align: center;
+            font-size: 24px;
+            letter-spacing: 8px;
+            font-weight: 600;
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .back-link a {
+            color: #6c757d;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .back-link a:hover {
+            color: #0d6efd;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <h1>PhishingShield</h1>
+            <p>Admin Portal</p>
+        </div>
+
+        <div class="step-indicator">
+            <div class="step active" id="step1">1</div>
+            <div class="step-line" id="line1"></div>
+            <div class="step" id="step2">2</div>
+        </div>
+
+        <div id="alert-container"></div>
+
+        <!-- Step 1: Email & Password -->
+        <div id="step1-form">
+            <div class="form-group">
+                <label for="email">Admin Email</label>
+                <input type="email" id="email" placeholder="admin@phishingshield.com" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Enter your password" required>
+            </div>
+            <button type="button" class="btn" id="btn-step1">Continue to Verification</button>
+        </div>
+
+        <!-- Step 2: OTP Verification -->
+        <div id="step2-form" class="hidden">
+            <div class="alert alert-info">
+                <strong>✓ OTP Sent!</strong><br>
+                Check your email for the 6-digit verification code. It expires in 5 minutes.
+            </div>
+            <div class="form-group">
+                <label for="otp">Enter Verification Code</label>
+                <input type="text" id="otp" class="otp-input" placeholder="000000" maxlength="6" pattern="[0-9]{6}">
+            </div>
+            <button type="button" class="btn" id="btn-step2">Verify & Login</button>
+            <button type="button" class="btn" id="btn-resend-otp" style="background: #6c757d; margin-top: 10px;">Resend OTP</button>
+        </div>
+
+        <div class="back-link">
+            <a href="popup.html">← Back to Extension</a>
+        </div>
+    </div>
+
+    <script src="js/admin-login.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,75 @@
+[
+  {
+    "id": "log_1767013170992_pan0jlpqk",
+    "userId": "rajkumarpadhy2006@gmail.com",
+    "action": "admin_login_step1",
+    "ipAddress": "::1",
+    "userAgent": "Unknown",
+    "success": true,
+    "details": {
+      "sessionId": "admin_sess_1767013170986_i34v5bpzv"
+    },
+    "timestamp": "2025-12-29T12:59:30.992Z"
+  },
+  {
+    "id": "log_1767013171001_ny8524qwq",
+    "userId": "rajkumarpadhy2006@gmail.com",
+    "action": "admin_login_step1",
+    "ipAddress": "::1",
+    "userAgent": "Unknown",
+    "success": true,
+    "details": {
+      "sessionId": "admin_sess_1767013171000_9gy75sj86"
+    },
+    "timestamp": "2025-12-29T12:59:31.001Z"
+  },
+  {
+    "id": "log_1767013171004_hyw78d0u4",
+    "userId": "rajkumarpadhy2006@gmail.com",
+    "action": "admin_login_step1",
+    "ipAddress": "::1",
+    "userAgent": "Unknown",
+    "success": true,
+    "details": {
+      "sessionId": "admin_sess_1767013171003_zgrbi76l4"
+    },
+    "timestamp": "2025-12-29T12:59:31.004Z"
+  },
+  {
+    "id": "log_1767013305373_ov7u1x8gx",
+    "userId": "rajkumarpadhy2006@gmail.com",
+    "action": "admin_login_success",
+    "ipAddress": "::1",
+    "userAgent": "Unknown",
+    "success": true,
+    "details": {
+      "sessionId": "admin_sess_1767013171003_zgrbi76l4",
+      "mfaMethod": "email"
+    },
+    "timestamp": "2025-12-29T13:01:45.373Z"
+  },
+  {
+    "id": "log_1767013305377_vkk3djzhy",
+    "userId": "unknown",
+    "action": "admin_mfa_verify",
+    "ipAddress": "::1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "invalid_session"
+    },
+    "timestamp": "2025-12-29T13:01:45.377Z"
+  },
+  {
+    "id": "log_1767013305378_ayw4ndf12",
+    "userId": "unknown",
+    "action": "admin_mfa_verify",
+    "ipAddress": "::1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "invalid_session"
+    },
+    "timestamp": "2025-12-29T13:01:45.378Z"
+  }
+]

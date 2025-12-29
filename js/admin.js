@@ -41,7 +41,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 4. Debug / Simulation Tools
     setupDebugTools();
+
+    // 5. Setup Modal Handlers (Replaces inline onclicks)
+    setupModalHandlers();
 });
+
+function setupModalHandlers() {
+    const modal = document.getElementById('user-modal');
+    const closeX = document.getElementById('modal-close-x');
+    const closeBtn = document.getElementById('modal-close-btn');
+
+    if (closeX) {
+        closeX.addEventListener('click', () => {
+            if (modal) modal.classList.add('hidden');
+        });
+    }
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            if (modal) modal.classList.add('hidden');
+        });
+    }
+}
 
 function setupDebugTools() {
     // Check Environment
@@ -84,47 +105,130 @@ function injectFakeData() {
     }
 }
 
-function checkAdminAccess() {
+async function checkAdminAccess() {
     const lockScreen = document.getElementById('lock-screen');
     const lockStatus = document.getElementById('lock-status');
-    const OWNER_EMAIL = 'rajkumarpadhy2006@gmail.com';
+    const API_BASE = "http://localhost:3000/api";
 
     if (!lockScreen) return;
 
-    // Check Current User directly from Storage
-    chrome.storage.local.get(['currentUser'], (res) => {
-        const user = res.currentUser;
-        console.log("[Admin Check] Stored User:", user ? user.email : "NULL"); // DEBUG
-        console.log("[Admin Check] Expected Owner:", OWNER_EMAIL); // DEBUG
+    // Check for admin token in storage
+    chrome.storage.local.get(['adminToken', 'adminTokenExpiry'], async (res) => {
+        const token = res.adminToken;
+        const expiry = res.adminTokenExpiry;
 
-        const normalizedEmail = user ? user.email.toLowerCase().trim() : '';
-        const normalizedOwner = OWNER_EMAIL.toLowerCase().trim();
-
-        if (normalizedEmail === normalizedOwner) {
-            // Authorized Owner
-            console.log("[Admin Check] ACCESS GRANTED ✅");
-            unlockUI();
-
-            // Trigger Fresh Data Load
-            if (typeof Auth !== 'undefined' && Auth.getUsers) {
-                // Background refresh of global data
-                Auth.getUsers(() => {
-                    console.log("Admin: Global Data Refreshed");
-                    loadDashboardData();
-                });
-                if (Auth.getGlobalReports) Auth.getGlobalReports(() => null);
-            }
-        } else {
-            // Unauthorized
+        // Check if token exists and hasn't expired
+        if (!token || !expiry || Date.now() > expiry) {
+            // No valid token - redirect to admin login
             if (lockStatus) {
+                const redirectToLogin = () => {
+                    const adminLoginUrl = chrome.runtime?.getURL ? chrome.runtime.getURL('admin-login.html') : 'admin-login.html';
+                    window.location.href = adminLoginUrl;
+                };
+
                 lockStatus.innerHTML = `
                     <div style="color:#dc3545; font-size:48px; margin-bottom:10px;">🔒</div>
-                    <h3>Access Denied</h3>
-                    <p>Restricted Area. Project Owner Only.</p>
-                    <p style="font-size:12px; margin-top:10px; color:#6c757d;">Logged in as: ${user ? user.email : 'Guest'}</p>
-                    <button onclick="window.close()" style="margin-top:20px; padding:10px 20px; border:none; background:#6c757d; color:white; border-radius:4px; cursor:pointer;">Close</button>
-                    <div style="margin-top:20px; font-size:10px; color:#adb5bd;">Expected: ${OWNER_EMAIL}</div>
+                    <h3>Admin Access Required</h3>
+                    <p>Please login to access the Admin Portal.</p>
+                    <p style="color:#6c757d; font-size:14px; margin-top:10px;">Redirecting to login...</p>
+                    <button id="manual-redirect-btn" style="margin-top:20px; padding:12px 24px; border:none; background:#0d6efd; color:white; border-radius:6px; cursor:pointer; font-weight:600; display:none;">Go to Admin Login</button>
                 `;
+
+                // Show manual button after 2 seconds if redirect didn't work
+                setTimeout(() => {
+                    const manualBtn = document.getElementById('manual-redirect-btn');
+                    if (manualBtn) {
+                        manualBtn.style.display = 'block';
+                        manualBtn.onclick = redirectToLogin;
+                    }
+                }, 2000);
+
+                // Auto-redirect after 1 second
+                setTimeout(redirectToLogin, 1000);
+            }
+            return;
+        }
+
+        // Verify token with server
+        try {
+            const response = await fetch(`${API_BASE}/auth/admin/verify`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Authorized Admin
+                console.log("[Admin Check] ACCESS GRANTED ✅");
+                unlockUI();
+
+                // Trigger Fresh Data Load
+                if (typeof Auth !== 'undefined' && Auth.getUsers) {
+                    // Background refresh of global data
+                    Auth.getUsers(() => {
+                        console.log("Admin: Global Data Refreshed");
+                        loadDashboardData();
+                    });
+                    if (Auth.getGlobalReports) Auth.getGlobalReports(() => null);
+                }
+            } else {
+                // Token invalid - clear and redirect
+                chrome.storage.local.remove(['adminToken', 'adminTokenExpiry', 'adminUser'], () => {
+                    if (lockStatus) {
+                        const redirectToLogin = () => {
+                            const adminLoginUrl = chrome.runtime?.getURL ? chrome.runtime.getURL('admin-login.html') : 'admin-login.html';
+                            window.location.href = adminLoginUrl;
+                        };
+
+                        lockStatus.innerHTML = `
+                            <div style="color:#dc3545; font-size:48px; margin-bottom:10px;">🔒</div>
+                            <h3>Session Expired</h3>
+                            <p>Your admin session has expired. Please login again.</p>
+                            <p style="color:#6c757d; font-size:14px; margin-top:10px;">Redirecting to login...</p>
+                            <button id="manual-redirect-btn-expired" style="margin-top:20px; padding:12px 24px; border:none; background:#0d6efd; color:white; border-radius:6px; cursor:pointer; font-weight:600; display:none;">Go to Admin Login</button>
+                        `;
+
+                        // Show manual button after 2 seconds if redirect didn't work
+                        setTimeout(() => {
+                            const manualBtn = document.getElementById('manual-redirect-btn-expired');
+                            if (manualBtn) {
+                                manualBtn.style.display = 'block';
+                                manualBtn.onclick = redirectToLogin;
+                            }
+                        }, 2000);
+
+                        // Auto-redirect after 1 second
+                        setTimeout(redirectToLogin, 1000);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error("[Admin Check] Server verification failed:", error);
+            // Network error - show error but allow access if token exists (graceful degradation)
+            if (lockStatus) {
+                const retryBtn = document.createElement('button');
+                retryBtn.textContent = 'Retry';
+                retryBtn.style.cssText = 'margin-top:20px; padding:12px 24px; border:none; background:#0d6efd; color:white; border-radius:6px; cursor:pointer; font-weight:600;';
+                retryBtn.onclick = () => window.location.reload();
+
+                const loginBtn = document.createElement('button');
+                loginBtn.textContent = 'Go to Login';
+                loginBtn.style.cssText = 'margin-top:10px; padding:10px 20px; border:1px solid #6c757d; background:transparent; color:#6c757d; border-radius:6px; cursor:pointer;';
+                loginBtn.onclick = () => {
+                    const adminLoginUrl = chrome.runtime?.getURL ? chrome.runtime.getURL('admin-login.html') : 'admin-login.html';
+                    window.location.href = adminLoginUrl;
+                };
+
+                lockStatus.innerHTML = `
+                    <div style="color:#ffc107; font-size:48px; margin-bottom:10px;">⚠️</div>
+                    <h3>Server Connection Error</h3>
+                    <p>Could not verify admin session. Please check your connection.</p>
+                `;
+                lockStatus.appendChild(retryBtn);
+                lockStatus.appendChild(loginBtn);
             }
         }
     });
@@ -481,85 +585,88 @@ function renderUsers(users, allLogs) {
                 histBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:10px; color:#adb5bd;">No synced history available.</td></tr>';
             }
             document.getElementById('user-modal').classList.remove('hidden');
-        });
 
-        // Edit Button (Promote/Degrade)
-        const editBtn = document.createElement('button');
-        editBtn.className = 'btn btn-outline';
-        editBtn.style.padding = '4px 8px';
-        editBtn.style.fontSize = '12px';
-        editBtn.style.marginLeft = '5px';
-        editBtn.textContent = 'Edit XP';
-        editBtn.style.borderColor = '#ffc107';
-        editBtn.style.color = '#ffc107';
+            // DYNAMIC BUTTON INJECTION into Modal Footer
+            const footer = document.getElementById('modal-footer');
+            if (footer) {
+                footer.innerHTML = ''; // Clear previous
 
-        editBtn.addEventListener('click', () => {
-            const newXPStr = prompt(`Promote/Degrade ${name}\n\nCurrent XP: ${xp}\nCurrent Level: ${level}\n\nEnter New XP Value:`, xp);
-            if (newXPStr !== null) {
-                const newXP = parseInt(newXPStr);
-                if (isNaN(newXP) || newXP < 0) {
-                    alert("Invalid XP Value.");
-                    return;
-                }
+                // 1. Edit XP Button
+                const editXPBtn = document.createElement('button');
+                editXPBtn.className = 'btn btn-outline';
+                editXPBtn.textContent = 'Edit XP';
+                editXPBtn.style.color = '#ffc107';
+                editXPBtn.style.borderColor = '#ffc107';
+                editXPBtn.onclick = () => {
+                    const newXPStr = prompt(`Update XP for ${name}\n\nCurrent: ${user.xp}`, user.xp);
+                    if (newXPStr === null) return;
 
-                // Update Logic
-                user.xp = newXP;
-                user.level = Math.floor(Math.sqrt(newXP / 100)) + 1;
+                    const newXP = parseInt(newXPStr);
+                    if (isNaN(newXP) || newXP < 0) {
+                        alert("Invalid XP");
+                        return;
+                    }
 
-                chrome.storage.local.set({ users: users }, () => {
-                    alert(`✅ Updated ${name}:\nXP: ${newXP}\nLevel: ${user.level}`);
-                    loadDashboardData();
+                    // Sync Logic
+                    const updatedUser = { ...user, xp: newXP, level: Math.floor(Math.sqrt(newXP / 100)) + 1 };
 
-                    // Sync Global if Current
-                    chrome.storage.local.get(['currentUser'], (res) => {
-                        if (res.currentUser && res.currentUser.email === email) {
-                            chrome.storage.local.set({ userXP: newXP, userLevel: user.level });
-                        }
-                    });
-                });
+                    fetch('http://localhost:3000/api/users/sync', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updatedUser)
+                    })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert("XP Updated & Synced!");
+                                // Quick UI update
+                                document.getElementById('modal-xp').textContent = newXP;
+                                document.getElementById('modal-level').textContent = updatedUser.level;
+                                // Background refresh
+                                loadDashboardData();
+                            } else {
+                                alert("Sync failed: " + data.message);
+                            }
+                        })
+                        .catch(e => alert("Server Error"));
+                };
+
+                // 2. Delete Button
+                const deleteUserBtn = document.createElement('button');
+                deleteUserBtn.className = 'btn btn-outline';
+                deleteUserBtn.textContent = 'Delete User';
+                deleteUserBtn.style.color = '#dc3545';
+                deleteUserBtn.style.borderColor = '#dc3545';
+                deleteUserBtn.onclick = () => {
+                    if (confirm(`Delete ${name}? This cannot be undone.`)) {
+                        fetch('http://localhost:3000/api/users/delete', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email: email })
+                        }).then(() => {
+                            alert("User deleted.");
+                            document.getElementById('user-modal').classList.add('hidden');
+                            loadDashboardData();
+                        }).catch(e => alert("Delete failed: " + e));
+                    }
+                };
+
+                // 3. Close Button
+                const closeBtn = document.createElement('button');
+                closeBtn.className = 'btn btn-outline';
+                closeBtn.textContent = 'Close';
+                closeBtn.onclick = () => document.getElementById('user-modal').classList.add('hidden');
+
+                // Append with proper spacing
+                footer.appendChild(editXPBtn);
+                footer.appendChild(deleteUserBtn);
+                footer.appendChild(closeBtn);
             }
         });
 
         actionCell.appendChild(viewBtn);
-        actionCell.appendChild(editBtn);
+        // Note: Edit and Delete buttons moved to Modal Footer
 
-        // Delete Button
-        const delBtn = document.createElement('button');
-        delBtn.className = 'btn btn-outline';
-        delBtn.style.padding = '4px 8px';
-        delBtn.style.fontSize = '12px';
-        delBtn.style.marginLeft = '5px';
-        delBtn.textContent = '🗑️';
-        delBtn.title = 'Delete User';
-        delBtn.style.borderColor = '#dc3545';
-        delBtn.style.color = '#dc3545';
-
-        delBtn.addEventListener('click', () => {
-            if (confirm(`⚠️ CRITICAL WARNING ⚠️\n\nAre you sure you want to PERMANENTLY DELETE user "${name}" (${email})?\n\nThis action cannot be undone.`)) {
-                // Delete Logic
-                const idx = users.findIndex(u => u.email === email);
-                if (idx !== -1) {
-                    users.splice(idx, 1);
-                    chrome.storage.local.set({ users: users }, () => {
-                        alert(`User ${name} deleted.`);
-                        loadDashboardData();
-
-                        // If we deleted ourselves (Admin delete self?), logout.
-                        // Checking against current session is good practice
-                        chrome.storage.local.get(['currentUser'], (res) => {
-                            if (res.currentUser && res.currentUser.email === email) {
-                                // Logout immediate
-                                chrome.storage.local.remove(['currentUser', 'userXP', 'userLevel'], () => {
-                                    location.reload();
-                                });
-                            }
-                        });
-                    });
-                }
-            }
-        });
-
-        actionCell.appendChild(delBtn);
         allRow.appendChild(actionCell);
 
         allBody.appendChild(allRow);

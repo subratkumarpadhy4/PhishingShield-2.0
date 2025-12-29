@@ -579,7 +579,7 @@
             <div
                 style="padding:20px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
                 <h3 style="margin:0;">User Inspector</h3>
-                <button onclick="document.getElementById('user-modal').classList.add('hidden')"
+                <button id="modal-close-x"
                     style="border:none; background:none; font-size:20px; cursor:pointer;">&times;</button>
             </div>
 
@@ -633,9 +633,9 @@
                 </div>
             </div>
 
-            <div style="padding:20px; background:#f8f9fa; text-align:right;">
-                <button class="btn btn-outline"
-                    onclick="document.getElementById('user-modal').classList.add('hidden')">Close</button>
+            <div id="modal-footer"
+                style="padding:20px; background:#f8f9fa; text-align:right; display:flex; justify-content:flex-end; gap:10px;">
+                <button id="modal-close-btn" class="btn btn-outline">Close</button>
             </div>
         </div>
     </div>
@@ -651,6 +651,26 @@
 
     <script src="js/auth.js"></script>
     <script src="js/admin.js"></script>
+    <script>
+        // Add logout functionality
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add logout button to user panel if it doesn't exist
+            const userPanel = document.querySelector('.user-panel');
+            if (userPanel && !document.getElementById('admin-logout-btn')) {
+                const logoutBtn = document.createElement('button');
+                logoutBtn.id = 'admin-logout-btn';
+                logoutBtn.textContent = 'Logout';
+                logoutBtn.style.cssText = 'margin-top: 10px; width: 100%; padding: 8px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;';
+                logoutBtn.onclick = () => {
+                    chrome.storage.local.remove(['adminToken', 'adminTokenExpiry', 'adminUser'], () => {
+                        const adminLoginUrl = chrome.runtime?.getURL ? chrome.runtime.getURL('admin-login.html') : 'admin-login.html';
+                        window.location.href = adminLoginUrl;
+                    });
+                };
+                userPanel.appendChild(logoutBtn);
+            }
+        });
+    </script>
 </body>
 
 </html>
