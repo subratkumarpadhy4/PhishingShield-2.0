@@ -8,13 +8,30 @@ if (typeof emailjs !== 'undefined') {
     try { emailjs.init({ publicKey: "BxDgzDbuSkLEs4H_9" }); } catch (e) { console.warn(e); }
 }
 
-const API_BASE = "https://phishingshield.onrender.com/api";
+// Toggle this for development
+const DEV_MODE = false; // Set to false for production
+const API_BASE = DEV_MODE
+    ? "http://localhost:3000/api"
+    : "https://phishingshield.onrender.com/api";
+
+console.log(`[AUTH] Running in ${DEV_MODE ? 'DEVELOPMENT' : 'PRODUCTION'} mode`);
+console.log(`[AUTH] API Base: ${API_BASE}`);
+
+// Helper function to handle Render's slow cold starts
+function fetchWithTimeout(url, options = {}, timeout = 120000) { // 2 minute timeout for Render
+    return Promise.race([
+        fetch(url, options),
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Request timeout - server may be waking up')), timeout)
+        )
+    ]);
+}
 
 const Auth = {
     // 1. REGISTER: Check Backend if email exists
     register: function (name, email, password, callback) {
         // Step 1: Check Exists
-        fetch(`${API_BASE}/users`)
+        fetchWithTimeout(`${API_BASE}/users`)
             .then(res => res.json())
             .then(users => {
                 const exists = users.find(u => u.email === email);
@@ -44,7 +61,7 @@ const Auth = {
 
     _proceedRegister: function (name, email, password, callback) {
         // Step 2: Request Server to Send OTP
-        fetch(`${API_BASE}/send-otp`, {
+        fetchWithTimeout(`${API_BASE}/send-otp`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, email })
@@ -63,7 +80,7 @@ const Auth = {
             })
             .catch(err => {
                 console.error("OTP Request Failed", err);
-                callback({ success: false, message: "Server Error. Is backend running?" });
+                callback({ success: false, message: "Server Error: " + err.message });
             });
     },
 

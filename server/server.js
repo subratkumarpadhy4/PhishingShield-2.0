@@ -91,28 +91,56 @@ app.get('/api/users', (req, res) => {
 const nodemailer = require('nodemailer');
 let transporter = null;
 
-try {
-    transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: process.env.EMAIL_USER || 'phishingshield@gmail.com',
-            pass: process.env.EMAIL_PASS || 'ugnd itej eqlw gywt' // App Password
-        }
-    });
+// Initialize email transporter with better error handling for cloud environments
+function initializeEmailService() {
+    const emailUser = process.env.EMAIL_USER;
+    const emailPass = process.env.EMAIL_PASS;
+    
+    // If no email credentials are provided, skip email initialization
+    if (!emailUser || !emailPass) {
+        console.warn('[EMAIL] Email credentials not configured. OTPs will be logged to console.');
+        console.warn('[EMAIL] Set EMAIL_USER and EMAIL_PASS environment variables to enable email.');
+        return null;
+    }
 
-    // Verify connection on startup (but don't crash if it fails)
-    transporter.verify((error, success) => {
-        if (error) {
-            console.warn('[EMAIL] Warning: Email service not available:', error.message);
-            console.warn('[EMAIL] OTPs will be logged to console instead');
-        } else {
-            console.log('[EMAIL] Email service ready');
-        }
-    });
-} catch (error) {
-    console.error('[EMAIL] Failed to initialize email service:', error.message);
-    console.log('[EMAIL] Server will continue without email functionality');
+    try {
+        transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: emailUser,
+                pass: emailPass
+            },
+            // Add timeout and connection options for cloud environments
+            connectionTimeout: 10000, // 10 seconds
+            greetingTimeout: 10000,
+            socketTimeout: 10000,
+            // Use secure connection
+            secure: true,
+            tls: {
+                rejectUnauthorized: false // Allow self-signed certificates if needed
+            }
+        });
+
+        // Verify connection on startup (but don't crash if it fails)
+        transporter.verify((error, success) => {
+            if (error) {
+                console.warn('[EMAIL] Warning: Email service not available:', error.message);
+                console.warn('[EMAIL] OTPs will be logged to console instead');
+                console.warn('[EMAIL] This is common on cloud platforms. Check firewall/network settings.');
+            } else {
+                console.log('[EMAIL] Email service ready');
+            }
+        });
+        
+        return transporter;
+    } catch (error) {
+        console.error('[EMAIL] Failed to initialize email service:', error.message);
+        console.log('[EMAIL] Server will continue without email functionality');
+        return null;
+    }
 }
+
+transporter = initializeEmailService();
 
 // In-memory OTP store (Global variable)
 const otpStore = {};
@@ -239,17 +267,36 @@ app.post('/api/send-otp', (req, res) => {
         return res.json({ success: true, message: "OTP generated (check server logs)" });
     }
 
-    transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-            console.error('[OTP] Error sending email:', error);
+    // Use async/await with timeout for better error handling
+    const sendEmailWithTimeout = () => {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('Email send timeout'));
+            }, 15000); // 15 second timeout
+
+            transporter.sendMail(mailOptions, (error, info) => {
+                clearTimeout(timeout);
+                if (error) {
+                    reject(error);
+                } else {
+                    resolve(info);
+                }
+            });
+        });
+    };
+
+    sendEmailWithTimeout()
+        .then((info) => {
+            console.log('[OTP] Email sent:', info.response);
+            res.json({ success: true, message: "OTP Sent to Email!" });
+        })
+        .catch((error) => {
+            console.error('[OTP] Error sending email:', error.message);
             // Fallback to console log if email fails so user is not stuck
             console.log(`[OTP FALLBACK] Code for ${email}: ${code}`);
             // Still return success so user can continue (they can check logs)
-            return res.json({ success: true, message: "OTP generated (check server logs)" });
-        }
-        console.log('[OTP] Email sent:', info.response);
-        res.json({ success: true, message: "OTP Sent to Email!" });
-    });
+            res.json({ success: true, message: "OTP generated (check server logs)" });
+        });
 });
 
 // POST /api/verify-otp (Mock)
@@ -415,15 +462,36 @@ app.post('/api/auth/admin/login', (req, res) => {
         `
     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-            console.error('[Admin OTP] Error sending email:', error);
-            console.log(`[Admin OTP FALLBACK] Code for ${user.email}: ${otp}`);
-            // Still return success but log the issue
-        } else {
-            console.log('[Admin OTP] Email sent:', info.response);
-        }
-    });
+    // Use async/await with timeout for better error handling
+    if (transporter) {
+        const sendEmailWithTimeout = () => {
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error('Email send timeout'));
+                }, 15000); // 15 second timeout
+
+                transporter.sendMail(mailOptions, (error, info) => {
+                    clearTimeout(timeout);
+                    if (error) {
+                        reject(error);
+                    } else {
+                        resolve(info);
+                    }
+                });
+            });
+        };
+
+        sendEmailWithTimeout()
+            .then((info) => {
+                console.log('[Admin OTP] Email sent:', info.response);
+            })
+            .catch((error) => {
+                console.error('[Admin OTP] Error sending email:', error.message);
+                console.log(`[Admin OTP FALLBACK] Code for ${user.email}: ${otp}`);
+            });
+    } else {
+        console.log(`[Admin OTP FALLBACK] Email service unavailable. Code for ${user.email}: ${otp}`);
+    }
 
     logAdminAction(user.email, 'admin_login_step1', ip, true, { sessionId });
 
@@ -579,6 +647,8 @@ app.get('/api/admin/logs', requireAdmin, (req, res) => {
 });
 
 // Start Server
-app.listen(PORT, () => {
-    console.log(`PhishingShield Backend running on http://localhost:${PORT}`);
+// Bind to 0.0.0.0 to accept connections from Render's network
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`PhishingShield Backend running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
