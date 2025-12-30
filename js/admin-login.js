@@ -30,22 +30,15 @@
         const email = emailInput.value.trim();
         const password = passwordInput.value;
 
-        console.log('[Admin Login] Email:', email ? 'provided' : 'missing');
-        console.log('[Admin Login] Password:', password ? 'provided' : 'missing');
-
         if (!email || !password) {
             showAlert('Please enter both email and password', 'danger');
             return;
         }
 
-        if (!btn) {
-            console.error('Step 1 button not found');
-            showAlert('Error: Button not found. Please refresh the page.', 'danger');
-            return;
-        }
+        if (!btn) return;
 
         btn.disabled = true;
-        btn.textContent = 'Verifying...';
+        btn.textContent = 'Logging in...';
 
         try {
             const response = await fetch(`${API_BASE}/auth/admin/login`, {
@@ -56,32 +49,34 @@
 
             const data = await response.json();
 
-            if (data.success) {
+            if (data.success && data.token) {
+                // DIRECT LOGIN SUCCESS (Single Step)
+                chrome.storage.local.set({
+                    adminToken: data.token,
+                    adminUser: data.user,
+                    adminTokenExpiry: Date.now() + (10 * 24 * 60 * 60 * 1000) // 10 days
+                }, () => {
+                    showAlert('Login successful! Redirecting...', 'success');
+                    setTimeout(() => {
+                        window.location.href = 'admin.html';
+                    }, 1000);
+                });
+            } else if (data.success && data.requiresMFA) {
+                // Fallback if server still requires MFA (should not happen with new server code)
                 currentSessionId = data.sessionId;
-
-                // Update UI to step 2
-                document.getElementById('step1').classList.remove('active');
                 document.getElementById('step1').classList.add('completed');
-                document.getElementById('line1').classList.add('completed');
-                document.getElementById('step2').classList.add('active');
                 document.getElementById('step1-form').classList.add('hidden');
                 document.getElementById('step2-form').classList.remove('hidden');
-                const otpInput = document.getElementById('otp');
-                if (otpInput) otpInput.focus();
             } else {
                 showAlert(data.message || 'Login failed', 'danger');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.textContent = 'Continue to Verification';
-                }
+                btn.disabled = false;
+                btn.textContent = 'Login';
             }
         } catch (error) {
             console.error('Login error:', error);
-            showAlert('Network error. Please check if the server is running. Error: ' + error.message, 'danger');
-            if (btn) {
-                btn.disabled = false;
-                btn.textContent = 'Continue to Verification';
-            }
+            showAlert('Network error. Check server status.', 'danger');
+            btn.disabled = false;
+            btn.textContent = 'Login';
         }
     };
 

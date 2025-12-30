@@ -2,6 +2,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // 0. SECURITY HANDSHAKE
     checkAdminAccess();
 
+    // REPORTS FILTER STATE
+    let allReportsCache = [];
+    let currentReportFilter = 'all';
+
     // 1. Sidebar Navigation Logic
     const navLinks = document.querySelectorAll('.nav-link');
     const tabs = document.querySelectorAll('.tab-content');
@@ -392,19 +396,57 @@ function loadDashboardData() {
     }
 }
 
+
+// Filter Logic
+window.setReportFilter = function (status) {
+    currentReportFilter = status;
+
+    // Update Buttons UI
+    ['all', 'pending', 'banned', 'ignored'].forEach(s => {
+        const btn = document.getElementById(`filter-${s}`);
+        if (btn) {
+            if (s === status) {
+                btn.classList.add('btn-active');
+                btn.classList.remove('btn-outline');
+            } else {
+                btn.classList.remove('btn-active');
+                btn.classList.add('btn-outline');
+            }
+        }
+    });
+
+    // Re-render
+    renderReports();
+};
+
 function renderReports(reports) {
     const tbody = document.querySelector('#reports-table tbody');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    if (!reports || reports.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color:#6c757d;">No reports submitted yet.</td></tr>';
+    // Update Cache if new data provided
+    if (reports) {
+        allReportsCache = reports;
+    }
+
+    // Use Cache
+    let dataToRender = allReportsCache || [];
+
+    // Apply Filter
+    if (currentReportFilter !== 'all') {
+        dataToRender = dataToRender.filter(r => {
+            const status = r.status || 'pending';
+            return status === currentReportFilter;
+        });
+    }
+
+    if (!dataToRender || dataToRender.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 20px; color:#6c757d;">No ${currentReportFilter !== 'all' ? currentReportFilter : ''} reports found.</td></tr>`;
         return;
     }
 
     // Sort by Date (newest first)
-    // We assume reports have 'timestamp' or 'date'
-    const sorted = [...reports].reverse();
+    const sorted = [...dataToRender].reverse();
 
     sorted.forEach((r, index) => {
         const date = new Date(r.timestamp).toLocaleDateString();
@@ -422,14 +464,14 @@ function renderReports(reports) {
         const escapedId = escapeHtml(r.id || '');
         const escapedHostname = escapeHtml(r.hostname || new URL(r.url).hostname || r.url);
 
-        // Action buttons based on status - using data attributes instead of inline onclick
+        // Action buttons based on status
         let actionBtn = '';
         if (status === 'banned') {
             statusBadge = '<span class="badge" style="background:#dc3545; color:white">🚫 BANNED</span>';
             actionBtn = `
                 <div style="display:flex; gap:5px;">
                     <button class="btn action-unban" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#198754; padding:4px 8px; font-size:11px;" title="Unban this site">UNBAN</button>
-                    <button class="btn action-details" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#0d6efd; padding:4px 8px; font-size:11px;" title="View details">DETAILS</button>
+                    <button class="btn action-details" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#0d6efd; padding:4px 8px; font-size:11px;" title="DETAILS">DETAILS</button>
                 </div>
             `;
         } else if (status === 'ignored') {
@@ -438,12 +480,12 @@ function renderReports(reports) {
                 <button class="btn action-ban" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#dc3545; padding:4px 8px; font-size:11px;" title="Ban this site anyway">BAN</button>
             `;
         } else {
-            // Pending status - show multiple actions
+            // Pending status
             actionBtn = `
                 <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                    <button class="btn action-ban" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#dc3545; padding:4px 8px; font-size:11px;" title="Block this harmful site">🚫 BAN</button>
-                    <button class="btn action-ignore" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#6c757d; padding:4px 8px; font-size:11px;" title="Mark as safe/false positive">✓ IGNORE</button>
-                    <button class="btn action-details" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#0d6efd; padding:4px 8px; font-size:11px;" title="View report details">🔍 DETAILS</button>
+                    <button class="btn action-ban" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#dc3545; padding:4px 8px; font-size:11px;" title="Block">🚫 BAN</button>
+                    <button class="btn action-ignore" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#6c757d; padding:4px 8px; font-size:11px;" title="Ignore">✓ IGNORE</button>
+                    <button class="btn action-details" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#0d6efd; padding:4px 8px; font-size:11px;" title="Details">🔍 DETAILS</button>
                 </div>
             `;
         }

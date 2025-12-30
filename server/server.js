@@ -425,78 +425,47 @@ app.post('/api/auth/admin/login', async (req, res) => {
         return res.status(401).json({ success: false, message: "Invalid credentials" });
     }
 
-    // Generate MFA session
+    // Authenticated successfully - Generate Admin Session directly (No OTP)
     const sessionId = `admin_sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const otp = generateAdminOTP();
 
-    // Store pending session (expires in 5 minutes)
-    adminPendingSessions[sessionId] = {
-        email: user.email,
-        userId: user.email, // Using email as ID
-        otp,
-        expiresAt: Date.now() + (5 * 60 * 1000), // 5 minutes
+    // Generate JWT token for admin
+    // Note: mfaVerified set to true as we are trusting password authentication now
+    const adminToken = jwt.sign(
+        {
+            userId: user.email,
+            email: user.email,
+            role: 'admin',
+            mfaVerified: true,
+            ipAddress: ip,
+            sessionId: sessionId
+        },
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRY_ADMIN }
+    );
+
+    // Store admin session PERSISTENTLY
+    const sessions = getAdminSessions();
+    sessions[sessionId] = {
+        userId: user.email,
+        token: adminToken,
         ip,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        expiresAt: Date.now() + (10 * 24 * 60 * 60 * 1000) // 10 days
     };
+    saveAdminSessions(sessions);
 
-    // Send OTP via email using Resend
-    // EmailJS uses template, so FROM_EMAIL is set in EmailJS dashboard
-    const fromEmail = process.env.FROM_EMAIL || 'phishingshield@gmail.com';
-    const adminEmailHtml = `
-        <div style="background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px 0;">
-            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); overflow: hidden;">
-                <div style="background-color: #dc3545; padding: 30px; text-align: center;">
-                    <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px;">🔒 Admin Access</h1>
-                </div>
-                <div style="padding: 40px 30px; text-align: center;">
-                    <h2 style="color: #1e293b; font-size: 22px; margin-bottom: 10px;">Admin Login Verification</h2>
-                    <p style="color: #64748b; font-size: 16px; line-height: 1.5; margin-bottom: 30px;">
-                        Someone is attempting to access the PhishingShield Admin Portal. If this was you, use the code below to complete login.
-                    </p>
-                    <div style="background-color: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 20px; margin: 0 auto 30px; width: fit-content; min-width: 250px;">
-                        <span style="font-size: 36px; font-weight: 800; letter-spacing: 12px; color: #dc3545; display: block;">${otp}</span>
-                    </div>
-                    <p style="color: #dc3545; font-size: 14px; font-weight: 600; margin-top: 30px;">
-                        ⚠️ This code expires in 5 minutes.<br>
-                        ⚠️ If you did not request this, secure your account immediately.
-                    </p>
-                </div>
-                <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #e2e8f0;">
-                    <p style="color: #cbd5e1; font-size: 12px; margin: 0;">
-                        &copy; ${new Date().getFullYear()} PhishingShield Security. All rights reserved.
-                    </p>
-                </div>
-            </div>
-        </div>
-    `;
-
-    if (emailServiceReady) {
-        const emailResult = await sendEmail(
-            user.email,
-            '🔐 Your PhishingShield Admin Login Code',
-            adminEmailHtml,
-            {
-                toName: user.name || "Admin"
-            }
-        );
-
-        if (emailResult.success) {
-            console.log(`[Admin OTP] Email sent successfully to ${user.email}`);
-        } else {
-            console.error('[Admin OTP] Error sending email:', emailResult.error);
-            console.log(`[Admin OTP FALLBACK] Code for ${user.email}: ${otp}`);
-        }
-    } else {
-        console.log(`[Admin OTP FALLBACK] Email service unavailable. Code for ${user.email}: ${otp}`);
-    }
-
-    logAdminAction(user.email, 'admin_login_step1', ip, true, { sessionId });
+    logAdminAction(user.email, 'admin_login_success', ip, true, { sessionId, method: 'password_only' });
 
     res.json({
         success: true,
-        sessionId,
-        requiresMFA: true,
-        message: "OTP sent to your email. Please check your inbox."
+        token: adminToken,
+        user: {
+            email: user.email,
+            name: user.name,
+            role: 'admin'
+        },
+        expiresIn: '10d',
+        requiresMFA: false
     });
 });
 
