@@ -193,6 +193,12 @@ const adminRateLimit = {}; // Rate limiting for admin endpoints
 
 
 
+// Helper: Check if email is admin
+function isAdminEmail(email) {
+    if (!email) return false;
+    return ADMIN_EMAILS.includes(email.toLowerCase().trim());
+}
+
 // Helper: Generate 6-digit OTP for admin
 function generateAdminOTP() {
     return Math.floor(100000 + Math.random() * 900000).toString();
