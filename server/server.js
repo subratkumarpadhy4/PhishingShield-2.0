@@ -635,6 +635,7 @@ app.get('/api/admin/logs', requireAdmin, (req, res) => {
     res.json({ success: true, logs: recentLogs });
 });
 
+
 // --- REPORTS API ---
 
 // GET /api/reports - Fetch all reports
@@ -688,6 +689,7 @@ app.post('/api/reports/update', (req, res) => {
         res.status(404).json({ success: false, message: "Report not found" });
     }
 });
+
 
 // Start Server
 // Bind to 0.0.0.0 to accept connections from Render's network
