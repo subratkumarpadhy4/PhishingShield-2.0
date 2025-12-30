@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (toggleFortress) toggleFortress.checked = result.enableFortress === true;
 
         const limitInput = document.getElementById('history-limit');
-        if (limitInput) limitInput.value = result.logHistoryLimit || 100;
+        if (limitInput) limitInput.value = result.logHistoryLimit || 20;
     });
 
     // Save Settings Listeners

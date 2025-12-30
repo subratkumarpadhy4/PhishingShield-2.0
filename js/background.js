@@ -132,7 +132,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Save visit to log (async)
         chrome.storage.local.get(['visitLog'], (res) => {
             const logs = Array.isArray(res.visitLog) ? res.visitLog : [];
-            if (logs.length > 50) logs.shift();
+            if (logs.length > 20) logs.shift();
             if (request.data) {
                 logs.push(request.data);
             }
