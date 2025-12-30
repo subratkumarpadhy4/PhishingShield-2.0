@@ -44,7 +44,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // 3. LOAD DATA & STATS
-        function loadDashboardData() {
+        // 3. LOAD DATA & STATS
+        function renderDashboardUI() {
             if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                 chrome.storage.local.get(['visitLog', 'theme', 'users', 'suspectedExtensions', 'userXP', 'userLevel'], (result) => {
                     const log = result.visitLog || [];
@@ -67,8 +68,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Load initial data
-        loadDashboardData();
+        // Initial Render (Local Data)
+        renderDashboardUI();
+
+        // Fetch Global Data (Background Sync)
+        if (typeof Auth !== 'undefined' && Auth.getUsers) {
+            Auth.getUsers((users) => {
+                console.log("[Dashboard] Global users fetched:", users.length);
+                // Note: This updates storage, which triggers the listener below => re-render
+            });
+        }
 
         // Listen for storage changes to update in real-time
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
@@ -76,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (areaName === 'local') {
                     // Update if visitLog, userXP, userLevel, or users changed
                     if (changes.visitLog || changes.userXP || changes.userLevel || changes.users) {
-                        loadDashboardData();
+                        renderDashboardUI();
                     }
                 }
             });

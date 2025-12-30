@@ -104,7 +104,7 @@ function initRiskAnalysis(isFortressMode) {
         analysis.score = Math.min(analysis.score, 100);
 
         console.log("[Content] Sending LOG_VISIT message...");
-        
+
         const visitData = {
             url: window.location.href,
             hostname: window.location.hostname || window.location.pathname.split('/').pop(),
@@ -113,7 +113,7 @@ function initRiskAnalysis(isFortressMode) {
             primaryThreat: analysis.primaryThreat,
             timestamp: Date.now()
         };
-        
+
         // Send LOG_VISIT message with timeout fallback
         let messageReceived = false;
         const timeout = setTimeout(() => {
@@ -124,18 +124,18 @@ function initRiskAnalysis(isFortressMode) {
                     let currentXP = typeof data.userXP === 'number' ? data.userXP : 0;
                     currentXP += 5; // +5 XP for visit
                     const newLevel = Math.floor(Math.sqrt(currentXP / 100)) + 1;
-                    
+
                     const logs = Array.isArray(data.visitLog) ? data.visitLog : [];
                     if (logs.length > 50) logs.shift();
                     logs.push(visitData);
-                    
+
                     const updateData = {
                         userXP: currentXP,
                         userLevel: newLevel,
                         visitLog: logs,
                         pendingXPSync: true
                     };
-                    
+
                     // Update user in users array if logged in
                     if (data.currentUser && data.currentUser.email && Array.isArray(data.users)) {
                         const users = [...data.users];
@@ -146,14 +146,14 @@ function initRiskAnalysis(isFortressMode) {
                             updateData.users = users;
                         }
                     }
-                    
+
                     chrome.storage.local.set(updateData, () => {
                         console.log("[Content] ✅ XP updated directly (fallback):", currentXP);
                     });
                 });
             }
         }, 1000);
-        
+
         chrome.runtime.sendMessage({
             type: "LOG_VISIT",
             data: visitData
@@ -174,7 +174,7 @@ function initRiskAnalysis(isFortressMode) {
         if (analysis.score < 20) {
             // Award 10 XP for safe site browsing
             console.log("[Content] Sending ADD_XP message (safe site)...");
-            
+
             let xpMessageReceived = false;
             const xpTimeout = setTimeout(() => {
                 if (!xpMessageReceived) {
@@ -184,13 +184,13 @@ function initRiskAnalysis(isFortressMode) {
                         let currentXP = typeof data.userXP === 'number' ? data.userXP : 0;
                         currentXP += 10; // +10 XP for safe site
                         const newLevel = Math.floor(Math.sqrt(currentXP / 100)) + 1;
-                        
+
                         const updateData = {
                             userXP: currentXP,
                             userLevel: newLevel,
                             pendingXPSync: true
                         };
-                        
+
                         // Update user in users array if logged in
                         if (data.currentUser && data.currentUser.email && Array.isArray(data.users)) {
                             const users = [...data.users];
@@ -201,14 +201,14 @@ function initRiskAnalysis(isFortressMode) {
                                 updateData.users = users;
                             }
                         }
-                        
+
                         chrome.storage.local.set(updateData, () => {
                             console.log("[Content] ✅ ADD_XP updated directly (fallback):", currentXP);
                         });
                     });
                 }
             }, 1000);
-            
+
             chrome.runtime.sendMessage({ type: "ADD_XP", amount: 10 }, (response) => {
                 clearTimeout(xpTimeout);
                 xpMessageReceived = true;

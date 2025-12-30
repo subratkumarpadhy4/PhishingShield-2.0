@@ -610,7 +610,7 @@ function updateBlocklistFromStorage() {
                             "resourceTypes": ["main_frame"]
                         }
                     };
-                }).filter(rule => rule.condition.urlFilter !== "||undefined"); // Filter invalid rules
+                }).filter(rule => rule && rule.condition.urlFilter !== "||undefined"); // Filter invalid rules
 
                 // Clear old 2000+ rules and add new ones
                 chrome.declarativeNetRequest.getDynamicRules((currentRules) => {
@@ -633,6 +633,7 @@ function updateBlocklistFromStorage() {
                     } catch (e) {
                         hostname = r.url;
                     }
+
                     return {
                         "id": 2000 + index,
                         "priority": 1,
@@ -645,7 +646,7 @@ function updateBlocklistFromStorage() {
                             "resourceTypes": ["main_frame"]
                         }
                     };
-                }).filter(rule => rule.condition.urlFilter !== "||undefined");
+                }).filter(rule => rule && rule.condition.urlFilter !== "||undefined");
 
                 chrome.declarativeNetRequest.getDynamicRules((currentRules) => {
                     const removeIds = currentRules.filter(r => r.id >= 2000).map(r => r.id);
@@ -665,3 +666,45 @@ chrome.runtime.onStartup.addListener(updateBlocklistFromStorage);
 chrome.runtime.onInstalled.addListener(updateBlocklistFromStorage);
 
 // UPDATE_BLOCKLIST is handled in the main message listener above
+
+// -----------------------------------------------------------------------------
+// XP SYNC (Global Leaderboard)
+// -----------------------------------------------------------------------------
+
+// Sync XP every 1 minute
+chrome.alarms.create("syncXP", { periodInMinutes: 1 });
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === "syncXP") {
+        syncXPToServer();
+    }
+});
+
+function syncXPToServer() {
+    chrome.storage.local.get(['currentUser', 'userXP', 'userLevel', 'pendingXPSync'], (res) => {
+        // Only sync if there is a pending update and we have a logged-in user
+        if (res.pendingXPSync && res.currentUser) {
+            console.log("[PhishingShield] Syncing XP to Global Leaderboard...");
+
+            const userData = {
+                ...res.currentUser,
+                xp: res.userXP,
+                level: res.userLevel
+            };
+
+            fetch("https://phishingshield.onrender.com/api/users/sync", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(userData)
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log("[PhishingShield] ✅ XP Global Sync Successful");
+                        chrome.storage.local.set({ pendingXPSync: false });
+                    }
+                })
+                .catch(e => console.error("[PhishingShield] ❌ XP Sync Failed:", e));
+        }
+    });
+}

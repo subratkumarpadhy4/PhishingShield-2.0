@@ -51,7 +51,12 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "js/email.min.js"
+        "js/email.min.js",
+        "js/banned.js",
+        "banned.html",
+        "warning.html",
+        "css/*",
+        "images/*"
       ],
       "matches": [
         "<all_urls>"

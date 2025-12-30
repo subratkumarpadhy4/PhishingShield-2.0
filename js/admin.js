@@ -30,6 +30,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Special Tab Logic
             if (tabId === 'banned-sites') {
                 loadBannedSites();
+            } else if (tabId === 'reports') {
+                // Setup filter buttons when reports tab is opened
+                setupFilterButtons();
+                // Initialize filter buttons when reports tab is opened
+                setReportFilter(currentReportFilter || 'all');
             }
         });
     });
@@ -53,6 +58,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 5. Setup Modal Handlers (Replaces inline onclicks)
     setupModalHandlers();
+
+    // 6. Setup Filter Buttons
+    setupFilterButtons();
+
+    // 7. Initialize filter to 'all'
+    setTimeout(() => {
+        setReportFilter('all');
+    }, 100);
+
+    // 6. Setup Filter Buttons
+    setupFilterButtons();
+
+    // 7. Initialize filter to 'all'
+    setTimeout(() => {
+        setReportFilter('all');
+    }, 100);
 });
 
 function setupModalHandlers() {
@@ -71,6 +92,33 @@ function setupModalHandlers() {
             if (modal) modal.classList.add('hidden');
         });
     }
+}
+
+// Track if filter buttons are already set up
+let filterButtonsSetup = false;
+
+function setupFilterButtons() {
+    // Only set up once to avoid duplicate listeners
+    if (filterButtonsSetup) {
+        return;
+    }
+    
+    // Attach event listeners to all filter buttons (CSP-safe)
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    filterButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const filter = btn.getAttribute('data-filter');
+            if (filter) {
+                console.log('[Admin] Filter button clicked:', filter);
+                setReportFilter(filter);
+            }
+        });
+    });
+    
+    filterButtonsSetup = true;
+    console.log('[Admin] Filter button listeners attached:', filterButtons.length);
 }
 
 function setupDebugTools() {

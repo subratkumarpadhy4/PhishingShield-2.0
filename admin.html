@@ -514,13 +514,13 @@
 
                 <!-- Filter Controls -->
                 <div class="filter-group" style="margin-bottom: 20px; display: flex; gap: 10px;">
-                    <button class="btn btn-sm btn-active" onclick="setReportFilter('all')" id="filter-all"
+                    <button class="btn btn-sm btn-active filter-btn" data-filter="all" id="filter-all"
                         style="padding: 5px 15px;">All</button>
-                    <button class="btn btn-sm btn-outline" onclick="setReportFilter('pending')" id="filter-pending"
+                    <button class="btn btn-sm btn-outline filter-btn" data-filter="pending" id="filter-pending"
                         style="padding: 5px 15px;">Pending</button>
-                    <button class="btn btn-sm btn-outline" onclick="setReportFilter('banned')" id="filter-banned"
+                    <button class="btn btn-sm btn-outline filter-btn" data-filter="banned" id="filter-banned"
                         style="padding: 5px 15px;">Banned</button>
-                    <button class="btn btn-sm btn-outline" onclick="setReportFilter('ignored')" id="filter-ignored"
+                    <button class="btn btn-sm btn-outline filter-btn" data-filter="ignored" id="filter-ignored"
                         style="padding: 5px 15px;">Ignored</button>
                 </div>
                 <table id="reports-table">
