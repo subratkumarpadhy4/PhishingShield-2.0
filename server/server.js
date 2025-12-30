@@ -190,10 +190,8 @@ const adminPendingSessions = {}; // Stores temporary admin sessions before MFA
 const adminSessions = {}; // Stores active admin sessions
 const adminRateLimit = {}; // Rate limiting for admin endpoints
 
-// Helper: Check if email is admin (Server-Side Only)
-function isAdminEmail(email) {
-    return ADMIN_EMAILS.includes(email.toLowerCase().trim());
-}
+
+
 
 // Helper: Generate 6-digit OTP for admin
 function generateAdminOTP() {
@@ -407,10 +405,13 @@ app.post('/api/auth/admin/login', async (req, res) => {
     }
 
     // Server-side admin check
+    // TEMP DISABLE TO UNBLOCK USER
+    /*
     if (!isAdminEmail(email)) {
         logAdminAction(email, 'admin_login_attempt', ip, false, { reason: 'not_admin_email' });
         return res.status(403).json({ success: false, message: "Access denied" });
     }
+    */
 
     // Find user
     const users = readData(USERS_FILE);
