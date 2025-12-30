@@ -97,7 +97,7 @@ console.log("[PhishingShield] Initializing context menu module...");
 // Create context menu item for reporting websites
 function createContextMenu() {
     console.log("[PhishingShield] createContextMenu() called");
-    
+
     // Check if contextMenus API is available
     if (!chrome.contextMenus) {
         console.error("[PhishingShield] contextMenus API not available - extension may not have permission");
@@ -543,36 +543,120 @@ self.testServiceWorker = function () {
 /**
  * COMMUNITY BLOCKLIST
  * Converts 'banned' reports into active blocking rules.
+ * Syncs with server to get global banned sites.
  */
 function updateBlocklistFromStorage() {
-    chrome.storage.local.get(['reportedSites'], (result) => {
+    // First get local banned sites and blacklist
+    chrome.storage.local.get(['reportedSites', 'blacklist'], (result) => {
         const reports = result.reportedSites || [];
-        const banned = reports.filter(r => r.status === 'banned');
+        const blacklist = result.blacklist || [];
+        let banned = reports.filter(r => r.status === 'banned');
 
-        // Convert to Rules
-        const newRules = banned.map((r, index) => ({
-            "id": 2000 + index, // IDs 2000+ for Community Blocklist
-            "priority": 1,
-            "action": {
-                "type": "redirect",
-                "redirect": { "extensionPath": "/warning.html?reason=COMMUNITY_BAN" }
-            },
-            "condition": {
-                "urlFilter": "||" + new URL(r.url).hostname,
-                "resourceTypes": ["main_frame"]
+        // Also add any URLs from blacklist array that aren't in reports
+        blacklist.forEach(url => {
+            if (!banned.find(r => r.url === url)) {
+                try {
+                    const hostname = new URL(url).hostname;
+                    banned.push({
+                        url: url,
+                        hostname: hostname,
+                        status: 'banned'
+                    });
+                } catch (e) {
+                    // If URL parsing fails, use as-is
+                    banned.push({
+                        url: url,
+                        hostname: url,
+                        status: 'banned'
+                    });
+                }
             }
-        }));
-
-        // Clear old 2000+ rules and add new ones
-        chrome.declarativeNetRequest.getDynamicRules((currentRules) => {
-            const removeIds = currentRules.filter(r => r.id >= 2000).map(r => r.id);
-            chrome.declarativeNetRequest.updateDynamicRules({
-                removeRuleIds: removeIds,
-                addRules: newRules
-            }, () => {
-                console.log(`[PhishingShield] Blocklist Updated: ${newRules.length} sites blocked.`);
-            });
         });
+
+        // Also fetch banned sites from server for global protection
+        fetch('https://phishingshield.onrender.com/api/reports')
+            .then(res => res.json())
+            .then(serverReports => {
+                const serverBanned = serverReports.filter(r => r.status === 'banned');
+
+                // Merge local and server banned sites (deduplicate by URL)
+                const bannedMap = new Map();
+                banned.forEach(r => bannedMap.set(r.url, r));
+                serverBanned.forEach(r => {
+                    if (!bannedMap.has(r.url)) {
+                        bannedMap.set(r.url, r);
+                    }
+                });
+                banned = Array.from(bannedMap.values());
+
+                // Convert to Rules
+                const newRules = banned.map((r, index) => {
+                    let hostname;
+                    try {
+                        hostname = r.hostname || new URL(r.url).hostname;
+                    } catch (e) {
+                        hostname = r.url;
+                    }
+
+                    return {
+                        "id": 2000 + index, // IDs 2000+ for Community Blocklist
+                        "priority": 1,
+                        "action": {
+                            "type": "redirect",
+                            "redirect": { "extensionPath": "/banned.html?url=" + encodeURIComponent(r.url) }
+                        },
+                        "condition": {
+                            "urlFilter": "||" + hostname,
+                            "resourceTypes": ["main_frame"]
+                        }
+                    };
+                }).filter(rule => rule.condition.urlFilter !== "||undefined"); // Filter invalid rules
+
+                // Clear old 2000+ rules and add new ones
+                chrome.declarativeNetRequest.getDynamicRules((currentRules) => {
+                    const removeIds = currentRules.filter(r => r.id >= 2000).map(r => r.id);
+                    chrome.declarativeNetRequest.updateDynamicRules({
+                        removeRuleIds: removeIds,
+                        addRules: newRules
+                    }, () => {
+                        console.log(`[PhishingShield] Blocklist Updated: ${newRules.length} sites blocked globally.`);
+                    });
+                });
+            })
+            .catch(err => {
+                console.warn("[PhishingShield] Failed to fetch server blocklist, using local only:", err);
+                // Fallback to local only
+                const newRules = banned.map((r, index) => {
+                    let hostname;
+                    try {
+                        hostname = r.hostname || new URL(r.url).hostname;
+                    } catch (e) {
+                        hostname = r.url;
+                    }
+                    return {
+                        "id": 2000 + index,
+                        "priority": 1,
+                        "action": {
+                            "type": "redirect",
+                            "redirect": { "extensionPath": "/banned.html?url=" + encodeURIComponent(r.url) }
+                        },
+                        "condition": {
+                            "urlFilter": "||" + hostname,
+                            "resourceTypes": ["main_frame"]
+                        }
+                    };
+                }).filter(rule => rule.condition.urlFilter !== "||undefined");
+
+                chrome.declarativeNetRequest.getDynamicRules((currentRules) => {
+                    const removeIds = currentRules.filter(r => r.id >= 2000).map(r => r.id);
+                    chrome.declarativeNetRequest.updateDynamicRules({
+                        removeRuleIds: removeIds,
+                        addRules: newRules
+                    }, () => {
+                        console.log(`[PhishingShield] Blocklist Updated (local only): ${newRules.length} sites blocked.`);
+                    });
+                });
+            });
     });
 }
 

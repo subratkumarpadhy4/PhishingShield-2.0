@@ -518,12 +518,68 @@
                             <th>User Name</th>
                             <th>Date</th>
                             <th>Status</th>
-                            <th>Action</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
                             <td colspan="5" style="text-align:center;">Loading reports...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- BANNED SITES TAB -->
+        <div id="banned-sites" class="tab-content">
+            <div class="table-container">
+                <div class="section-header">
+                    <h3>🚫 Banned Websites Registry</h3>
+                    <button class="btn btn-outline" onclick="loadBannedSites()">Refresh List</button>
+                </div>
+                <p style="margin-bottom:20px; color:#6c757d;">
+                    List of all websites that have been banned by administrators.
+                </p>
+                <table id="banned-table">
+                    <thead>
+                        <tr>
+                            <th>Domain / URL</th>
+                            <th>Banned Date</th>
+                            <th>Reported By</th>
+                            <th>Admin Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="banned-table-body">
+                        <tr>
+                            <td colspan="4" style="text-align:center;">Loading banned sites...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- BANNED SITES TAB -->
+        <div id="banned-sites" class="tab-content">
+            <div class="table-container">
+                <div class="section-header">
+                    <h3>🚫 Banned Websites Registry</h3>
+                    <button class="btn btn-outline" onclick="loadBannedSites()">Refresh List</button>
+                </div>
+                <p style="margin-bottom:20px; color:#6c757d;">
+                    List of all websites that have been banned by administrators.
+                </p>
+                <table id="banned-table">
+                    <thead>
+                        <tr>
+                            <th>Domain / URL</th>
+                            <th>Banned Date</th>
+                            <th>Reported By</th>
+                            <th>Banned By</th>
+                        </tr>
+                    </thead>
+                    <tbody id="banned-table-body">
+                        <tr>
+                            <td colspan="4" style="text-align:center;">Loading banned sites...</td>
                         </tr>
                     </tbody>
                 </table>

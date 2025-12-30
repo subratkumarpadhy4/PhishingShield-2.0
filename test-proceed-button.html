@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Proceed Button</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 600px;
+        }
+
+        button {
+            background: white;
+            color: #dc3545;
+            border: 2px solid #dc3545;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+        }
+
+        button:hover {
+            background: #dc3545;
+            color: white;
+        }
+
+        #log {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            text-align: left;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🧪 Test Proceed Button</h1>
+        <p>This is a test page to verify the "Proceed Anyway" button works.</p>
+
+        <button onclick="testProceed()">⚠️ Test Proceed Anyway</button>
+        <button onclick="clearLog()">Clear Log</button>
+
+        <div id="log"></div>
+    </div>
+
+    <script>
+        const testUrl = 'https://example.com';
+
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function testProceed() {
+            log('✅ Button clicked!');
+            log('Test URL: ' + testUrl);
+
+            if (confirm('⚠️ TEST WARNING\n\nThis is a test. Click OK to simulate navigation.\n\nIn the real extension, this would navigate to:\n' + testUrl)) {
+                log('✅ User confirmed');
+                log('🚀 Would navigate to: ' + testUrl);
+                alert('SUCCESS! Button works correctly.\n\nIn the real extension, you would now be redirected to:\n' + testUrl);
+            } else {
+                log('❌ User cancelled');
+            }
+        }
+
+        log('Page loaded. Click the button to test.');
+    </script>
+</body>
+
+</html>

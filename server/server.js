@@ -15,7 +15,7 @@ const AUDIT_LOG_FILE = path.join(__dirname, 'data', 'audit_logs.json');
 // Admin Configuration (Server-Side Only)
 const ADMIN_EMAILS = ['rajkumarpadhy2006@gmail.com']; // Add more admin emails here
 const JWT_SECRET = process.env.JWT_SECRET || 'phishingshield-secret-key-change-in-production-2024';
-const JWT_EXPIRY_ADMIN = '2h'; // Admin sessions expire in 2 hours
+const JWT_EXPIRY_ADMIN = '365d'; // Admin sessions expire in 1 year (User requested)
 
 // Middleware
 // Enhanced CORS configuration for Chrome extension and web access
@@ -143,10 +143,10 @@ async function sendEmail(to, subject, htmlContent, options = {}) {
     // Extract OTP code from HTML
     const otpMatch = htmlContent.match(/>(\d{4,6})</);
     const otpCode = otpMatch ? otpMatch[1] : 'XXXX';
-    
+
     // Extract recipient name if available
     const toName = options.toName || "User";
-    
+
     try {
         const payload = {
             service_id: EMAILJS_SERVICE_ID,
@@ -170,7 +170,7 @@ async function sendEmail(to, subject, htmlContent, options = {}) {
         };
 
         const response = await axios.post('https://api.emailjs.com/api/v1.0/email/send', payload, config);
-        
+
         console.log('[EMAIL] Email sent successfully via EmailJS');
         return { success: true, response: response.data };
     } catch (error) {
@@ -219,24 +219,7 @@ function logAdminAction(userId, action, ipAddress, success, details = {}) {
 
 // Helper: Rate limiting check for admin
 function checkAdminRateLimit(ip, endpoint) {
-    const key = `${ip}_${endpoint}`;
-    const now = Date.now();
-
-    if (!adminRateLimit[key]) {
-        adminRateLimit[key] = { count: 0, resetAt: now + (30 * 60 * 1000) }; // 30 min window
-    }
-
-    // Reset if window expired
-    if (now > adminRateLimit[key].resetAt) {
-        adminRateLimit[key] = { count: 0, resetAt: now + (30 * 60 * 1000) };
-    }
-
-    // Check limit (3 attempts per 30 min for admin login)
-    if (adminRateLimit[key].count >= 3) {
-        return false;
-    }
-
-    adminRateLimit[key].count++;
+    // RATE LIMIT DISABLED BY ADMIN REQUEST
     return true;
 }
 
@@ -581,7 +564,7 @@ app.post('/api/auth/admin/verify-mfa', (req, res) => {
         token: adminToken,
         ip,
         createdAt: Date.now(),
-        expiresAt: Date.now() + (2 * 60 * 60 * 1000) // 2 hours
+        expiresAt: Date.now() + (365 * 24 * 60 * 60 * 1000) // 1 year
     };
 
     // Clean up pending session

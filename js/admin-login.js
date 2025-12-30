@@ -130,7 +130,7 @@
                     chrome.storage.local.set({
                         adminToken: data.token,
                         adminUser: data.user,
-                        adminTokenExpiry: Date.now() + (2 * 60 * 60 * 1000) // 2 hours
+                        adminTokenExpiry: Date.now() + (365 * 24 * 60 * 60 * 1000) // 1 year (User requested unlimited/long login)
                     }, () => {
                         showAlert('Login successful! Redirecting...', 'success');
                         setTimeout(() => {

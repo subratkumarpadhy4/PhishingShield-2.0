@@ -217,8 +217,19 @@
             </div>
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" required placeholder="Create a strong password"
-                    autocomplete="new-password" minlength="6">
+                <div style="position: relative;">
+                    <input type="password" id="password" required placeholder="Create a strong password"
+                        autocomplete="new-password" minlength="6" style="padding-right: 45px;">
+                    <button type="button" id="toggle-password" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); 
+                        background: transparent; border: none; cursor: pointer; padding: 5px; width: auto; margin: 0;"
+                        title="Show/Hide Password">
+                        <svg id="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
+                </div>
                 <div class="password-strength">
                     <div class="strength-bar">
                         <div class="strength-fill" id="strength-fill"></div>
