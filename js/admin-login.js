@@ -130,7 +130,7 @@
                     chrome.storage.local.set({
                         adminToken: data.token,
                         adminUser: data.user,
-                        adminTokenExpiry: Date.now() + (365 * 24 * 60 * 60 * 1000) // 1 year (User requested unlimited/long login)
+                        adminTokenExpiry: Date.now() + (10 * 24 * 60 * 60 * 1000) // 10 days
                     }, () => {
                         showAlert('Login successful! Redirecting...', 'success');
                         setTimeout(() => {
@@ -182,7 +182,11 @@
     };
 
     // Set up event listeners (required due to CSP blocking inline handlers)
+    let listenersAttached = false;
     function initEventListeners() {
+        if (listenersAttached) return;
+        listenersAttached = true;
+
         // Step 1 button - PRIMARY handler
         const btnStep1 = document.getElementById('btn-step1');
         if (btnStep1) {

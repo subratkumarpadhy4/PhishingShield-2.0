@@ -15,7 +15,7 @@ const AUDIT_LOG_FILE = path.join(__dirname, 'data', 'audit_logs.json');
 // Admin Configuration (Server-Side Only)
 const ADMIN_EMAILS = ['rajkumarpadhy2006@gmail.com']; // Add more admin emails here
 const JWT_SECRET = process.env.JWT_SECRET || 'phishingshield-secret-key-change-in-production-2024';
-const JWT_EXPIRY_ADMIN = '365d'; // Admin sessions expire in 1 year (User requested)
+const JWT_EXPIRY_ADMIN = '10d'; // Admin sessions expire in 10 days
 
 // Middleware
 // Enhanced CORS configuration for Chrome extension and web access
@@ -405,13 +405,10 @@ app.post('/api/auth/admin/login', async (req, res) => {
     }
 
     // Server-side admin check
-    // TEMP DISABLE TO UNBLOCK USER
-    /*
     if (!isAdminEmail(email)) {
         logAdminAction(email, 'admin_login_attempt', ip, false, { reason: 'not_admin_email' });
         return res.status(403).json({ success: false, message: "Access denied" });
     }
-    */
 
     // Find user
     const users = readData(USERS_FILE);
@@ -503,6 +500,18 @@ app.post('/api/auth/admin/login', async (req, res) => {
     });
 });
 
+// Persistent Admin Sessions
+const SESSIONS_FILE = path.join(__dirname, 'data', 'admin_sessions.json');
+if (!fs.existsSync(SESSIONS_FILE)) fs.writeFileSync(SESSIONS_FILE, JSON.stringify({}, null, 2));
+
+function getAdminSessions() {
+    return readData(SESSIONS_FILE) || {};
+}
+
+function saveAdminSessions(sessions) {
+    writeData(SESSIONS_FILE, sessions);
+}
+
 // POST /api/auth/admin/verify-mfa - Step 2: MFA Verification
 app.post('/api/auth/admin/verify-mfa', (req, res) => {
     const { sessionId, otp } = req.body;
@@ -559,14 +568,16 @@ app.post('/api/auth/admin/verify-mfa', (req, res) => {
         { expiresIn: JWT_EXPIRY_ADMIN }
     );
 
-    // Store admin session
-    adminSessions[sessionId] = {
+    // Store admin session PERSISTENTLY
+    const sessions = getAdminSessions();
+    sessions[sessionId] = {
         userId: user.email,
         token: adminToken,
         ip,
         createdAt: Date.now(),
-        expiresAt: Date.now() + (365 * 24 * 60 * 60 * 1000) // 1 year
+        expiresAt: Date.now() + (10 * 24 * 60 * 60 * 1000) // 10 days
     };
+    saveAdminSessions(sessions);
 
     // Clean up pending session
     delete adminPendingSessions[sessionId];
@@ -581,7 +592,7 @@ app.post('/api/auth/admin/verify-mfa', (req, res) => {
             name: user.name,
             role: 'admin'
         },
-        expiresIn: '2h'
+        expiresIn: '10d'
     });
 });
 
@@ -603,16 +614,19 @@ function requireAdmin(req, res, next) {
             return res.status(403).json({ success: false, message: "Admin access required" });
         }
 
-        // Verify session exists
+        // Verify session exists in PERSISTENT store
         const sessionId = decoded.sessionId;
-        if (!adminSessions[sessionId]) {
+        const sessions = getAdminSessions(); // Read from file
+
+        if (!sessions[sessionId]) {
             return res.status(401).json({ success: false, message: "Session expired" });
         }
 
         // Check session expiry
-        const session = adminSessions[sessionId];
+        const session = sessions[sessionId];
         if (Date.now() > session.expiresAt) {
-            delete adminSessions[sessionId];
+            delete sessions[sessionId];
+            saveAdminSessions(sessions);
             return res.status(401).json({ success: false, message: "Session expired" });
         }
 
