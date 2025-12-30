@@ -4,7 +4,13 @@
 let db = null; // No longer used
 
 // Import AI Model for basic offline checks
-importScripts('js/ai_model.js');
+// Note: Path is relative to extension root, but since background.js is in js/, we use './ai_model.js'
+try {
+    importScripts('./ai_model.js');
+} catch (e) {
+    console.warn("[PhishingShield] Failed to load ai_model.js:", e.message || e);
+    // Continue anyway - AI model is optional for basic functionality
+}
 
 // -----------------------------------------------------------------------------
 // TRUSTED EXTENSIONS WHITELIST (Tier 1: Trusted)
@@ -82,6 +88,131 @@ if (chrome.management && chrome.management.onInstalled) {
         }
     });
 }
+
+// -----------------------------------------------------------------------------
+// CONTEXT MENU - REPORT WEBSITE
+// -----------------------------------------------------------------------------
+console.log("[PhishingShield] Initializing context menu module...");
+
+// Create context menu item for reporting websites
+function createContextMenu() {
+    console.log("[PhishingShield] createContextMenu() called");
+    
+    // Check if contextMenus API is available
+    if (!chrome.contextMenus) {
+        console.error("[PhishingShield] contextMenus API not available - extension may not have permission");
+        return;
+    }
+
+    console.log("[PhishingShield] contextMenus API is available, creating menu...");
+
+    // Try to remove existing menu first (ignore errors if it doesn't exist)
+    chrome.contextMenus.remove("report-to-phishingshield", () => {
+        // Ignore errors from remove - menu might not exist
+        if (chrome.runtime.lastError) {
+            console.log("[PhishingShield] No existing menu to remove (this is OK)");
+        }
+
+        // Create the context menu item directly
+        chrome.contextMenus.create({
+            id: "report-to-phishingshield",
+            title: "Report to PhishingShield",
+            contexts: ["page", "link"]
+        }, () => {
+            if (chrome.runtime.lastError) {
+                const errorMsg = chrome.runtime.lastError.message || '';
+                // If it says duplicate/exists, that's actually OK - menu was already there
+                if (errorMsg.includes('duplicate') || errorMsg.includes('already exists') || errorMsg.includes('Cannot create')) {
+                    console.log("[PhishingShield] Context menu already exists (this is OK):", errorMsg);
+                } else {
+                    console.error("[PhishingShield] ❌ Context menu creation FAILED:", errorMsg);
+                }
+            } else {
+                console.log("[PhishingShield] ✅✅✅ Context menu created successfully!");
+            }
+        });
+    });
+}
+
+// Handle context menu clicks
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === "report-to-phishingshield") {
+        console.log("[PhishingShield] Report context menu clicked");
+
+        // Get the URL to report (either clicked link or current page)
+        // info.linkUrl is available when right-clicking on a link
+        // tab.url is available when right-clicking on the page
+        const urlToReport = info.linkUrl || (tab && tab.url) || '';
+
+        if (!urlToReport || urlToReport.startsWith('chrome://') || urlToReport.startsWith('chrome-extension://') || urlToReport.startsWith('edge://') || urlToReport.startsWith('moz-extension://')) {
+            chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'images/icon48.png',
+                title: 'Cannot Report',
+                message: 'System pages cannot be reported.',
+                priority: 1
+            });
+            return;
+        }
+
+        // Get user info and send report
+        chrome.storage.local.get(['currentUser'], (data) => {
+            const user = data.currentUser || {};
+            const reporterDisplay = (user.name || 'Anonymous') + (user.email ? ` (${user.email})` : '');
+
+            let hostname;
+            try {
+                hostname = new URL(urlToReport).hostname;
+            } catch (e) {
+                hostname = urlToReport;
+            }
+
+            const reportPayload = {
+                id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                url: urlToReport,
+                hostname: hostname,
+                reporter: reporterDisplay,
+                timestamp: Date.now(),
+                status: 'pending'
+            };
+
+            // Send to Backend
+            fetch('https://phishingshield.onrender.com/api/reports', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(reportPayload)
+            })
+                .then(res => res.json())
+                .then(data => {
+                    console.log("[PhishingShield] Report sent successfully:", data);
+                    chrome.notifications.create({
+                        type: 'basic',
+                        iconUrl: 'images/icon48.png',
+                        title: '✅ Report Submitted',
+                        message: `Thank you for reporting ${hostname}. Our team will review it.`,
+                        priority: 1
+                    });
+                })
+                .catch(err => {
+                    console.error("[PhishingShield] Report failed:", err);
+                    chrome.notifications.create({
+                        type: 'basic',
+                        iconUrl: 'images/icon48.png',
+                        title: '⚠️ Report Failed',
+                        message: 'Could not submit report. Please try again later.',
+                        priority: 1
+                    });
+                });
+
+            // Save locally as backup
+            chrome.storage.local.get(['reportedSites'], (res) => {
+                const reports = res.reportedSites || [];
+                reports.push(reportPayload);
+                chrome.storage.local.set({ reportedSites: reports });
+            });
+        });
+    }
+});
 
 // -----------------------------------------------------------------------------
 // MESSAGE LISTENERS
@@ -162,9 +293,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             const reporterDisplay = (user.name || 'Anonymous') + (user.email ? ` (${user.email})` : '');
 
             const reportPayload = {
+                id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                 url: request.url,
                 hostname: request.hostname,
-                reporter: reporterDisplay
+                reporter: reporterDisplay,
+                timestamp: Date.now(),
+                status: 'pending'
             };
 
             // Send to Backend
@@ -186,7 +320,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             // Local Backup
             chrome.storage.local.get(['reportedSites'], (res) => {
                 const logs = res.reportedSites || [];
-                logs.push({ ...reportPayload, status: 'pending', timestamp: Date.now() });
+                logs.push(reportPayload);
                 chrome.storage.local.set({ reportedSites: logs });
             });
         });
@@ -357,13 +491,25 @@ function updateFortressRules(enabled) {
 
 console.log("PhishingShield Service Worker Loaded - " + new Date().toISOString());
 
-// Keep service worker alive by listening to events
-chrome.runtime.onInstalled.addListener(() => {
-    console.log("[PhishingShield] Extension installed/updated");
+// Create context menu - this is critical for MV3
+// Try to create immediately (for cases where extension was already installed)
+// Wrap in try-catch to prevent service worker from crashing
+try {
+    createContextMenu();
+} catch (e) {
+    console.error("[PhishingShield] Error creating context menu on startup:", e);
+}
+
+// Create context menu on install/update - this is the primary way in MV3
+chrome.runtime.onInstalled.addListener((details) => {
+    console.log("[PhishingShield] Extension installed/updated:", details.reason);
+    createContextMenu(); // Create context menu on install/update
 });
 
+// Also create on browser startup
 chrome.runtime.onStartup.addListener(() => {
     console.log("[PhishingShield] Browser startup");
+    createContextMenu(); // Recreate context menu on browser startup
 });
 
 // Initialize XP system on startup

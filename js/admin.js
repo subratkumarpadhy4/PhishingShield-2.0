@@ -405,15 +405,42 @@ function renderReports(reports) {
         const date = new Date(r.timestamp).toLocaleDateString();
         const status = r.status || 'pending';
 
-        let statusBadge = '<span class="badge" style="background:#ffc107; color:black">PENDING</span>';
-        let actionBtn = `<button class="btn" style="background:#dc3545; padding:4px 8px; font-size:12px;" onclick="banSite('${r.url}', '${r.id}')">BAN SITE</button>`;
+        // Escape HTML to prevent XSS
+        const escapeHtml = (text) => {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        };
 
+        let statusBadge = '<span class="badge" style="background:#ffc107; color:black">PENDING</span>';
+        const escapedUrl = escapeHtml(r.url);
+        const escapedId = escapeHtml(r.id || '');
+        const escapedHostname = escapeHtml(r.hostname || new URL(r.url).hostname || r.url);
+        
+        // Action buttons based on status
+        let actionBtn = '';
         if (status === 'banned') {
-            statusBadge = '<span class="badge" style="background:#dc3545; color:white">BANNED</span>';
-            actionBtn = `<span style="color:#198754; font-size:12px; font-weight:bold;">Accounted For</span>`;
+            statusBadge = '<span class="badge" style="background:#dc3545; color:white">🚫 BANNED</span>';
+            actionBtn = `
+                <div style="display:flex; gap:5px;">
+                    <button class="btn" style="background:#198754; padding:4px 8px; font-size:11px;" onclick="unbanSite('${escapedUrl.replace(/'/g, "\\'")}', '${escapedId.replace(/'/g, "\\'")}')" title="Unban this site">UNBAN</button>
+                    <button class="btn" style="background:#0d6efd; padding:4px 8px; font-size:11px;" onclick="viewSiteDetails('${escapedUrl.replace(/'/g, "\\'")}', '${escapedId.replace(/'/g, "\\'")}')" title="View details">DETAILS</button>
+                </div>
+            `;
         } else if (status === 'ignored') {
             statusBadge = '<span class="badge" style="background:#6c757d; color:white">IGNORED</span>';
-            actionBtn = '-';
+            actionBtn = `
+                <button class="btn" style="background:#dc3545; padding:4px 8px; font-size:11px;" onclick="banSite('${escapedUrl.replace(/'/g, "\\'")}', '${escapedId.replace(/'/g, "\\'")}')" title="Ban this site anyway">BAN</button>
+            `;
+        } else {
+            // Pending status - show multiple actions
+            actionBtn = `
+                <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                    <button class="btn" style="background:#dc3545; padding:4px 8px; font-size:11px;" onclick="banSite('${escapedUrl.replace(/'/g, "\\'")}', '${escapedId.replace(/'/g, "\\'")}')" title="Block this harmful site">🚫 BAN</button>
+                    <button class="btn" style="background:#6c757d; padding:4px 8px; font-size:11px;" onclick="ignoreReport('${escapedUrl.replace(/'/g, "\\'")}', '${escapedId.replace(/'/g, "\\'")}')" title="Mark as safe/false positive">✓ IGNORE</button>
+                    <button class="btn" style="background:#0d6efd; padding:4px 8px; font-size:11px;" onclick="viewSiteDetails('${escapedUrl.replace(/'/g, "\\'")}', '${escapedId.replace(/'/g, "\\'")}')" title="View report details">🔍 DETAILS</button>
+                </div>
+            `;
         }
 
         // Parse reporter to separate Name and Email if possible for better display
@@ -423,12 +450,14 @@ function renderReports(reports) {
             const parts = reporterDisplay.split('(');
             const name = parts[0].trim();
             const email = '(' + parts[1]; // keep the email part
-            reporterDisplay = `<strong>${name}</strong> <span style="font-size:12px; color:#6c757d;">${email}</span>`;
+            reporterDisplay = `<strong>${escapeHtml(name)}</strong> <span style="font-size:12px; color:#6c757d;">${escapeHtml(email)}</span>`;
+        } else {
+            reporterDisplay = escapeHtml(reporterDisplay);
         }
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td style="font-family:monospace; color:#0d6efd;">${r.url}</td>
+            <td style="font-family:monospace; color:#0d6efd;">${escapeHtml(r.url)}</td>
             <td>${reporterDisplay}</td>
             <td>${date}</td>
             <td>${statusBadge}</td>
