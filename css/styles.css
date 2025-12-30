@@ -1,0 +1,201 @@
+/* PhishingShield Injected Styles */
+
+/* Tooltip */
+#phishingshield-tooltip {
+    position: absolute;
+    background-color: #333;
+    color: #fff;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 2147483647;
+    /* Max z-index */
+    pointer-events: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    font-family: sans-serif;
+    max-width: 300px;
+    word-wrap: break-word;
+}
+
+#phishingshield-tooltip.suspicious {
+    background-color: #dc3545;
+    font-weight: bold;
+}
+
+/* Security Banner */
+#phishingshield-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: #dc3545;
+    /* Red */
+    color: white;
+    text-align: center;
+    padding: 15px;
+    font-family: sans-serif;
+    font-weight: bold;
+    z-index: 2147483647;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+}
+
+#phishingshield-banner p {
+    margin: 0;
+    padding: 0;
+    font-size: 16px;
+}
+
+/* Floating Risk HUD (Hackathon Feature) */
+#phishingshield-hud {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 300px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    z-index: 2147483647;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+    animation: slideIn 0.5s ease-out;
+    border: 1px solid #ddd;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(100px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.hud-header {
+    padding: 10px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: white;
+    font-weight: bold;
+}
+
+#hud-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.hud-body {
+    padding: 15px;
+    text-align: center;
+}
+
+.risk-score {
+    font-size: 1.2rem;
+    color: #555;
+    margin-bottom: 5px;
+}
+
+.score-val {
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.risk-level {
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+}
+
+.risk-factors {
+    text-align: left;
+    margin: 10px 0 0 0;
+    padding-left: 20px;
+    font-size: 13px;
+    color: #444;
+}
+
+.risk-factors li {
+    margin-bottom: 5px;
+}
+
+/* Antigravity Animation for Inspector Mode */
+@keyframes antigravity {
+    0% {
+        transform: translateY(0px);
+        box-shadow: 0 0 15px rgba(220, 53, 69, 0.6);
+    }
+
+    50% {
+        transform: translateY(-10px);
+        box-shadow: 0 15px 25px rgba(220, 53, 69, 0.4);
+    }
+
+    100% {
+        transform: translateY(0px);
+        box-shadow: 0 0 15px rgba(220, 53, 69, 0.6);
+    }
+}
+
+.antigravity-float {
+    animation: antigravity 3s ease-in-out infinite;
+    position: relative;
+    z-index: 2147483647;
+    /* Must be above overlay */
+    transition: all 0.3s ease;
+}
+
+/* Link Pulse (Warning Light) */
+@keyframes pulse-red {
+    0% {
+        background-color: rgba(220, 53, 69, 0.1);
+    }
+
+    50% {
+        background-color: rgba(220, 53, 69, 0.4);
+    }
+
+    100% {
+        background-color: rgba(220, 53, 69, 0.1);
+    }
+}
+
+.suspicious-pulse {
+    animation: pulse-red 1.5s infinite;
+    border-radius: 3px;
+    border-bottom: 2px solid #dc3545;
+}
+
+/* Spotlight Overlay */
+#phishingshield-spotlight-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.75);
+    z-index: 2147483646;
+    /* Just below risky elements */
+    pointer-events: none;
+    /* Let clicks pass through if needed, but visually block */
+    display: none;
+    transition: opacity 0.3s;
+}
+
+/* Dashboard Pie Chart (CSS only) */
+.pie-chart {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: conic-gradient(#dc3545 0deg 90deg,
+            #ffc107 90deg 180deg,
+            #0d6efd 180deg 360deg);
+    margin: 0 auto;
+}

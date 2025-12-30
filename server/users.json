@@ -1,0 +1,39 @@
+[
+  {
+    "name": "System Admin",
+    "email": "rajkumarpadhy2006@gmail.com",
+    "password": "rajkumarpadhy2006@gmail.com",
+    "joined": 1703800000000,
+    "xp": 37920,
+    "level": 20,
+    "history": [],
+    "lastCriticalTime": 1703800000000
+  },
+  {
+    "name": "subrat kumar padhy",
+    "email": "padhysubratkumar7@gmail.com",
+    "password": "padhysubratkumar7@gmail.com",
+    "xp": 0,
+    "level": 1,
+    "joined": 1766952392006,
+    "rank": "Novice"
+  },
+  {
+    "name": "subrat.g",
+    "email": "subratkumarpadhy.g.new@gmail.com",
+    "password": "subratkumarpadhy.g.new@gmail.com",
+    "xp": 90,
+    "level": 1,
+    "joined": 1766954223620,
+    "rank": "Novice"
+  },
+  {
+    "name": "subrat clg id",
+    "email": "subratkumar_padhy@srmap.edu.in",
+    "password": "subratkumar_padhy@srmap.edu.in",
+    "xp": 700,
+    "level": 3,
+    "joined": 1766993673694,
+    "rank": "Novice"
+  }
+]

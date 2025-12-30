@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishingShield Test Page</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        section {
+            margin-bottom: 40px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        input {
+            padding: 8px;
+            margin: 5px 0;
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>PhishingShield Verification</h1>
+    <p>Open this page in Chrome with the extension loaded to test the features.</p>
+
+    <section>
+        <h2>Test 1: Link Preview & Suspicion</h2>
+        <p>Hover over these links to see the tooltip:</p>
+        <ul>
+            <li>
+                <a href="https://www.google.com">Normal Google Link</a> (Should show normal tooltip)
+            </li>
+            <li>
+                <a href="http://evil.com">www.google.com</a> (<b>Suspicious!</b> Text doesn't match destination. Tooltip
+                should be RED with warning.)
+            </li>
+            <li>
+                <a href="http://login.update.secure.account.bank.com">Link with excessive subdomains</a>
+                (<b>Suspicious!</b> Tooltip should be RED.)
+            </li>
+        </ul>
+    </section>
+
+    <section>
+        <h2>Test 2: Blocking (Click to Test)</h2>
+        <p>Clicking these should redirect you to the Warning Page:</p>
+        <ul>
+            <li>
+                <a href="http://192.168.1.1/login">Link to IP Address (e.g. 192.168.1.1)</a>
+            </li>
+            <li>
+                <a href="http://g00gle.com">Link to Typosquatted Domain (g00gle.com)</a>
+            </li>
+        </ul>
+    </section>
+
+    <section>
+        <h2>Test 3: Insecure Login Detection</h2>
+        <p>Because this file is opened locally (file://) or potentially http://, checking for a password field below.
+        </p>
+        <p><b>If you see a Red Banner at the top of this page, the feature is working!</b></p>
+        <form>
+            <label>Username: <input type="text" name="username"></label>
+            <label>Password: <input type="password" name="password"></label>
+        </form>
+    </section>
+
+    <section>
+        <h2>Test 4: Analysis/Reporting</h2>
+        <p>Right-click anywhere on this page and look for "Report Phishing Link" in the menu.</p>
+    </section>
+    <div class="test-section">
+        <h2>Feature 3: Risk Engine & HUD</h2>
+        <p>This section contains urgency keywords that should trigger the <strong>Risk HUD</strong>.</p>
+        <div style="background: #fff3cd; padding: 15px; border: 1px solid #ffeeba;">
+            <p><strong>ATTENTION:</strong> Your account will be <strong>suspended</strong> within <strong>24
+                    hours</strong> if you do not <strong>verify your account</strong> immediately.</p>
+            <p>Please take <strong>immediate action</strong> preventing <strong>unauthorized access</strong>.</p>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Feature 4: Download Protection</h2>
+        <p>Trying to download a risky file from this "insecure" (HTTP/Local) page should warn you.</p>
+        <p>
+            <a href="malware_simulated.exe"
+                style="background: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Download
+                Report.exe (Test)</a>
+            <br><br>
+            <a href="test_archive.zip"
+                style="background: #ffc107; color: black; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Download
+                Archive.zip (New Double Confirm)</a>
+            <br><br>
+            <a href="test_image.iso"
+                style="background: #ffc107; color: black; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Download
+                Disk.iso (New Double Confirm)</a>
+            <br><br>
+            <a href="test_script.bat"
+                style="background: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Download
+                Script.bat (Blocked)</a>
+        </p>
+    </div>
+
+    <div class="test-section" style="border: 2px solid #0d6efd; background: #e7f1ff;">
+        <h2>Feature 5: Advanced Algorithm Simulation (Brand New)</h2>
+        <p>Click these to reload the page and "pretend" to be on a malicious domain. This tests the new
+            <b>Levenshtein</b>
+            and <b>Entropy</b> algorithms.
+        </p>
+        <ul>
+            <li>
+                <a href="test.html?fake_host_for_testing=faceb00k.com">Simulate Typosquatting (faceb00k.com)</a>
+                <br><em>Expect: ⚠️ Potential Typosquatting Alert</em>
+            </li>
+            <li>
+                <a href="test.html?fake_host_for_testing=g00gle.com">Simulate Typosquatting (g00gle.com)</a>
+                <br><em>Expect: ⚠️ Potential Typosquatting Alert</em>
+            </li>
+            <li>
+                <a href="test.html?fake_host_for_testing=xn-9a2z-secure-u8.com">Simulate High Entropy
+                    (xn-9a2z-secure-u8.com)</a>
+                <br><em>Expect: ⚠️ High Domain Entropy Alert</em>
+            </li>
+            <li>
+                <a href="test.html?fake_host_for_testing=apple.com">Simulate Verified Site (apple.com)</a>
+                <br><em>Expect: ✅ Verified Official Website (Green Check)</em>
+            </li>
+        </ul>
+        <p><strong>Note:</strong> After clicking, look at the PhishingShield HUD that appears!</p>
+    </div>
+</body>
+
+</html>

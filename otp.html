@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishingShield - Verify Email</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #212529 0%, #343a40 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            color: white;
+        }
+
+        .auth-card {
+            background: white;
+            color: #333;
+            width: 100%;
+            max-width: 400px;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+            text-align: center;
+        }
+
+        .auth-logo {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 20px;
+            display: block;
+        }
+
+        h2 {
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 24px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+
+        .otp-input {
+            width: 100%;
+            padding: 15px;
+            font-size: 24px;
+            text-align: center;
+            letter-spacing: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-family: monospace;
+        }
+
+        .otp-input:focus {
+            outline: none;
+            border-color: #28a745;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+        }
+
+        .error {
+            color: #dc3545;
+            font-size: 13px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .resend-link {
+            display: block;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #0d6efd;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .resend-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="auth-card">
+        <img src="images/image.png" alt="PhishingShield Logo" class="auth-logo">
+        <h2>Verification</h2>
+        <p class="subtitle">Enter the 4-digit code sent to <b id="email-display">your email</b></p>
+
+        <input type="text" id="otp" class="otp-input" maxlength="4" placeholder="0000" autofocus>
+
+        <button id="verify-btn" disabled>Loading...</button>
+
+        <div class="error" id="error-msg"></div>
+        <a class="resend-link" id="resend-link">Resend Code</a>
+    </div>
+
+    <script type="text/javascript" src="js/email.min.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/otp.js"></script>
+</body>
+
+</html>

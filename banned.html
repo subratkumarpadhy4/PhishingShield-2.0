@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⛔ Site Banned by PhishingShield</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+            text-align: center;
+            animation: slideIn 0.5s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        h1 {
+            color: #dc3545;
+            font-size: 32px;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            color: #6c757d;
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+
+        .warning-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .warning-box h3 {
+            color: #856404;
+            font-size: 18px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .warning-box p {
+            color: #856404;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .url-display {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 25px;
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+            color: #dc3545;
+            font-weight: 600;
+        }
+
+        .info-section {
+            background: #e7f3ff;
+            border-left: 4px solid #0d6efd;
+            padding: 15px;
+            margin-bottom: 25px;
+            text-align: left;
+            border-radius: 4px;
+        }
+
+        .info-section h4 {
+            color: #0d6efd;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .info-section ul {
+            color: #495057;
+            font-size: 14px;
+            line-height: 1.8;
+            padding-left: 20px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 14px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s;
+            margin: 5px;
+        }
+
+        .btn-primary {
+            background: #0d6efd;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0b5ed7;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-danger {
+            background: transparent;
+            color: #dc3545;
+            border: 2px solid #dc3545;
+        }
+
+        .btn-danger:hover {
+            background: #dc3545;
+            color: white;
+        }
+
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+            color: #6c757d;
+            font-size: 13px;
+        }
+
+        .shield-logo {
+            display: inline-block;
+            color: #0d6efd;
+            font-weight: 700;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Proceed Anyway button in top right corner -->
+    <button class="btn btn-danger" onclick="proceedAnyway()" style="position: fixed; top: 20px; right: 20px; 
+              background: white;
+              color: #dc3545;
+              border: 2px solid #dc3545;
+              padding: 10px 20px; 
+              font-size: 14px;
+              font-weight: 600;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+              z-index: 1000;" onmouseover="this.style.background='#dc3545'; this.style.color='white';"
+        onmouseout="this.style.background='white'; this.style.color='#dc3545';">
+        ⚠️ Proceed Anyway (Unsafe)
+    </button>
+
+    <div class="container">
+        <div class="icon">🚫</div>
+        <h1>Site Banned by PhishingShield</h1>
+        <p class="subtitle">This website has been blocked by our community protection system</p>
+
+        <div class="warning-box">
+            <h3>⚠️ Community Ban Active</h3>
+            <p>This site has been reported by PhishingShield users and banned by administrators due to malicious or
+                fraudulent activity.</p>
+        </div>
+
+        <div class="url-display" id="blocked-url">
+            Loading URL...
+        </div>
+
+        <div class="info-section">
+            <h4>🛡️ Why was this site banned?</h4>
+            <ul>
+                <li>Reported by PhishingShield community members</li>
+                <li>Verified and banned by system administrators</li>
+                <li>Identified as malicious, fraudulent, or phishing site</li>
+                <li>Part of our global protection network</li>
+            </ul>
+        </div>
+
+        <div class="info-section">
+            <h4>✅ What should you do?</h4>
+            <ul>
+                <li><strong>Do not proceed</strong> to this website</li>
+                <li>Close this tab and return to a safe page</li>
+                <li>If you believe this is a mistake, contact support</li>
+                <li>Report similar sites to help protect others</li>
+            </ul>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <button class="btn btn-primary" onclick="goBack()">← Go Back to Safety</button>
+            <button class="btn btn-secondary" onclick="goHome()">🏠 Go to Homepage</button>
+        </div>
+
+        <div class="footer">
+            <span class="shield-logo">🛡️ PhishingShield</span><br>
+            Protected by community-driven security
+        </div>
+    </div>
+
+    <script>
+        // Get URL from query parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const blockedUrl = urlParams.get('url') || 'Unknown URL';
+
+        document.getElementById('blocked-url').textContent = blockedUrl;
+
+        function goBack() {
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.location.href = 'about:blank';
+            }
+        }
+
+        function goHome() {
+            window.location.href = 'https://www.google.com';
+        }
+
+        function proceedAnyway() {
+            console.log('[PhishingShield] Proceed Anyway button clicked on banned.html');
+            console.log('[PhishingShield] Blocked URL:', blockedUrl);
+
+            if (confirm('⚠️ FINAL WARNING\n\nThis site has been banned by PhishingShield administrators.\n\nProceeding may result in:\n• Identity theft\n• Financial loss\n• Malware infection\n• Data breach\n\nAre you absolutely sure you want to continue?')) {
+                console.log('[PhishingShield] User confirmed, attempting navigation...');
+                // Extract the actual URL and navigate to it
+                const actualUrl = blockedUrl;
+                if (actualUrl && actualUrl !== 'Unknown URL') {
+                    console.log('[PhishingShield] Navigating to:', actualUrl);
+                    window.location.href = actualUrl;
+                } else {
+                    console.error('[PhishingShield] Cannot proceed - URL is:', actualUrl);
+                    alert('Cannot proceed - URL not available');
+                }
+            } else {
+                console.log('[PhishingShield] User cancelled navigation');
+            }
+        }
+
+        // Log the block event
+        console.log('[PhishingShield] Community-banned site blocked:', blockedUrl);
+    </script>
+</body>
+
+</html>

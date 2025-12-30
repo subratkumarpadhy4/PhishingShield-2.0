@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishingShield - Admin Portal</title>
+    <style>
+        :root {
+            --primary: #0d6efd;
+            --secondary: #6c757d;
+            --success: #198754;
+            --info: #0dcaf0;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --dark: #212529;
+            --light: #f8f9fa;
+            --bg: #f3f4f6;
+            --sidebar-width: 260px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--dark);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Sidebar Styles */
+        aside {
+            width: var(--sidebar-width);
+            background-color: var(--dark);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            padding: 20px 0;
+            box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .brand {
+            padding: 0 24px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+        }
+
+        .brand h2 {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .brand span {
+            color: var(--primary);
+        }
+
+        nav {
+            flex: 1;
+        }
+
+        nav ul {
+            list-style: none;
+        }
+
+        nav li {
+            position: relative;
+        }
+
+        nav a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 24px;
+            color: #adb5bd;
+            text-decoration: none;
+            transition: 0.3s;
+            font-weight: 500;
+        }
+
+        nav a:hover,
+        nav a.active {
+            color: #fff;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-left: 4px solid var(--primary);
+        }
+
+        nav a i {
+            width: 20px;
+            text-align: center;
+        }
+
+        .user-panel {
+            padding: 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .user-panel h6 {
+            color: #adb5bd;
+            margin-bottom: 5px;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .user-panel p {
+            font-weight: 600;
+        }
+
+        /* Main Content */
+        main {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--dark);
+        }
+
+        .date-badge {
+            background: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            color: var(--secondary);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Dashboard Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 24px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+        }
+
+        .bg-blue {
+            background-color: rgba(13, 110, 253, 0.1);
+            color: var(--primary);
+        }
+
+        .bg-green {
+            background-color: rgba(25, 135, 84, 0.1);
+            color: var(--success);
+        }
+
+        .bg-yellow {
+            background-color: rgba(255, 193, 7, 0.1);
+            color: var(--warning);
+        }
+
+        .bg-red {
+            background-color: rgba(220, 53, 69, 0.1);
+            color: var(--danger);
+        }
+
+        .card-title {
+            color: var(--secondary);
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .card-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 8px;
+        }
+
+        .card-trend {
+            font-size: 13px;
+        }
+
+        .trend-up {
+            color: var(--success);
+        }
+
+        .trend-down {
+            color: var(--danger);
+        }
+
+        /* Tables */
+        .table-container {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+            margin-bottom: 30px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .section-header h3 {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 12px 16px;
+            color: var(--secondary);
+            font-weight: 600;
+            font-size: 13px;
+            border-bottom: 2px solid var(--bg);
+        }
+
+        td {
+            padding: 16px;
+            border-bottom: 1px solid var(--bg);
+            vertical-align: middle;
+            font-size: 14px;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-admin {
+            background-color: var(--dark);
+            color: white;
+        }
+
+        .badge-user {
+            background-color: var(--bg);
+            color: var(--secondary);
+        }
+
+        .badge-active {
+            background-color: rgba(25, 135, 84, 0.1);
+            color: var(--success);
+        }
+
+        .progress-bar {
+            width: 100px;
+            height: 6px;
+            background: var(--bg);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 3px;
+        }
+
+        button.btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: 0.2s;
+        }
+
+        button.btn:hover {
+            filter: brightness(110%);
+        }
+
+        button.btn-outline {
+            background: transparent;
+            border: 1px solid var(--secondary);
+            color: var(--secondary);
+        }
+
+        /* Loading */
+        .hidden {
+            display: none !important;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <aside>
+        <div class="brand">
+            <img src="images/image.png" alt="Logo">
+            <div>
+                <h2>PhishingShield</h2>
+                <span style="font-size: 11px; letter-spacing: 1px; font-weight: 700;">ADMIN PORTAL</span>
+            </div>
+        </div>
+
+        <nav>
+            <ul>
+                <li><a href="#" class="nav-link active" data-tab="dashboard">📊 Dashboard</a></li>
+                <li><a href="#" class="nav-link" data-tab="users">👥 User Management</a></li>
+
+                <li><a href="#" class="nav-link" data-tab="reports">🚩 Reports <span class="badge badge-active"
+                            style="margin-left:auto; font-size:10px;">NEW</span></a></li>
+                <li><a href="#" class="nav-link" data-tab="logs">🛡️ Threat Logs</a></li>
+                <li><a href="#" class="nav-link" data-tab="settings">⚙️ System Settings</a></li>
+            </ul>
+        </nav>
+
+        <div class="user-panel">
+            <h6>Logged in as</h6>
+            <p>Admin User</p>
+            <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
+                <div style="width: 8px; height: 8px; background: #28a745; border-radius: 50%;"></div>
+                <span style="font-size: 12px; color: #adb5bd;">System Online</span>
+            </div>
+        </div>
+    </aside>
+
+    <main>
+        <header>
+            <h1 id="page-title">Dashboard Overview</h1>
+            <div class="date-badge" id="current-date">Fetching date...</div>
+        </header>
+
+        <!-- DASHBOARD TAB -->
+        <div id="dashboard" class="tab-content active">
+            <div class="stats-grid">
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">User Accounts</div>
+                            <div class="card-value" id="stats-total-users">0</div>
+                        </div>
+                        <div class="card-icon bg-blue">users</div>
+                    </div>
+                    <div class="card-trend" style="font-size: 12px; color: #6c757d;">
+                        <div>✅ Signed Up: <strong id="stats-signed" style="color: #198754;">0</strong></div>
+                        <div>👤 Unsigned: <strong id="stats-unsigned" style="color: #fd7e14;">0</strong></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Threats Blocked</div>
+                            <div class="card-value" id="stats-threats">0</div>
+                        </div>
+                        <div class="card-icon bg-red">shield</div>
+                    </div>
+                    <div class="card-trend"><span class="trend-up">↑ 85</span> malicious sites</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Active Sessions</div>
+                            <div class="card-value">1</div>
+                        </div>
+                        <div class="card-icon bg-green">wifi</div>
+                    </div>
+                    <div class="card-trend"><span class="trend-down">●</span> Currently Online</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">System Health</div>
+                            <div class="card-value">98%</div>
+                        </div>
+                        <div class="card-icon bg-yellow">activity</div>
+                    </div>
+                    <div class="card-trend">Server Status: <strong>Stable</strong></div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <div class="section-header">
+                    <h3>Recent User Registrations</h3>
+                    <button class="btn btn-outline" id="view-all-users">View All</button>
+                </div>
+                <table id="recent-users-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Joined</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- USERS TAB -->
+        <div id="users" class="tab-content">
+            <!-- (Existing Content) -->
+            <div class="table-container">
+                <div class="section-header">
+                    <h3>Registered System Users</h3>
+                    <button class="btn" onclick="alert('Exporting CSV...')">Export CSV</button>
+                </div>
+                <table id="all-users-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Level</th>
+                            <th>Last Active</th>
+                            <th>Risk Factor</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- JS populated -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- XP SYSTEM TAB (Removed) -->
+
+        <!-- REPORTS TAB -->
+        <div id="reports" class="tab-content">
+            <div class="table-container">
+                <div class="section-header">
+                    <h3>CrowdShield - Reported Phishing Sites</h3>
+                    <button class="btn btn-outline" onclick="loadDashboardData()">Refresh List</button>
+                </div>
+                <p style="margin-bottom:20px; color:#6c757d;">User-submitted reports. Verify and ban malicious domains.
+                </p>
+
+                <!-- Filter Controls -->
+                <div class="filter-group" style="margin-bottom: 20px; display: flex; gap: 10px;">
+                    <button class="btn btn-sm btn-active" onclick="setReportFilter('all')" id="filter-all"
+                        style="padding: 5px 15px;">All</button>
+                    <button class="btn btn-sm btn-outline" onclick="setReportFilter('pending')" id="filter-pending"
+                        style="padding: 5px 15px;">Pending</button>
+                    <button class="btn btn-sm btn-outline" onclick="setReportFilter('banned')" id="filter-banned"
+                        style="padding: 5px 15px;">Banned</button>
+                    <button class="btn btn-sm btn-outline" onclick="setReportFilter('ignored')" id="filter-ignored"
+                        style="padding: 5px 15px;">Ignored</button>
+                </div>
+                <table id="reports-table">
+                    <thead>
+                        <tr>
+                            <th>URL / Domain</th>
+                            <th>User Name</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="5" style="text-align:center;">Loading reports...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- BANNED SITES TAB -->
+        <div id="banned-sites" class="tab-content">
+            <div class="table-container">
+                <div class="section-header">
+                    <h3>🚫 Banned Websites Registry</h3>
+                    <button class="btn btn-outline" onclick="loadBannedSites()">Refresh List</button>
+                </div>
+                <p style="margin-bottom:20px; color:#6c757d;">
+                    List of all websites that have been banned by administrators.
+                </p>
+                <table id="banned-table">
+                    <thead>
+                        <tr>
+                            <th>Domain / URL</th>
+                            <th>Banned Date</th>
+                            <th>Reported By</th>
+                            <th>Admin Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="banned-table-body">
+                        <tr>
+                            <td colspan="4" style="text-align:center;">Loading banned sites...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- BANNED SITES TAB -->
+        <div id="banned-sites" class="tab-content">
+            <div class="table-container">
+                <div class="section-header">
+                    <h3>🚫 Banned Websites Registry</h3>
+                    <button class="btn btn-outline" onclick="loadBannedSites()">Refresh List</button>
+                </div>
+                <p style="margin-bottom:20px; color:#6c757d;">
+                    List of all websites that have been banned by administrators.
+                </p>
+                <table id="banned-table">
+                    <thead>
+                        <tr>
+                            <th>Domain / URL</th>
+                            <th>Banned Date</th>
+                            <th>Reported By</th>
+                            <th>Banned By</th>
+                        </tr>
+                    </thead>
+                    <tbody id="banned-table-body">
+                        <tr>
+                            <td colspan="4" style="text-align:center;">Loading banned sites...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- LOGS TAB -->
+        <div id="logs" class="tab-content">
+            <div class="table-container">
+                <h3>Global Threat Activity Log</h3>
+                <p style="color: #6c757d; margin-bottom: 20px;">Real-time feed of blocked phishing attempts across the
+                    network.</p>
+                <table id="logs-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>User Source</th>
+                            <th>Target Domain</th>
+                            <th>Threat Type</th>
+                            <th>Risk Score</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- JS populated -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SETTINGS TAB -->
+        <div id="settings" class="tab-content">
+            <div class="table-container">
+                <h3>System Configuration</h3>
+                <div style="margin-top: 20px;">
+                    <p><strong>Admin Mode:</strong> Enabled</p>
+                    <p><strong>Database:</strong> chrome.storage.local</p>
+                    <p><strong>Version:</strong> 1.0.0</p>
+                    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+                    <button class="btn" style="background: var(--danger);"
+                        onclick="alert('Cannot purge system database in simulation mode.')">Purge All Data</button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- USER DETAIL MODAL -->
+    <div id="user-modal" class="hidden"
+        style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:5000; display:flex; justify-content:center; align-items:center;">
+        <div
+            style="background:white; width:600px; max-height:80vh; border-radius:12px; display:flex; flex-direction:column; overflow:hidden;">
+            <div
+                style="padding:20px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0;">User Inspector</h3>
+                <button id="modal-close-x"
+                    style="border:none; background:none; font-size:20px; cursor:pointer;">&times;</button>
+            </div>
+
+            <div style="padding:20px; overflow-y:auto; flex:1;">
+                <!-- Profile Header -->
+                <div style="display:flex; gap:20px; margin-bottom:20px;">
+                    <div id="modal-avatar"
+                        style="width:80px; height:80px; background:#f8f9fa; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:32px; color:#adb5bd; font-weight:bold;">
+                        U
+                    </div>
+                    <div>
+                        <h2 id="modal-name" style="margin:0; font-size:24px;">User Name</h2>
+                        <div id="modal-email" style="color:#6c757d; margin-bottom:10px;">user@example.com</div>
+                        <div style="display:flex; gap:10px;">
+                            <span id="modal-rank" class="badge badge-admin">Rank</span>
+                            <span id="modal-status" class="badge badge-active">Active</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
+                    <div style="background:#f8f9fa; padding:15px; border-radius:8px;">
+                        <div style="font-size:12px; color:#6c757d;">EXPERIENCE</div>
+                        <div style="font-size:20px; font-weight:bold;"><span id="modal-xp">0</span> XP</div>
+                        <div style="font-size:12px; color:#198754;">Level <span id="modal-level">1</span></div>
+                    </div>
+                    <div style="background:#f8f9fa; padding:15px; border-radius:8px;">
+                        <div style="font-size:12px; color:#6c757d;">SAFETY STREAK</div>
+                        <div style="font-size:20px; font-weight:bold;"><span id="modal-streak">0</span> Days</div>
+                        <div style="font-size:12px; color:#6c757d;">Last Incident: <span id="modal-incident">None</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History -->
+                <h4 style="margin-bottom:10px; font-size:16px;">Recent Activity (Cloud Synced)</h4>
+                <div style="background:#f8f9fa; border-radius:8px; padding:10px; max-height:200px; overflow-y:auto;">
+                    <table style="width:100%; font-size:13px;">
+                        <thead>
+                            <tr style="text-align:left; color:#adb5bd;">
+                                <th>Time</th>
+                                <th>Site</th>
+                                <th>Risk</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal-history-body">
+                            <!-- Populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="modal-footer"
+                style="padding:20px; background:#f8f9fa; text-align:right; display:flex; justify-content:flex-end; gap:10px;">
+                <button id="modal-close-btn" class="btn btn-outline">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOCK SCREEN OVERLAY -->
+    <div id="lock-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+        background-color: #f8f9fa; z-index: 9999; display: flex; align-items: center; justify-content: center; 
+        flex-direction: column; transition: opacity 0.5s ease;">
+        <div id="lock-status" style="text-align: center;">
+            <div class="loader" style="font-size: 24px;">🔄 Verifying Access...</div>
+        </div>
+    </div>
+
+    <script src="js/auth.js"></script>
+    <script src="js/admin.js"></script>
+    <script>
+        // Add logout functionality
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add logout button to user panel if it doesn't exist
+            const userPanel = document.querySelector('.user-panel');
+            if (userPanel && !document.getElementById('admin-logout-btn')) {
+                const logoutBtn = document.createElement('button');
+                logoutBtn.id = 'admin-logout-btn';
+                logoutBtn.textContent = 'Logout';
+                logoutBtn.style.cssText = 'margin-top: 10px; width: 100%; padding: 8px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;';
+                logoutBtn.onclick = () => {
+                    chrome.storage.local.remove(['adminToken', 'adminTokenExpiry', 'adminUser'], () => {
+                        const adminLoginUrl = chrome.runtime?.getURL ? chrome.runtime.getURL('admin-login.html') : 'admin-login.html';
+                        window.location.href = adminLoginUrl;
+                    });
+                };
+                userPanel.appendChild(logoutBtn);
+            }
+        });
+    </script>
+</body>
+
+</html>

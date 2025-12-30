@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PayPal Security Center - Urgent Action Required</title> <!-- Trigger: Brand Impersonation -->
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 40px;
+            background: #f9f9f9;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #dc3545;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 20px;
+        }
+
+        .note {
+            background: #fff3cd;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>PhishingShield Scenario Tester</h1>
+
+        <p>Use this page to trigger specific threats for your Analytics Dashboard.</p>
+
+        <!-- SCENARIO 1: Impersonation & Urgency -->
+        <div class="section">
+            <h2>1. Impersonation & Urgency</h2>
+            <div class="note"><strong>Expected Result:</strong> Risk Score > 75. HUD shows "Brand Spoofing" or "Social
+                Engineering". Visual Inspector highlights text.</div>
+
+            <p><strong>Detected Brand in Title:</strong> "PayPal"</p>
+            <p><strong>Urgency Text:</strong></p>
+            <p id="urgency-text">
+                URGENT: Your account has been compromised. Immediate action is required to verify your identity.
+                If you do not act within 24 hours, your account will be permanently suspended.
+                Please verify your account immediately.
+            </p>
+        </div>
+
+        <!-- SCENARIO 2: Malicious Downloads -->
+        <div class="section">
+            <h2>2. Malicious Downloads</h2>
+            <div class="note"><strong>Expected Result:</strong> Intercepted by Download Protection. Yellow border in
+                Inspector.</div>
+
+            <ul>
+                <li><a href="http://example.com/malware.exe">Download Invoice_Scan.exe</a> (Executable)</li>
+                <li><a href="http://example.com/contract.zip">Download Contract.zip</a> (Archive)</li>
+                <li><a href="http://example.com/installer.dmg">Download Installer.dmg</a> (Disk Image)</li>
+            </ul>
+        </div>
+
+        <!-- SCENARIO 3: Link Pulse & Mismatch -->
+        <div class="section">
+            <h2>3. Link Reality Check</h2>
+            <div class="note"><strong>Expected Result:</strong> Link pulses red on hover. Tooltip warns of mismatch.
+            </div>
+
+            <p>
+                Please login at:
+                <a href="http://evil-phishing-site.com/login">www.paypal.com/login</a>
+                (Hover me!)
+            </p>
+        </div>
+
+        <!-- SCENARIO 4: Fortress Mode Clipboard -->
+        <div class="section">
+            <h2>4. Fortress Clipboard Block</h2>
+            <div class="note"><strong>Expected Result:</strong> If Fortress Mode is ON, copying this text should be
+                blocked (Score is high due to urgency/brand).</div>
+
+            <textarea
+                style="width:100%; height:80px; padding:10px;">Try to copy this text while Fortress Mode is enabled. You should see a toast notification blocking it.</textarea>
+        </div>
+
+        <!-- SCENARIO 5: Insecure Login -->
+        <div class="section">
+            <h2>5. Insecure Login (HTTP)</h2>
+            <div class="note"><strong>Expected Result:</strong> Red banner at top of page. Red highlight in Inspector.
+            </div>
+
+            <form action="#">
+                <label>Username: <input type="text" placeholder="user@example.com"></label><br><br>
+                <label>Password: <input type="password" placeholder="••••••"></label> (Insecure Type)
+            </form>
+        </div>
+
+    </div>
+    <script src="../js/risk_engine.js"></script>
+    <script>
+        // Automated Coherence Test
+        setTimeout(() => {
+            console.log("--- STARTING COHERENCE TESTS ---");
+            const tests = [
+                { title: "My Local Bank", domain: "mylocalbank.com", expected: "High" },
+                { title: "Acme Corp", domain: "acme-group.com", expected: "Medium" },
+                { title: "Welcome to Facebook", domain: "fb-login-secure.net", expected: "Low" },
+                { title: "State Bank of India", domain: "onlinesbi.sbi", expected: "High" }
+            ];
+
+            tests.forEach(t => {
+                const score = RiskEngine.calculateDomainCoherence(t.title, t.domain);
+                console.log(`Title: "${t.title}" | Domain: "${t.domain}" -> Score: ${score.toFixed(2)} (Expected: ${t.expected})`);
+            });
+            console.log("--- END TESTS ---");
+        }, 1000);
+    </script>
+</body>
+
+</html>
