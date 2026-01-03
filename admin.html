@@ -507,20 +507,18 @@
             <div class="table-container">
                 <div class="section-header">
                     <h3>CrowdShield - Reported Phishing Sites</h3>
-                    <button class="btn btn-outline" onclick="loadDashboardData()">Refresh List</button>
+                    <button class="btn btn-outline" id="btn-refresh-reports">Refresh List</button>
                 </div>
                 <p style="margin-bottom:20px; color:#6c757d;">User-submitted reports. Verify and ban malicious domains.
                 </p>
 
                 <!-- Filter Controls -->
                 <div class="filter-group" style="margin-bottom: 20px; display: flex; gap: 10px;">
-                    <button class="btn btn-sm btn-active filter-btn" data-filter="all" id="filter-all"
-                        style="padding: 5px 15px;">All</button>
-                    <button class="btn btn-sm btn-outline filter-btn" data-filter="pending" id="filter-pending"
+                    <button class="btn btn-sm btn-active" id="filter-all" style="padding: 5px 15px;">All</button>
+                    <button class="btn btn-sm btn-outline" id="filter-pending"
                         style="padding: 5px 15px;">Pending</button>
-                    <button class="btn btn-sm btn-outline filter-btn" data-filter="banned" id="filter-banned"
-                        style="padding: 5px 15px;">Banned</button>
-                    <button class="btn btn-sm btn-outline filter-btn" data-filter="ignored" id="filter-ignored"
+                    <button class="btn btn-sm btn-outline" id="filter-banned" style="padding: 5px 15px;">Banned</button>
+                    <button class="btn btn-sm btn-outline" id="filter-ignored"
                         style="padding: 5px 15px;">Ignored</button>
                 </div>
                 <table id="reports-table">
@@ -547,7 +545,7 @@
             <div class="table-container">
                 <div class="section-header">
                     <h3>🚫 Banned Websites Registry</h3>
-                    <button class="btn btn-outline" onclick="loadBannedSites()">Refresh List</button>
+                    <button class="btn btn-outline" id="btn-refresh-banned">Refresh List</button>
                 </div>
                 <p style="margin-bottom:20px; color:#6c757d;">
                     List of all websites that have been banned by administrators.

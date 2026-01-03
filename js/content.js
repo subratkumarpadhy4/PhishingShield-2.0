@@ -21,6 +21,9 @@ chrome.storage.local.get(['enablePreview', 'enableLogin', 'enableDownloads', 'en
     initRiskAnalysis(enableFortress);
     initDownloadProtection(enableFortress, enableDownloads);
     initFortressClipboard(enableFortress);
+
+    // Initial Sync for Fresh XP
+    chrome.runtime.sendMessage({ type: "SYNC_XP" });
 });
 
 // Listener for Real-Time Events (Level Up)
@@ -58,6 +61,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }, 4000);
     }
 });
+
+// SERVICE WORKER KEEP-ALIVE (Robust Connection)
+// Uses long-lived port instead of interval messaging
+let keepAlivePort;
+function connectKeepAlive() {
+    try {
+        keepAlivePort = chrome.runtime.connect({ name: 'keepAlive' });
+        keepAlivePort.onDisconnect.addListener(() => {
+            console.log("Keep-Alive disconnected. Reconnecting...");
+            setTimeout(connectKeepAlive, 1000); // Reconnect after 1s
+        });
+    } catch (e) {
+        // Extension context invalidated
+        console.warn("Connection failed:", e);
+    }
+}
+// Start connection
+connectKeepAlive();
+// Fallback: Still ping occasionally to force activity if connection sits idle too long
+setInterval(() => {
+    if (keepAlivePort) {
+        try {
+            keepAlivePort.postMessage({ ping: true });
+        } catch (e) { connectKeepAlive(); }
+    }
+}, 25000);
 
 // ... (Link Preview and Login - No changes needed) ...
 

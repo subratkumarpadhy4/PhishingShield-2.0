@@ -342,18 +342,36 @@ app.post('/api/users/sync', (req, res) => {
     const users = readData(USERS_FILE);
     const idx = users.findIndex(u => u.email === userData.email);
 
+    let finalUser;
+
     if (idx !== -1) {
-        // Update existing
-        users[idx] = { ...users[idx], ...userData };
-        console.log(`[User] Updated info for ${userData.email}`);
+        // SERVER AUTHORITY STRATEGY:
+        // We prioritize the Server's stored XP/Level over the Client's claim.
+        // This allows Admin to demote users (Server < Client) and have it reflect on the client.
+
+        const serverXP = Number(users[idx].xp) || 0;
+        const serverLevel = Number(users[idx].level) || 1;
+
+        // We only update NON-Gameplay fields from the client (e.g. name, preferences)
+        // We FORCE the client to accept the Server's XP value.
+        finalUser = {
+            ...users[idx],
+            ...userData,
+            xp: serverXP,    // Keep Server Value
+            level: serverLevel // Keep Server Value
+        };
+
+        users[idx] = finalUser;
+        console.log(`[User] Synced ${userData.email} - Enforcing Server XP: ${serverXP}`);
     } else {
         // Create new
-        users.push(userData);
+        finalUser = userData;
+        users.push(finalUser);
         console.log(`[User] New user registered: ${userData.email}`);
     }
 
     writeData(USERS_FILE, users);
-    res.json({ success: true, user: userData });
+    res.json({ success: true, user: finalUser });
 });
 
 // POST /api/users/delete
@@ -638,36 +656,7 @@ app.get('/api/admin/logs', requireAdmin, (req, res) => {
 
 // --- REPORTS API ---
 
-// GET /api/reports - Fetch all reports
-app.get('/api/reports', (req, res) => {
-    const reports = readData(REPORTS_FILE) || [];
-    res.json(reports);
-});
-
-// POST /api/reports - Submit a new report
-app.post('/api/reports', (req, res) => {
-    const { url, reporter, hostname, reason } = req.body;
-    if (!url) return res.status(400).json({ success: false, message: "URL required" });
-
-    const reports = readData(REPORTS_FILE) || [];
-    const newReport = {
-        id: `rep_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        url,
-        hostname: hostname || (new URL(url).hostname),
-        reporter: reporter || 'Anonymous',
-        reason: reason || 'Phishing Suspect',
-        status: 'pending',
-        timestamp: Date.now()
-    };
-
-    reports.push(newReport);
-    writeData(REPORTS_FILE, reports);
-
-    // Log
-    console.log(`[Report] New report: ${url} by ${reporter}`);
-
-    res.json({ success: true, report: newReport });
-});
+// (Duplicate Routes Removed)
 
 // POST /api/reports/update - Update report status (ban/ignore/pending)
 app.post('/api/reports/update', (req, res) => {

@@ -218,6 +218,19 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 // MESSAGE LISTENERS
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
+// CONNECTION KEEP-ALIVE (Robust SW Lifespan)
+// -----------------------------------------------------------------------------
+chrome.runtime.onConnect.addListener((port) => {
+    if (port.name === 'keepAlive') {
+        console.log("[PhishingShield] Keep-Alive Connection Established");
+        port.onDisconnect.addListener(() => {
+            console.log("[PhishingShield] Keep-Alive Connection Closed - Client Disconnected");
+        });
+        // Optional: Send a heartbeat back periodically if really needed, but connection itself helps
+    }
+});
+
+// -----------------------------------------------------------------------------
 // MESSAGE LISTENERS
 // -----------------------------------------------------------------------------
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -331,6 +344,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // 5. UPDATE BLOCKLIST
     else if (request.type === "UPDATE_BLOCKLIST") {
         updateBlocklistFromStorage();
+        if (sendResponse) sendResponse({ success: true });
+        return true;
+    }
+
+    // 6. SYNC XP (Force Sync from Frontend)
+    else if (request.type === "SYNC_XP") {
+        console.log("[PhishingShield] Forced XP Sync requested via message");
+        syncXPToServer();
         if (sendResponse) sendResponse({ success: true });
         return true;
     }
@@ -681,16 +702,51 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 function syncXPToServer() {
-    chrome.storage.local.get(['currentUser', 'userXP', 'userLevel', 'pendingXPSync'], (res) => {
-        // Only sync if there is a pending update and we have a logged-in user
-        if (res.pendingXPSync && res.currentUser) {
-            console.log("[PhishingShield] Syncing XP to Global Leaderboard...");
+    chrome.storage.local.get(['currentUser', 'userXP', 'userLevel', 'pendingXPSync', 'users'], (res) => {
+        // Try to get user email from currentUser or users array
+        let userEmail = null;
+        if (res.currentUser && res.currentUser.email) {
+            userEmail = res.currentUser.email;
+        } else if (res.users && Array.isArray(res.users) && res.users.length > 0) {
+            // Fallback: use first user if currentUser not set (for guest users with XP)
+            const firstUser = res.users.find(u => u && u.email);
+            if (firstUser) {
+                userEmail = firstUser.email;
+                console.log("[PhishingShield] Using fallback user email from users array:", userEmail);
+            }
+        }
 
-            const userData = {
-                ...res.currentUser,
-                xp: res.userXP,
-                level: res.userLevel
-            };
+        // Sync if we have a user email (acts as heartbeat to fetch server updates like Admin Promotions)
+        if (userEmail) {
+            console.log("[PhishingShield] Syncing XP to Global Leaderboard...");
+            console.log(`[PhishingShield] User: ${userEmail}, Local XP: ${res.userXP || 0}`);
+
+            // Build user data - use currentUser if available, otherwise construct from users array
+            let userData;
+            if (res.currentUser && res.currentUser.email === userEmail) {
+                userData = {
+                    ...res.currentUser,
+                    xp: res.userXP || 0,
+                    level: res.userLevel || 1
+                };
+            } else {
+                // Fallback: construct from users array
+                const userFromArray = res.users.find(u => u && u.email === userEmail);
+                if (userFromArray) {
+                    userData = {
+                        ...userFromArray,
+                        xp: res.userXP || userFromArray.xp || 0,
+                        level: res.userLevel || userFromArray.level || 1
+                    };
+                } else {
+                    // Last resort: minimal user data
+                    userData = {
+                        email: userEmail,
+                        xp: res.userXP || 0,
+                        level: res.userLevel || 1
+                    };
+                }
+            }
 
             fetch("https://phishingshield.onrender.com/api/users/sync", {
                 method: "POST",
@@ -699,9 +755,58 @@ function syncXPToServer() {
             })
                 .then(r => r.json())
                 .then(data => {
-                    if (data.success) {
+                    if (data.success && data.user) {
                         console.log("[PhishingShield] ✅ XP Global Sync Successful");
+                        console.log(`[PhishingShield] Server returned: XP=${data.user.xp}, Level=${data.user.level}`);
                         chrome.storage.local.set({ pendingXPSync: false });
+
+                        // 2-Way Sync: Handle both cases - server higher (admin promotion) or local higher (user earned XP)
+                        const serverXP = Number(data.user.xp) || 0;
+                        const localXP = Number(res.userXP) || 0;
+                        const serverLevel = data.user.level || calculateLevel(serverXP);
+                        const localLevel = Number(res.userLevel) || calculateLevel(localXP);
+
+                        // Case 1: Server Authority (Always sync to Server)
+                        // If Server is different (Higher OR Lower), we update local.
+                        // This allows Admin to downgrade users (XP 20) and have it reflect.
+                        if (serverXP !== localXP || serverLevel !== localLevel) {
+                            console.log(`[PhishingShield] 📥 Syncing to Server Authority: Local(${localXP}) -> Server(${serverXP})`);
+
+                            // Update users array in local storage if exists
+                            const updateData = {
+                                userXP: serverXP,
+                                userLevel: serverLevel
+                            };
+
+                            if (res.users && Array.isArray(res.users) && res.currentUser) {
+                                const userIndex = res.users.findIndex(u => u && u.email === res.currentUser.email);
+                                if (userIndex >= 0) {
+                                    res.users[userIndex].xp = serverXP;
+                                    res.users[userIndex].level = serverLevel;
+                                    updateData.users = res.users;
+                                }
+                            }
+
+                            chrome.storage.local.set(updateData, () => {
+                                console.log(`[PhishingShield] ✅ Local storage updated to match Server.`);
+
+                                // Notify tabs to update HUD
+                                chrome.tabs.query({}, (tabs) => {
+                                    tabs.forEach(tab => {
+                                        if (tab.id) chrome.tabs.sendMessage(tab.id, {
+                                            type: "XP_UPDATE",
+                                            xp: serverXP,
+                                            level: serverLevel
+                                        }).catch(() => { });
+                                    });
+                                });
+                            });
+                        }
+                        else {
+                            console.log(`[PhishingShield] ✅ In Sync (XP=${localXP})`);
+                        }
+                    } else {
+                        console.warn("[PhishingShield] Sync response missing user data:", data);
                     }
                 })
                 .catch(e => console.error("[PhishingShield] ❌ XP Sync Failed:", e));

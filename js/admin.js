@@ -1,10 +1,12 @@
+// REPORTS FILTER STATE
+let allReportsCache = [];
+let currentReportFilter = 'all';
+
 document.addEventListener('DOMContentLoaded', () => {
     // 0. SECURITY HANDSHAKE
     checkAdminAccess();
 
-    // REPORTS FILTER STATE
-    let allReportsCache = [];
-    let currentReportFilter = 'all';
+
 
     // 1. Sidebar Navigation Logic
     const navLinks = document.querySelectorAll('.nav-link');
@@ -30,11 +32,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Special Tab Logic
             if (tabId === 'banned-sites') {
                 loadBannedSites();
-            } else if (tabId === 'reports') {
-                // Setup filter buttons when reports tab is opened
-                setupFilterButtons();
-                // Initialize filter buttons when reports tab is opened
-                setReportFilter(currentReportFilter || 'all');
             }
         });
     });
@@ -59,22 +56,67 @@ document.addEventListener('DOMContentLoaded', () => {
     // 5. Setup Modal Handlers (Replaces inline onclicks)
     setupModalHandlers();
 
-    // 6. Setup Filter Buttons
-    setupFilterButtons();
+    // 6. Setup Report Filter Handlers (Safely attached)
+    setupReportFilters();
 
-    // 7. Initialize filter to 'all'
-    setTimeout(() => {
-        setReportFilter('all');
-    }, 100);
-
-    // 6. Setup Filter Buttons
-    setupFilterButtons();
-
-    // 7. Initialize filter to 'all'
-    setTimeout(() => {
-        setReportFilter('all');
-    }, 100);
+    // 7. Keep-Alive Service (Robust)
+    connectKeepAlive();
 });
+
+let keepAlivePort;
+function connectKeepAlive() {
+    if (!chrome.runtime || !chrome.runtime.connect) return;
+    try {
+        keepAlivePort = chrome.runtime.connect({ name: 'keepAlive' });
+        keepAlivePort.onDisconnect.addListener(() => {
+            // Reconnect logic
+            setTimeout(connectKeepAlive, 5000);
+        });
+    } catch (e) {
+        console.warn('Keep-Alive failed', e);
+    }
+}
+
+function setupReportFilters() {
+    // 1. Filter Tabs
+    const filters = ['all', 'pending', 'banned', 'ignored'];
+    filters.forEach(status => {
+        const btn = document.getElementById(`filter-${status}`);
+        if (btn) {
+            // Remove any existing inline onclick to be safe (though JS override usually wins)
+            btn.onclick = null;
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                setReportFilter(status);
+            });
+        }
+    });
+
+    // 2. Refresh Button (Reports)
+    const refreshReportsBtn = document.getElementById('btn-refresh-reports');
+    if (refreshReportsBtn) {
+        refreshReportsBtn.onclick = null;
+        refreshReportsBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            loadDashboardData();
+        });
+    }
+
+    // 3. Refresh Button (Banned Sites)
+    const refreshBannedBtn = document.getElementById('btn-refresh-banned');
+    if (refreshBannedBtn) {
+        refreshBannedBtn.onclick = null;
+        refreshBannedBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Assuming loadBannedSites() is global or available
+            if (typeof loadBannedSites === 'function') {
+                loadBannedSites();
+            } else {
+                console.warn('[Admin] loadBannedSites is not defined');
+            }
+        });
+    }
+}
 
 function setupModalHandlers() {
     const modal = document.getElementById('user-modal');
@@ -92,33 +134,6 @@ function setupModalHandlers() {
             if (modal) modal.classList.add('hidden');
         });
     }
-}
-
-// Track if filter buttons are already set up
-let filterButtonsSetup = false;
-
-function setupFilterButtons() {
-    // Only set up once to avoid duplicate listeners
-    if (filterButtonsSetup) {
-        return;
-    }
-    
-    // Attach event listeners to all filter buttons (CSP-safe)
-    const filterButtons = document.querySelectorAll('.filter-btn');
-    filterButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const filter = btn.getAttribute('data-filter');
-            if (filter) {
-                console.log('[Admin] Filter button clicked:', filter);
-                setReportFilter(filter);
-            }
-        });
-    });
-    
-    filterButtonsSetup = true;
-    console.log('[Admin] Filter button listeners attached:', filterButtons.length);
 }
 
 function setupDebugTools() {
@@ -161,6 +176,7 @@ function injectFakeData() {
         loadDashboardData();
     }
 }
+
 
 async function checkAdminAccess() {
     const lockScreen = document.getElementById('lock-screen');
@@ -389,11 +405,29 @@ function loadDashboardData() {
 
             // --- Populate Reports Table ---
             // Fetch from Node.js Backend
+            // Fetch from Node.js Backend 
             fetch('https://phishingshield.onrender.com/api/reports')
                 .then(res => res.json())
                 .then(serverReports => {
                     console.log("[Admin] Fetched Global Reports:", serverReports);
-                    renderReports(serverReports);
+
+                    // MERGE: Combine Server Reports with Local Reports to ensure nothing is missed
+                    // This fixes the issue where reports show locally but not if server returns empty list
+                    const localReports = data.reportedSites || [];
+                    const mergedReports = [...serverReports];
+
+                    // Add local reports that are missing from server (by ID)
+                    localReports.forEach(localR => {
+                        const exists = mergedReports.find(serverR => serverR.id === localR.id);
+                        if (!exists) {
+                            mergedReports.push(localR);
+                        }
+                    });
+
+                    // Sort by timestamp newly
+                    mergedReports.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+                    renderReports(mergedReports);
                 })
                 .catch(err => {
                     console.warn("[Admin] Could not fetch global reports (Server Offline?)", err);
@@ -919,6 +953,7 @@ function renderUsers(users, allLogs) {
 
                     // Sync Logic
                     const updatedUser = { ...user, xp: newXP, level: Math.floor(Math.sqrt(newXP / 100)) + 1 };
+                    console.log(`[Admin] Updating XP for ${email}: ${user.xp} -> ${newXP}`);
 
                     fetch('https://phishingshield.onrender.com/api/users/sync', {
                         method: 'POST',
@@ -928,17 +963,22 @@ function renderUsers(users, allLogs) {
                         .then(res => res.json())
                         .then(data => {
                             if (data.success) {
-                                alert("XP Updated & Synced!");
+                                console.log(`[Admin] ✅ XP update successful. Server returned: XP=${data.user.xp}, Level=${data.user.level}`);
+                                alert(`XP Updated & Synced!\n\nUser: ${name}\nNew XP: ${data.user.xp}\nNew Level: ${data.user.level}\n\nThe user's dashboard will update within 10 seconds.`);
                                 // Quick UI update
-                                document.getElementById('modal-xp').textContent = newXP;
-                                document.getElementById('modal-level').textContent = updatedUser.level;
+                                document.getElementById('modal-xp').textContent = data.user.xp;
+                                document.getElementById('modal-level').textContent = data.user.level;
                                 // Background refresh
                                 loadDashboardData();
                             } else {
-                                alert("Sync failed: " + data.message);
+                                console.error("[Admin] ❌ XP update failed:", data);
+                                alert("Sync failed: " + (data.message || "Unknown error"));
                             }
                         })
-                        .catch(e => alert("Server Error"));
+                        .catch(e => {
+                            console.error("[Admin] ❌ XP update error:", e);
+                            alert("Server Error: " + e.message);
+                        });
                 };
 
                 // 2. Delete Button

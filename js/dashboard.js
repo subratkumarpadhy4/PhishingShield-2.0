@@ -46,6 +46,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // 3. LOAD DATA & STATS
         // 3. LOAD DATA & STATS
         function renderDashboardUI() {
+            // Force Sync with Backend on Load to get latest XP
+            chrome.runtime.sendMessage({ type: "SYNC_XP" });
+
             if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                 chrome.storage.local.get(['visitLog', 'theme', 'users', 'suspectedExtensions', 'userXP', 'userLevel'], (result) => {
                     const log = result.visitLog || [];
@@ -71,6 +74,48 @@ document.addEventListener('DOMContentLoaded', () => {
         // Initial Render (Local Data)
         renderDashboardUI();
 
+        // Immediate XP Sync Check - Fix any mismatches between users array and userXP
+        chrome.storage.local.get(['userXP', 'userLevel', 'users', 'currentUser'], (data) => {
+            if (data.currentUser && data.currentUser.email && data.users && Array.isArray(data.users)) {
+                const userInArray = data.users.find(u => u && u.email === data.currentUser.email);
+                if (userInArray) {
+                    const serverXP = Number(userInArray.xp) || 0;
+                    const localXP = Number(data.userXP) || 0;
+
+                    if (serverXP > localXP) {
+                        console.log(`[Dashboard] ⚠️ XP mismatch detected! Users array has ${serverXP} but userXP is ${localXP}. Fixing...`);
+                        chrome.storage.local.set({
+                            userXP: serverXP,
+                            userLevel: userInArray.level || Math.floor(Math.sqrt(serverXP / 100)) + 1
+                        }, () => {
+                            console.log(`[Dashboard] ✅ Fixed XP mismatch. Now showing ${serverXP} XP`);
+                            renderDashboardUI(); // Re-render with correct XP
+                        });
+                    }
+                }
+            }
+        });
+
+        // Periodic XP Sync (every 10 seconds) to catch admin-promoted XP
+        setInterval(() => {
+            console.log("[Dashboard] Periodic XP sync triggered");
+            chrome.runtime.sendMessage({ type: "SYNC_XP" }, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.warn("[Dashboard] SYNC_XP error:", chrome.runtime.lastError);
+                } else {
+                    console.log("[Dashboard] Periodic sync completed");
+                }
+            });
+        }, 10000); // Sync every 10 seconds
+
+        // Sync when dashboard becomes visible (user switches back to tab)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                console.log("[Dashboard] Dashboard became visible, syncing XP...");
+                chrome.runtime.sendMessage({ type: "SYNC_XP" });
+            }
+        });
+
         // Fetch Global Data (Background Sync)
         if (typeof Auth !== 'undefined' && Auth.getUsers) {
             Auth.getUsers((users) => {
@@ -85,8 +130,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (areaName === 'local') {
                     // Update if visitLog, userXP, userLevel, or users changed
                     if (changes.visitLog || changes.userXP || changes.userLevel || changes.users) {
+                        console.log("[Dashboard] Storage changed, re-rendering UI. XP:", changes.userXP?.newValue, "Level:", changes.userLevel?.newValue);
                         renderDashboardUI();
                     }
+                }
+            });
+        }
+
+        // Listen for XP_UPDATE messages from background script (for admin-promoted XP)
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+            chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+                if (message.type === "XP_UPDATE") {
+                    console.log("[Dashboard] XP_UPDATE message received: XP=" + message.xp + ", Level=" + message.level);
+                    // Update storage first, then re-render (storage listener will also trigger, but this ensures immediate update)
+                    chrome.storage.local.set({
+                        userXP: message.xp,
+                        userLevel: message.level
+                    }, () => {
+                        // Force immediate re-render to show updated XP
+                        renderDashboardUI();
+                    });
                 }
             });
         }
@@ -309,10 +372,39 @@ function updateStats(log) {
     const safePercentage = total > 0 ? Math.round((safe / total) * 100) : 100;
     if (elSummary) elSummary.innerText = `Safety: ${safePercentage}%`;
 
-    // Gamification
-    chrome.storage.local.get(['userXP', 'userLevel'], (g) => {
-        const xp = g.userXP || 0;
-        const level = g.userLevel || 1;
+    // Gamification - Read XP from storage, with fallback to users array
+    chrome.storage.local.get(['userXP', 'userLevel', 'users', 'currentUser'], (g) => {
+        let xp = Number(g.userXP) || 0;
+        let level = Number(g.userLevel) || 1;
+
+        // Fallback: If userXP seems stale, check users array for current user
+        if (g.currentUser && g.currentUser.email && g.users && Array.isArray(g.users)) {
+            const currentUserInArray = g.users.find(u => u && u.email === g.currentUser.email);
+            if (currentUserInArray) {
+                const serverXP = Number(currentUserInArray.xp) || 0;
+                const serverLevel = Number(currentUserInArray.level) || 1;
+
+                // Enforce Server Authority: If server is different (higher OR lower), we sync local to server.
+                if (serverXP !== xp) {
+                    console.log(`[Dashboard] Syncing Local XP to Server XP: ${xp} -> ${serverXP}`);
+                    xp = serverXP;
+                    level = serverLevel;
+
+                    // Update local storage to match
+                    chrome.storage.local.set({
+                        userXP: serverXP,
+                        userLevel: serverLevel
+                    });
+                }
+            }
+        }
+
+        // Recalculate level from XP to ensure accuracy (level = floor(sqrt(xp/100)) + 1)
+        const calculatedLevel = Math.floor(Math.sqrt(xp / 100)) + 1;
+        if (calculatedLevel !== level) {
+            console.log(`[Dashboard] Level mismatch! Recalculating: stored=${level}, calculated=${calculatedLevel} from XP=${xp}`);
+            level = calculatedLevel;
+        }
 
         const elRank = document.getElementById('user-rank');
         const elLevel = document.getElementById('user-level');
@@ -324,11 +416,13 @@ function updateStats(log) {
         if (elXP) elXP.innerText = xp;
         if (elRank) elRank.innerText = (level >= 20 ? 'Sentinel' : (level >= 5 ? 'Scout' : 'Novice'));
 
-        // Bar
-        const prev = Math.pow(level - 1, 2) * 100;
-        const next = Math.pow(level, 2) * 100;
+        // Calculate XP requirements for current level
+        // Level formula: level = floor(sqrt(xp/100)) + 1
+        // So for level N, min XP = (N-1)^2 * 100, max XP = N^2 * 100
+        const prevLevelXP = Math.pow(level - 1, 2) * 100;
+        const nextLevelXP = Math.pow(level, 2) * 100;
 
-        if (elNext) elNext.innerText = next; // Update the label
+        if (elNext) elNext.innerText = nextLevelXP; // Update the label
 
         // Update Badge Image
         const elBadge = document.getElementById('rank-badge');
@@ -338,8 +432,27 @@ function updateStats(log) {
             else elBadge.src = 'images/badge_novice.png';
         }
 
-        const p = level === 1 ? (xp / 100) * 100 : ((xp - prev) / (next - prev)) * 100;
-        if (bar) bar.style.width = Math.min(p, 100) + '%';
+        // Calculate progress percentage
+        // For level 1: progress = (xp / 100) * 100
+        // For other levels: progress = ((xp - prevLevelXP) / (nextLevelXP - prevLevelXP)) * 100
+        let progressPercent = 0;
+        if (level === 1) {
+            progressPercent = (xp / 100) * 100;
+        } else {
+            const xpInCurrentLevel = xp - prevLevelXP;
+            const xpNeededForLevel = nextLevelXP - prevLevelXP;
+            progressPercent = (xpInCurrentLevel / xpNeededForLevel) * 100;
+        }
+
+        // Ensure progress is between 0 and 100
+        progressPercent = Math.max(0, Math.min(100, progressPercent));
+
+        console.log(`[Dashboard] XP Progress: ${xp} XP, Level ${level}, Progress: ${progressPercent.toFixed(1)}% (${prevLevelXP} -> ${nextLevelXP})`);
+
+        if (bar) {
+            bar.style.width = progressPercent + '%';
+            console.log(`[Dashboard] Progress bar set to ${progressPercent}%`);
+        }
     });
 }
 

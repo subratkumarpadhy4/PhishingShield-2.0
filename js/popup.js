@@ -139,6 +139,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 4. STATS & GAMIFICATION ---
     function updateSafetyLevel() {
+        // Trigger Sync to ensure fresh data
+        chrome.runtime.sendMessage({ type: "SYNC_XP" });
+        // Render current data immediately
+        renderSafetyStats();
+    }
+
+    updateSafetyLevel();
+
+    // Listen for live updates (e.g. after sync finishes)
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local') {
+            if (changes.userXP || changes.userLevel || changes.siteHistory) {
+                // Determine if we need to redraw strictly (avoids loops if we are careful, but simple call is safe here)
+                // We'll just read from storage again inside updateSafetyLevel
+                // However, updateSafetyLevel triggers a sync, we should avoid infinite loops.
+                // Actually updateSafetyLevel sends 'SYNC_XP', which does fetch -> storage.set.
+                // storage.set triggers onChanged -> updateSafetyLevel -> SYNC_XP -> fetch.
+                // This is a loop if server and client disagree constantly, but if they match, storage won't change?
+                // Actually chrome.storage.set only triggers onChanged if value differs.
+                // But let's be safe: separate the UI update from the Sync Trigger.
+
+                // We will split updateSafetyLevel into renderSafetyStats() and the sync trigger.
+                renderSafetyStats();
+            }
+        }
+    });
+
+    function renderSafetyStats() {
         chrome.storage.local.get(['siteHistory', 'userXP', 'userLevel'], (result) => {
             const history = result.siteHistory || [];
             const attacksBlocked = history.filter(h => h.score > 50).length;
@@ -169,8 +197,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-
-    updateSafetyLevel();
 
     // --- 5. DOJO INIT ---
     if (typeof Dojo !== 'undefined') {

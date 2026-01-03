@@ -1,1 +1,9 @@
-{}
+{
+  "admin_sess_pending_1767462177777_ivp4uri4r": {
+    "userId": "rajkumarpadhy2006@gmail.com",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyYWprdW1hcnBhZGh5MjAwNkBnbWFpbC5jb20iLCJlbWFpbCI6InJhamt1bWFycGFkaHkyMDA2QGdtYWlsLmNvbSIsInJvbGUiOiJhZG1pbiIsIm1mYVZlcmlmaWVkIjp0cnVlLCJpcEFkZHJlc3MiOiIxMjcuMC4wLjEiLCJzZXNzaW9uSWQiOiJhZG1pbl9zZXNzX3BlbmRpbmdfMTc2NzQ2MjE3Nzc3N19pdnA0dXJpNHIiLCJpYXQiOjE3Njc0NjIxNzcsImV4cCI6MTc2ODMyNjE3N30.k7XGiAj4ZrWAMgeP5mIq5TbU0HNo6thUSQjTOXMUeuQ",
+    "ip": "127.0.0.1",
+    "createdAt": 1767462177797,
+    "expiresAt": 1768326177797
+  }
+}
