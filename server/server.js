@@ -352,17 +352,18 @@ app.post('/api/users/sync', (req, res) => {
         const serverXP = Number(users[idx].xp) || 0;
         const serverLevel = Number(users[idx].level) || 1;
 
-        // We only update NON-Gameplay fields from the client (e.g. name, preferences)
-        // We FORCE the client to accept the Server's XP value.
+        // ALLOW ADMIN OVERRIDES / UPDATES
+        // If the client sends XP/Level, we accept it.
+        // This is necessary for the Admin Portal to update user stats.
         finalUser = {
             ...users[idx],
             ...userData,
-            xp: serverXP,    // Keep Server Value
-            level: serverLevel // Keep Server Value
+            xp: (userData.xp !== undefined) ? Number(userData.xp) : serverXP,
+            level: (userData.level !== undefined) ? Number(userData.level) : serverLevel
         };
 
         users[idx] = finalUser;
-        console.log(`[User] Synced ${userData.email} - Enforcing Server XP: ${serverXP}`);
+        console.log(`[User] Synced ${userData.email} - New XP: ${finalUser.xp}`);
     } else {
         // Create new
         finalUser = userData;

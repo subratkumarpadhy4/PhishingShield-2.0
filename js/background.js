@@ -3,14 +3,11 @@
 
 let db = null; // No longer used
 
-// Import AI Model for basic offline checks
-// Note: Path is relative to extension root, but since background.js is in js/, we use './ai_model.js'
-try {
-    importScripts('./ai_model.js');
-} catch (e) {
-    console.warn("[PhishingShield] Failed to load ai_model.js:", e.message || e);
-    // Continue anyway - AI model is optional for basic functionality
-}
+console.log("[PhishingShield] Service Worker Starting... " + new Date().toISOString());
+
+// -----------------------------------------------------------------------------
+// TRUSTED EXTENSIONS WHITELIST (Tier 1: Trusted)
+// -----------------------------------------------------------------------------
 
 // -----------------------------------------------------------------------------
 // TRUSTED EXTENSIONS WHITELIST (Tier 1: Trusted)
@@ -104,33 +101,24 @@ function createContextMenu() {
         return;
     }
 
-    console.log("[PhishingShield] contextMenus API is available, creating menu...");
-
-    // Try to remove existing menu first (ignore errors if it doesn't exist)
-    chrome.contextMenus.remove("report-to-phishingshield", () => {
-        // Ignore errors from remove - menu might not exist
+    // Attempt to create the menu item
+    // We do NOT remove it first, to avoid race conditions.
+    // If it exists, we catch the error.
+    chrome.contextMenus.create({
+        id: "report-to-phishingshield",
+        title: "Report to PhishingShield",
+        contexts: ["page", "link"]
+    }, () => {
         if (chrome.runtime.lastError) {
-            console.log("[PhishingShield] No existing menu to remove (this is OK)");
-        }
-
-        // Create the context menu item directly
-        chrome.contextMenus.create({
-            id: "report-to-phishingshield",
-            title: "Report to PhishingShield",
-            contexts: ["page", "link"]
-        }, () => {
-            if (chrome.runtime.lastError) {
-                const errorMsg = chrome.runtime.lastError.message || '';
-                // If it says duplicate/exists, that's actually OK - menu was already there
-                if (errorMsg.includes('duplicate') || errorMsg.includes('already exists') || errorMsg.includes('Cannot create')) {
-                    console.log("[PhishingShield] Context menu already exists (this is OK):", errorMsg);
-                } else {
-                    console.error("[PhishingShield] ❌ Context menu creation FAILED:", errorMsg);
-                }
+            const msg = chrome.runtime.lastError.message;
+            if (msg.includes("duplicate") || msg.includes("already exists")) {
+                console.log("[PhishingShield] Context menu already registered (Perfectly fine).");
             } else {
-                console.log("[PhishingShield] ✅✅✅ Context menu created successfully!");
+                console.error("[PhishingShield] Context Menu Creation Error:", msg);
             }
-        });
+        } else {
+            console.log("[PhishingShield] ✅ Context menu created successfully!");
+        }
     });
 }
 
@@ -182,24 +170,38 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(reportPayload)
             })
-                .then(res => res.json())
-                .then(data => {
-                    console.log("[PhishingShield] Report sent successfully:", data);
-                    chrome.notifications.create({
-                        type: 'basic',
-                        iconUrl: 'images/icon48.png',
-                        title: '✅ Report Submitted',
-                        message: `Thank you for reporting ${hostname}. Our team will review it.`,
-                        priority: 1
+                .then(res => {
+                    console.log("[PhishingShield] POST Response Status:", res.status);
+                    return res.json();
+                })
+                .then(() => {
+                    console.log("[PhishingShield] Report sent successfully!");
+
+                    // Add XP to user
+                    chrome.storage.local.get(['userXP', 'userLevel'], (data) => {
+                        let xp = data.userXP || 0;
+                        let level = data.userLevel || 1;
+                        xp += 10; // 10 XP for reporting
+                        updateXP(10); // Call updateXP with the amount
                     });
+
+                    // NOTIFY USER OF SUCCESS (Pretty Toast)
+                    if (tab && tab.id) {
+                        chrome.tabs.sendMessage(tab.id, {
+                            type: "SHOW_NOTIFICATION",
+                            title: "Report Sent!",
+                            message: "Thank you for keeping the web safe.\n(+10 XP)"
+                        }).catch(() => { });
+                    }
                 })
                 .catch(err => {
                     console.error("[PhishingShield] Report failed:", err);
+                    console.log("[PhishingShield] Detailed Error:", err.message, err.stack);
                     chrome.notifications.create({
                         type: 'basic',
                         iconUrl: 'images/icon48.png',
                         title: '⚠️ Report Failed',
-                        message: 'Could not submit report. Please try again later.',
+                        message: 'Could not submit report. Please try again later. (' + err.message + ')',
                         priority: 1
                     });
                 });
@@ -437,8 +439,8 @@ function updateXP(amount) {
                 users[userIndex].level = newLevel;
                 updateData.users = users;
 
-                // Sync to server
-                fetch('https://phishingshield.onrender.com/api/users/sync', {
+                // Send to Backend
+                fetch('https://phishingshield.onrender.com/api/reports', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(users[userIndex])
@@ -702,52 +704,18 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 function syncXPToServer() {
-    chrome.storage.local.get(['currentUser', 'userXP', 'userLevel', 'pendingXPSync', 'users'], (res) => {
-        // Try to get user email from currentUser or users array
-        let userEmail = null;
+    chrome.storage.local.get(['currentUser', 'userXP', 'userLevel', 'pendingXPSync'], (res) => {
+        // Sync always if user is logged in (acts as heartbeat to fetch server updates like Admin Promotions)
         if (res.currentUser && res.currentUser.email) {
-            userEmail = res.currentUser.email;
-        } else if (res.users && Array.isArray(res.users) && res.users.length > 0) {
-            // Fallback: use first user if currentUser not set (for guest users with XP)
-            const firstUser = res.users.find(u => u && u.email);
-            if (firstUser) {
-                userEmail = firstUser.email;
-                console.log("[PhishingShield] Using fallback user email from users array:", userEmail);
-            }
-        }
-
-        // Sync if we have a user email (acts as heartbeat to fetch server updates like Admin Promotions)
-        if (userEmail) {
             console.log("[PhishingShield] Syncing XP to Global Leaderboard...");
-            console.log(`[PhishingShield] User: ${userEmail}, Local XP: ${res.userXP || 0}`);
 
-            // Build user data - use currentUser if available, otherwise construct from users array
-            let userData;
-            if (res.currentUser && res.currentUser.email === userEmail) {
-                userData = {
-                    ...res.currentUser,
-                    xp: res.userXP || 0,
-                    level: res.userLevel || 1
-                };
-            } else {
-                // Fallback: construct from users array
-                const userFromArray = res.users.find(u => u && u.email === userEmail);
-                if (userFromArray) {
-                    userData = {
-                        ...userFromArray,
-                        xp: res.userXP || userFromArray.xp || 0,
-                        level: res.userLevel || userFromArray.level || 1
-                    };
-                } else {
-                    // Last resort: minimal user data
-                    userData = {
-                        email: userEmail,
-                        xp: res.userXP || 0,
-                        level: res.userLevel || 1
-                    };
-                }
-            }
+            const userData = {
+                ...res.currentUser,
+                xp: res.userXP,
+                level: res.userLevel
+            };
 
+            // Sync to server
             fetch("https://phishingshield.onrender.com/api/users/sync", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -755,58 +723,29 @@ function syncXPToServer() {
             })
                 .then(r => r.json())
                 .then(data => {
-                    if (data.success && data.user) {
+                    if (data.success) {
                         console.log("[PhishingShield] ✅ XP Global Sync Successful");
-                        console.log(`[PhishingShield] Server returned: XP=${data.user.xp}, Level=${data.user.level}`);
                         chrome.storage.local.set({ pendingXPSync: false });
 
-                        // 2-Way Sync: Handle both cases - server higher (admin promotion) or local higher (user earned XP)
-                        const serverXP = Number(data.user.xp) || 0;
-                        const localXP = Number(res.userXP) || 0;
-                        const serverLevel = data.user.level || calculateLevel(serverXP);
-                        const localLevel = Number(res.userLevel) || calculateLevel(localXP);
-
-                        // Case 1: Server Authority (Always sync to Server)
-                        // If Server is different (Higher OR Lower), we update local.
-                        // This allows Admin to downgrade users (XP 20) and have it reflect.
-                        if (serverXP !== localXP || serverLevel !== localLevel) {
-                            console.log(`[PhishingShield] 📥 Syncing to Server Authority: Local(${localXP}) -> Server(${serverXP})`);
-
-                            // Update users array in local storage if exists
-                            const updateData = {
-                                userXP: serverXP,
-                                userLevel: serverLevel
-                            };
-
-                            if (res.users && Array.isArray(res.users) && res.currentUser) {
-                                const userIndex = res.users.findIndex(u => u && u.email === res.currentUser.email);
-                                if (userIndex >= 0) {
-                                    res.users[userIndex].xp = serverXP;
-                                    res.users[userIndex].level = serverLevel;
-                                    updateData.users = res.users;
-                                }
-                            }
-
-                            chrome.storage.local.set(updateData, () => {
-                                console.log(`[PhishingShield] ✅ Local storage updated to match Server.`);
-
+                        // 2-Way Sync: If Server has higher XP (e.g. Admin Promotion), update local
+                        if (data.user && data.user.xp > res.userXP) {
+                            console.log(`[PhishingShield] 📥 Server has higher XP (${data.user.xp} > ${res.userXP}). Updating local...`);
+                            chrome.storage.local.set({
+                                userXP: data.user.xp,
+                                userLevel: data.user.level || calculateLevel(data.user.xp)
+                            }, () => {
                                 // Notify tabs to update HUD
                                 chrome.tabs.query({}, (tabs) => {
                                     tabs.forEach(tab => {
                                         if (tab.id) chrome.tabs.sendMessage(tab.id, {
                                             type: "XP_UPDATE",
-                                            xp: serverXP,
-                                            level: serverLevel
+                                            xp: data.user.xp,
+                                            level: data.user.level
                                         }).catch(() => { });
                                     });
                                 });
                             });
                         }
-                        else {
-                            console.log(`[PhishingShield] ✅ In Sync (XP=${localXP})`);
-                        }
-                    } else {
-                        console.warn("[PhishingShield] Sync response missing user data:", data);
                     }
                 })
                 .catch(e => console.error("[PhishingShield] ❌ XP Sync Failed:", e));

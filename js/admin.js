@@ -149,13 +149,114 @@ function setupDebugTools() {
     // Add Debug Button
     const container = document.querySelector('#settings .table-container');
     if (container) {
-        const btn = document.createElement('button');
-        btn.className = "btn btn-outline";
-        btn.textContent = "🛠️ Inject Fake Data (Debug)";
-        btn.style.marginTop = "10px";
-        btn.onclick = injectFakeData;
-        container.appendChild(btn);
+        // Divider
+        container.appendChild(document.createElement('hr'));
+
+        // "Memory" Restore Button (No downloads)
+        const btnRestore = document.createElement('button');
+        btnRestore.className = "btn btn-outline";
+        btnRestore.textContent = "🔄 Restore Data to Server";
+        btnRestore.title = "Restores missing reports from this browser's memory to the server.";
+        btnRestore.onclick = restoreFromMemory;
+        container.appendChild(btnRestore);
+
+        // Debug Button
+        const btnDebug = document.createElement('button');
+        btnDebug.className = "btn btn-outline";
+        btnDebug.textContent = "🛠️ Inject Fake Data (Debug)";
+        btnDebug.style.marginTop = "10px";
+        btnDebug.style.display = "block"; // New line
+        btnDebug.onclick = injectFakeData;
+        container.appendChild(btnDebug);
     }
+
+}
+
+function restoreFromMemory() {
+    chrome.storage.local.get(['cachedGlobalReports'], (data) => {
+        const cached = data.cachedGlobalReports || [];
+
+        if (cached.length === 0) {
+            alert("No saved data found in this browser's memory.");
+            return;
+        }
+
+        // 1. Fetch Current Server State first to differentiate between "Full Wipe" and "Partial Missing"
+        const statusDiv = document.createElement('div');
+        statusDiv.style.cssText = "position:fixed; top:20px; right:20px; background:#0d6efd; color:white; padding:15px; border-radius:5px; z-index:10000; font-weight:bold;";
+        statusDiv.innerText = "🔍 Checking Server State...";
+        document.body.appendChild(statusDiv);
+
+        fetch('https://phishingshield.onrender.com/api/reports')
+            .then(res => res.json())
+            .then(serverReports => {
+                // map existing IDs for fast lookup
+                const serverIds = new Set(serverReports.map(r => r.id));
+
+                // 2. Identify Missing Reports
+                const missingReports = cached.filter(r => !serverIds.has(r.id));
+
+                if (missingReports.length === 0) {
+                    statusDiv.style.background = "#198754";
+                    statusDiv.innerText = "✅ Server is already up-to-date.";
+                    setTimeout(() => statusDiv.remove(), 2500);
+                    return;
+                }
+
+                // 3. User Confirmation based on scenario
+                statusDiv.remove(); // Remove checking status
+                let message = "";
+                if (serverReports.length === 0) {
+                    message = `🚨 SERVER WIPE DETECTED!\n\nThe server is empty, but your browser remembers ${missingReports.length} reports.\n\nRestore all data?`;
+                } else {
+                    message = `⚠️ Sync Gap Detected\n\nFound ${missingReports.length} reports in your memory that are missing from the server.\n\nRestore them now?`;
+                }
+
+                if (!confirm(message)) return;
+
+                // 4. Restore Logic
+                statusDiv.innerText = "⏳ Syncing...";
+                document.body.appendChild(statusDiv);
+                statusDiv.style.background = "#0d6efd";
+
+                let count = 0;
+                let errors = 0;
+
+                const uploadNext = (index) => {
+                    if (index >= missingReports.length) {
+                        statusDiv.style.background = "#198754";
+                        statusDiv.innerText = `✅ Restoration Complete! (${count} sent)`;
+                        setTimeout(() => statusDiv.remove(), 2500);
+                        loadDashboardData();
+                        return;
+                    }
+
+                    const report = missingReports[index];
+                    fetch('https://phishingshield.onrender.com/api/reports', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(report)
+                    })
+                        .then(res => {
+                            if (res.ok) count++;
+                            else errors++;
+                        })
+                        .catch(() => errors++)
+                        .finally(() => {
+                            statusDiv.innerText = `⏳ Restoring ${count}/${missingReports.length}...`;
+                            uploadNext(index + 1);
+                        });
+                };
+
+                uploadNext(0);
+            })
+            .catch(err => {
+                statusDiv.style.background = "#dc3545";
+                statusDiv.innerText = "❌ Connection Failed. Data saved in memory.";
+                console.error(err);
+                setTimeout(() => statusDiv.remove(), 3000);
+            });
+    });
 }
 
 function injectFakeData() {
@@ -411,28 +512,84 @@ function loadDashboardData() {
                 .then(serverReports => {
                     console.log("[Admin] Fetched Global Reports:", serverReports);
 
-                    // MERGE: Combine Server Reports with Local Reports to ensure nothing is missed
-                    // This fixes the issue where reports show locally but not if server returns empty list
-                    const localReports = data.reportedSites || [];
-                    const mergedReports = [...serverReports];
+                    // --- SERVER RESTORATION LOGIC (Persistence Hack) ---
+                    // If server returns EMPTY list (because it reset), but we have a Local Cache,
+                    // we assume the server wiped and we RESTORE it from our cache.
+                    chrome.storage.local.get(['cachedGlobalReports'], (c) => {
+                        const cached = c.cachedGlobalReports || [];
 
-                    // Add local reports that are missing from server (by ID)
-                    localReports.forEach(localR => {
-                        const exists = mergedReports.find(serverR => serverR.id === localR.id);
-                        if (!exists) {
-                            mergedReports.push(localR);
+                        if (serverReports.length === 0 && cached.length > 0) {
+                            console.warn("⚠️ SERVER DATA LOSS DETECTED! Restoring from Admin Cache...");
+
+                            // 1. Show Recovery UI
+                            const alertBox = document.createElement('div');
+                            alertBox.style.cssText = "position:fixed; top:20px; right:20px; background:#ffc107; color:black; padding:15px; z-index:9999; border-radius:8px; font-weight:bold; box-shadow:0 5px 15px rgba(0,0,0,0.2);";
+                            alertBox.innerHTML = `🔄 Server Reset Detected. Restoring ${cached.length} reports...`;
+                            document.body.appendChild(alertBox);
+
+                            // 2. Restore to Server (One by one to avoid payload limits, or batch if API supported)
+                            // We'll just push them back effectively.
+                            let restoredCount = 0;
+                            cached.forEach(report => {
+                                fetch('https://phishingshield.onrender.com/api/reports', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(report)
+                                }).then(() => {
+                                    restoredCount++;
+                                    if (restoredCount === cached.length) {
+                                        alertBox.style.background = "#198754";
+                                        alertBox.style.color = "white";
+                                        alertBox.innerHTML = `✅ Server Restored (${restoredCount} reports).`;
+                                        setTimeout(() => alertBox.remove(), 3000);
+                                        loadDashboardData(); // Reload to confirm
+                                    }
+                                });
+                            });
+
+                            // Use Cached data for NOW so UI looks instant
+                            renderReports(cached);
+
+                        } else if (serverReports.length >= cached.length) {
+                            // Normal Case: Server has data. Update our Cache.
+                            console.log("[Admin] Updating Local Cache with latest Server Data");
+                            chrome.storage.local.set({ cachedGlobalReports: serverReports });
+
+                            // MERGE logic for UI
+                            const localReports = data.reportedSites || [];
+                            const mergedReports = [...serverReports];
+
+                            localReports.forEach(localR => {
+                                const exists = mergedReports.find(serverR => serverR.id === localR.id);
+                                if (!exists) mergedReports.push(localR);
+                            });
+
+                            mergedReports.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                            renderReports(mergedReports);
+                        } else {
+                            // Edge Case: Server has SOME data but less than cache? 
+                            // Usually implies partial wipe or just new reports. We trust Server + Cache merge.
+                            const mergedCache = [...cached];
+                            serverReports.forEach(r => {
+                                if (!mergedCache.find(c => c.id === r.id)) mergedCache.push(r);
+                            });
+                            chrome.storage.local.set({ cachedGlobalReports: mergedCache });
+                            renderReports(mergedCache);
                         }
                     });
-
-                    // Sort by timestamp newly
-                    mergedReports.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-                    renderReports(mergedReports);
                 })
                 .catch(err => {
                     console.warn("[Admin] Could not fetch global reports (Server Offline?)", err);
-                    // Fallback to local
-                    renderReports(reports);
+                    // Fallback to Cache first, then Local
+                    chrome.storage.local.get(['cachedGlobalReports'], (c) => {
+                        const cached = c.cachedGlobalReports || [];
+                        if (cached.length > 0) {
+                            console.log("[Admin] Using Offline Cache");
+                            renderReports(cached);
+                        } else {
+                            renderReports(reports); // Fallback to local user reports
+                        }
+                    });
                 });
 
             // DEBUG: Inject Test Report Button if not exists
@@ -467,15 +624,87 @@ function loadDashboardData() {
 
     // Trigger Load
     console.log("Fetching Data...");
-    // Just perform local check + server fetch logic inside processData
-    // We removed Auth dependency for Reports, but keep it for Users if needed.
-    if (typeof Auth !== 'undefined' && Auth.getUsers) {
-        Auth.getUsers((users) => {
+
+    // 1. Fetch Users logic with Auto-Restore
+    const fetchUsers = () => {
+        return fetch('https://phishingshield.onrender.com/api/users')
+            .then(res => res.json())
+            .then(serverUsers => {
+                console.log("[Admin] Fetched Global Users:", serverUsers.length);
+
+                return new Promise((resolve) => {
+                    chrome.storage.local.get(['cachedUsers'], (data) => {
+                        const cached = data.cachedUsers || [];
+
+                        // CACHE LOGIC:
+                        if (serverUsers.length === 0 && cached.length > 0) {
+                            console.warn("⚠️ SERVER USER DATA LOSS DETECTED! Restoring users from Admin Cache...");
+
+                            // Restore UI
+                            const alertBox = document.createElement('div');
+                            alertBox.style.cssText = "position:fixed; top:20px; left:20px; background:#ffc107; color:black; padding:15px; z-index:9999; border-radius:8px; font-weight:bold; box-shadow:0 5px 15px rgba(0,0,0,0.2);";
+                            alertBox.innerText = `🔄 Restoring ${cached.length} missing users to server...`;
+                            document.body.appendChild(alertBox);
+
+                            // Restore execution
+                            let restored = 0;
+                            const promises = cached.map(u => {
+                                return fetch('https://phishingshield.onrender.com/api/users/sync', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(u)
+                                }).then(() => restored++);
+                            });
+
+                            Promise.allSettled(promises).then(() => {
+                                alertBox.innerText = `✅ Restored ${restored} users.`;
+                                alertBox.style.background = "#198754";
+                                alertBox.style.color = "white";
+                                setTimeout(() => alertBox.remove(), 3000);
+                                resolve(cached); // Use cached for now
+                            });
+
+                        } else if (serverUsers.length >= cached.length) {
+                            // Normal / Update: Update Cache
+                            console.log("[Admin] Updating User Cache");
+                            chrome.storage.local.set({ cachedUsers: serverUsers });
+                            resolve(serverUsers);
+                        } else {
+                            // Merge
+                            const missing = cached.filter(c => !serverUsers.find(s => s.email === c.email));
+                            if (missing.length > 0) {
+                                console.log(`[Admin] Restoring ${missing.length} missing users`);
+                                missing.forEach(u => {
+                                    fetch('https://phishingshield.onrender.com/api/users/sync', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify(u)
+                                    });
+                                });
+                            }
+                            const merged = [...serverUsers, ...missing];
+                            chrome.storage.local.set({ cachedUsers: merged });
+                            resolve(merged);
+                        }
+                    });
+                });
+            })
+            .catch(err => {
+                console.warn("[Admin] User Fetch Failed (Offline?):", err);
+                return new Promise(resolve => {
+                    chrome.storage.local.get(['cachedUsers'], r => resolve(r.cachedUsers || []));
+                });
+            });
+    };
+
+    // Execute
+    fetchUsers().then(users => {
+        // Continue with processData
+        chrome.storage.local.get(['reports'], r => {
+            // We use the existing processData flow but pass our smart user list
             processData(users || [], []);
         });
-    } else {
-        chrome.storage.local.get(['users'], r => processData(r.users || [], []));
-    }
+    });
 }
 
 
@@ -953,7 +1182,6 @@ function renderUsers(users, allLogs) {
 
                     // Sync Logic
                     const updatedUser = { ...user, xp: newXP, level: Math.floor(Math.sqrt(newXP / 100)) + 1 };
-                    console.log(`[Admin] Updating XP for ${email}: ${user.xp} -> ${newXP}`);
 
                     fetch('https://phishingshield.onrender.com/api/users/sync', {
                         method: 'POST',
@@ -963,22 +1191,17 @@ function renderUsers(users, allLogs) {
                         .then(res => res.json())
                         .then(data => {
                             if (data.success) {
-                                console.log(`[Admin] ✅ XP update successful. Server returned: XP=${data.user.xp}, Level=${data.user.level}`);
-                                alert(`XP Updated & Synced!\n\nUser: ${name}\nNew XP: ${data.user.xp}\nNew Level: ${data.user.level}\n\nThe user's dashboard will update within 10 seconds.`);
+                                alert("XP Updated & Synced!");
                                 // Quick UI update
-                                document.getElementById('modal-xp').textContent = data.user.xp;
-                                document.getElementById('modal-level').textContent = data.user.level;
+                                document.getElementById('modal-xp').textContent = newXP;
+                                document.getElementById('modal-level').textContent = updatedUser.level;
                                 // Background refresh
                                 loadDashboardData();
                             } else {
-                                console.error("[Admin] ❌ XP update failed:", data);
-                                alert("Sync failed: " + (data.message || "Unknown error"));
+                                alert("Sync failed: " + data.message);
                             }
                         })
-                        .catch(e => {
-                            console.error("[Admin] ❌ XP update error:", e);
-                            alert("Server Error: " + e.message);
-                        });
+                        .catch(e => alert("Server Error"));
                 };
 
                 // 2. Delete Button

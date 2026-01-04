@@ -27,40 +27,58 @@ chrome.storage.local.get(['enablePreview', 'enableLogin', 'enableDownloads', 'en
 });
 
 // Listener for Real-Time Events (Level Up)
+// Listener for Real-Time Events (Level Up & Notifications)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === "LEVEL_UP") {
-        const level = message.level;
-        // Show Level Up Toast
-        const toast = document.createElement('div');
-        toast.innerHTML = `
-            <div style="font-size: 24px;">🎉</div>
-            <div style="font-weight: bold; margin-top: 5px;">LEVEL UP!</div>
-            <div>You are now Level ${level}</div>
-        `;
-        toast.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background: linear-gradient(135deg, #0d6efd, #0dcaf0);
-            color: white;
-            padding: 15px 25px;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(13, 110, 253, 0.4);
-            z-index: 2147483647;
-            text-align: center;
-            font-family: sans-serif;
-            animation: slideUp 0.5s ease-out;
-        `;
-        document.body.appendChild(toast);
 
-        // Remove after 4 seconds
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            toast.style.transition = 'opacity 0.5s';
-            setTimeout(() => toast.remove(), 500);
-        }, 4000);
+    // LEVEL UP
+    if (message.type === "LEVEL_UP") {
+        showToast("🎉", "LEVEL UP!", `You are now Level ${message.level}`, "#0d6efd", "#0dcaf0");
+    }
+
+    // GENERAL NOTIFICATION (Detailed)
+    if (message.type === "SHOW_NOTIFICATION") {
+        showToast("✅", message.title, message.message, "#198754", "#20c997");
     }
 });
+
+// Helper for beautiful toasts
+function showToast(icon, title, text, color1, color2) {
+    const toast = document.createElement('div');
+    toast.innerHTML = `
+        <div style="font-size: 24px;">${icon}</div>
+        <div style="font-weight: bold; margin-top: 5px;">${title}</div>
+        <div style="margin-top:2px;">${text.replace(/\n/g, '<br>')}</div>
+    `;
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        background: linear-gradient(135deg, ${color1}, ${color2});
+        color: white;
+        padding: 15px 25px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0, 0.2);
+        z-index: 2147483647;
+        text-align: center;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        animation: slideUp 0.5s ease-out;
+        min-width: 200px;
+    `;
+
+    // Slide Up Animation
+    const style = document.createElement('style');
+    style.innerHTML = `@keyframes slideUp { from { transform: translateY(100px); opacity:0; } to { transform: translateY(0); opacity:1; } }`;
+    document.head.appendChild(style);
+
+    document.body.appendChild(toast);
+
+    // Remove after 4 seconds
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.5s';
+        setTimeout(() => toast.remove(), 500);
+    }, 4000);
+}
 
 // SERVICE WORKER KEEP-ALIVE (Robust Connection)
 // Uses long-lived port instead of interval messaging

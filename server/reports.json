@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "id": "1767513786199",
+    "url": "http://test-manual-curl.com",
+    "hostname": "test-manual-curl.com",
+    "reporter": "Curl Test",
+    "timestamp": 1767513786199,
+    "status": "pending"
+  }
+]
