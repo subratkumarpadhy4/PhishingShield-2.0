@@ -185,23 +185,40 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
                         updateXP(10); // Call updateXP with the amount
                     });
 
-                    // NOTIFY USER OF SUCCESS (Pretty Toast)
+                    // NOTIFY USER OF SUCCESS (Pretty Toast -> Fallback to Alert)
                     if (tab && tab.id) {
                         chrome.tabs.sendMessage(tab.id, {
                             type: "SHOW_NOTIFICATION",
                             title: "Report Sent!",
                             message: "Thank you for keeping the web safe.\n(+10 XP)"
-                        }).catch(() => { });
+                        })
+                            .then(() => console.log("[PhishingShield] Toast Sent"))
+                            .catch(() => {
+                                console.log("[PhishingShield] Content script inactive. Using fallback alert.");
+                                chrome.scripting.executeScript({
+                                    target: { tabId: tab.id },
+                                    func: () => alert("✅ Report Sent to PhishingShield!\n\nThank you for keeping the web safe.\n(+10 XP)")
+                                });
+                            });
                     }
                 })
                 .catch(err => {
                     console.error("[PhishingShield] Report failed:", err);
-                    console.log("[PhishingShield] Detailed Error:", err.message, err.stack);
+
+                    // Notify User of FAILURE
+                    if (tab && tab.id) {
+                        chrome.scripting.executeScript({
+                            target: { tabId: tab.id },
+                            func: (msg) => alert("⚠️ Report Failed: " + msg),
+                            args: [err.message || "Unknown Error"]
+                        });
+                    }
+
                     chrome.notifications.create({
                         type: 'basic',
                         iconUrl: 'images/icon48.png',
                         title: '⚠️ Report Failed',
-                        message: 'Could not submit report. Please try again later. (' + err.message + ')',
+                        message: 'Could not submit report: ' + err.message,
                         priority: 1
                     });
                 });
@@ -747,8 +764,37 @@ function syncXPToServer() {
                             });
                         }
                     }
+
+                    // --- REPORT SELF-HEALING (Persistence) ---
+                    // Check if my reports exist on server. If not (Wipe), re-upload.
+                    syncReportsHeal();
                 })
                 .catch(e => console.error("[PhishingShield] ❌ XP Sync Failed:", e));
         }
+    });
+}
+
+function syncReportsHeal() {
+    chrome.storage.local.get(['reportedSites'], (res) => {
+        const myReports = res.reportedSites || [];
+        if (myReports.length === 0) return;
+
+        fetch('https://phishingshield.onrender.com/api/reports')
+            .then(r => r.json())
+            .then(serverReports => {
+                const serverUrls = new Set(serverReports.map(r => r.url));
+
+                myReports.forEach(localR => {
+                    if (!serverUrls.has(localR.url)) {
+                        console.warn(`[PhishingShield] Report missing on server (Wipe?): ${localR.url}. Re-uploading...`);
+                        fetch('https://phishingshield.onrender.com/api/reports', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(localR)
+                        }).catch(e => console.error("Report Heal Failed", e));
+                    }
+                });
+            })
+            .catch(() => { });
     });
 }

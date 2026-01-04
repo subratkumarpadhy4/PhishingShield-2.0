@@ -283,12 +283,19 @@ const Auth = {
             });
     },
 
-    // For Admin: Fetch Global Users
+    // For Admin/Dashboard: Fetch Global Users
     getUsers: function (callback) {
         fetch(`${API_BASE}/users`)
             .then(res => res.json())
             .then(data => {
-                // Update local cache
+                // PROTECTION: If Server Wipe detected (empty list), DO NOT overwrite local cache
+                if (!data || data.length === 0) {
+                    console.warn("[Auth] Server returned 0 users (Potential Wipe). Preserving local cache.");
+                    chrome.storage.local.get(['users'], r => callback(r.users || []));
+                    return;
+                }
+
+                // Normal Update
                 chrome.storage.local.set({ users: data });
                 callback(data);
             })

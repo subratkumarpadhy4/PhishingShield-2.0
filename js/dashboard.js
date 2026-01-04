@@ -78,7 +78,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof Auth !== 'undefined' && Auth.getUsers) {
             Auth.getUsers((users) => {
                 console.log("[Dashboard] Global users fetched:", users.length);
-                // Note: This updates storage, which triggers the listener below => re-render
+
+                // CRITICAL FIX: Sync "My Profile" with Global Data immediately
+                chrome.storage.local.get(['currentUser'], (res) => {
+                    if (res.currentUser && res.currentUser.email) {
+                        const meInGlobal = users.find(u => u.email === res.currentUser.email);
+                        if (meInGlobal) {
+                            console.log(`[Dashboard] Found self in global list. Syncing XP: ${meInGlobal.xp}`);
+
+                            // Update Local Storage (This triggers the UI re-render listener)
+                            chrome.storage.local.set({
+                                userXP: meInGlobal.xp,
+                                userLevel: meInGlobal.level || 1,
+                                currentUser: { ...res.currentUser, ...meInGlobal } // Merge Update
+                            });
+                        }
+                    }
+                });
             });
         }
 

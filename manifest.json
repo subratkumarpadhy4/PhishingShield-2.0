@@ -14,7 +14,9 @@
     "contextMenus",
     "storage",
     "management",
-    "notifications"
+    "notifications",
+    "scripting",
+    "alarms"
   ],
   "host_permissions": [
     "<all_urls>"
