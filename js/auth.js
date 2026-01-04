@@ -10,9 +10,8 @@ if (typeof emailjs !== 'undefined') {
 
 // Toggle this for development
 const DEV_MODE = false; // Set to false for production
-const API_BASE = DEV_MODE
-    ? "http://localhost:3000/api"
-    : "https://phishingshield.onrender.com/api";
+const API_BASE = "https://phishingshield.onrender.com/api"; // Force Production URL
+// const API_BASE = DEV_MODE ? "http://localhost:3000/api" : "https://phishingshield.onrender.com/api";
 
 console.log(`[AUTH] Running in ${DEV_MODE ? 'DEVELOPMENT' : 'PRODUCTION'} mode`);
 console.log(`[AUTH] API Base: ${API_BASE}`);
