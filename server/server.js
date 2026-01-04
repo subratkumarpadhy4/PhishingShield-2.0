@@ -352,18 +352,28 @@ app.post('/api/users/sync', (req, res) => {
         const serverXP = Number(users[idx].xp) || 0;
         const serverLevel = Number(users[idx].level) || 1;
 
-        // ALLOW ADMIN OVERRIDES / UPDATES
-        // If the client sends XP/Level, we accept it.
-        // This is necessary for the Admin Portal to update user stats.
+        // SMART SYNC: Keep the highest value to prevent Client overwriting Admin Promotion
+        // and prevent Admin Promotion from being lost by a stale client sync.
+        const incomingXP = (userData.xp !== undefined) ? Number(userData.xp) : 0;
+        const finalXP = Math.max(incomingXP, serverXP);
+
+        // Logic for Level: If XP increased, recalculate level if not provided explicit
+        // But if Admin set level specifically, we respect it.
+        // Actually, just trust the max strategy for Level too or recalculate based on XP?
+        // Let's stick to what we had but use Math.max for XP.
+
         finalUser = {
             ...users[idx],
             ...userData,
-            xp: (userData.xp !== undefined) ? Number(userData.xp) : serverXP,
-            level: (userData.level !== undefined) ? Number(userData.level) : serverLevel
+            xp: finalXP,
+            level: (userData.level !== undefined && Number(userData.level) > serverLevel) ? Number(userData.level) : (finalXP > serverXP ? Math.floor(Math.sqrt(finalXP / 100)) + 1 : serverLevel)
         };
 
+        // If simple overwrite is preferred for Admin demotions, we need a flag.
+        // But assuming "Promotion" is the goal:
+
         users[idx] = finalUser;
-        console.log(`[User] Synced ${userData.email} - New XP: ${finalUser.xp}`);
+        console.log(`[User] Synced ${userData.email} - Merged XP: ${finalUser.xp}`);
     } else {
         // Create new
         finalUser = userData;
