@@ -931,16 +931,29 @@ window.banSite = function (url, reportId) {
 };
 
 // Global function to ignore a report (mark as false positive)
-window.ignoreReport = function (url, reportId) {
+window.ignoreReport = async function (url, reportId) {
     if (!confirm(`Mark this report as FALSE POSITIVE?\n\n${url}\n\nThis will mark the site as safe and ignore the report.`)) return;
 
-    // Update status on server
-    fetch('https://phishingshield.onrender.com/api/reports/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: reportId, status: 'ignored' })
-    }).then(res => res.json()).catch(err => console.error('Server update failed:', err));
+    try {
+        // Update status on server AND WAIT for it
+        const response = await fetch('https://phishingshield.onrender.com/api/reports/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: reportId, status: 'ignored' })
+        });
+        const resData = await response.json();
 
+        if (!response.ok || !resData.success) {
+            throw new Error(resData.message || 'Server returned error');
+        }
+
+        console.log("[Admin] Server ignored report successfully.");
+    } catch (err) {
+        console.error('Server update failed:', err);
+        alert("Warning: Could not update server. Updating locally only.");
+    }
+
+    // Now update UI
     chrome.storage.local.get(['reportedSites'], (data) => {
         let reports = data.reportedSites || [];
         const reportIndex = reports.findIndex(r => r.id === reportId || r.url === url);
