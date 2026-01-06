@@ -1289,7 +1289,7 @@ function loadBannedSites() {
                 <td>${new Date(site.timestamp).toLocaleDateString()}</td>
                 <td>${site.reportedBy || 'Unknown'}</td>
                 <td>
-                    <button class="btn btn-outline" style="color: #28a745; border-color: #28a745; font-size: 12px; padding: 4px 8px;" onclick="unbanSite('${site.id}')">
+                    <button class="btn btn-outline" style="color: #28a745; border-color: #28a745; font-size: 12px; padding: 4px 8px;" onclick="unbanSite('${site.url}', '${site.id}')">
                         ✅ Unban
                     </button>
                     ${site.notes ? `<div style="font-size:10px; margin-top:5px; color:#6c757d;">Note: ${site.notes}</div>` : ''}
@@ -1300,25 +1300,7 @@ function loadBannedSites() {
     });
 }
 
-// Helper to Unban (Simulated)
-window.unbanSite = function (reportId) {
-    if (confirm('Are you sure you want to unban this site? It will be accessible to users again.')) {
-        chrome.storage.local.get(['reports'], (res) => {
-            const reports = res.reports || [];
-            const updatedReports = reports.map(r => {
-                if (r.id === reportId) {
-                    return { ...r, status: 'approved' }; // Or 'pending'
-                }
-                return r;
-            });
 
-            chrome.storage.local.set({ reports: updatedReports }, () => {
-                alert('Site unbanned successfully.');
-                loadBannedSites();
-            });
-        });
-    }
-};
 
 function renderLogs(logs) {
     const tbody = document.querySelector('#logs-table tbody');
