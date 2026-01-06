@@ -119,19 +119,30 @@ function setupReportFilters() {
 }
 
 function setupModalHandlers() {
-    const modal = document.getElementById('user-modal');
-    const closeX = document.getElementById('modal-close-x');
-    const closeBtn = document.getElementById('modal-close-btn');
+    // User Modal
+    const userModal = document.getElementById('user-modal');
+    const userCloseX = document.getElementById('modal-close-x');
+    const userCloseBtn = document.getElementById('modal-close-btn');
 
-    if (closeX) {
-        closeX.addEventListener('click', () => {
-            if (modal) modal.classList.add('hidden');
+    if (userCloseX) {
+        userCloseX.addEventListener('click', () => {
+            if (userModal) userModal.classList.add('hidden');
         });
     }
 
-    if (closeBtn) {
-        closeBtn.addEventListener('click', () => {
-            if (modal) modal.classList.add('hidden');
+    if (userCloseBtn) {
+        userCloseBtn.addEventListener('click', () => {
+            if (userModal) userModal.classList.add('hidden');
+        });
+    }
+
+    // Report Detail Modal
+    const reportModal = document.getElementById('report-modal');
+    const reportCloseX = document.getElementById('report-modal-close-x');
+
+    if (reportCloseX) {
+        reportCloseX.addEventListener('click', () => {
+            if (reportModal) reportModal.classList.add('hidden');
         });
     }
 }
@@ -779,27 +790,14 @@ function renderReports(reports) {
         let actionBtn = '';
         if (status === 'banned') {
             statusBadge = '<span class="badge" style="background:#dc3545; color:white">🚫 BANNED</span>';
-            actionBtn = `
-                <div style="display:flex; gap:5px;">
-                    <button class="btn action-unban" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#198754; padding:4px 8px; font-size:11px;" title="Unban this site">UNBAN</button>
-                    <button class="btn action-details" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#0d6efd; padding:4px 8px; font-size:11px;" title="DETAILS">DETAILS</button>
-                </div>
-            `;
         } else if (status === 'ignored') {
             statusBadge = '<span class="badge" style="background:#6c757d; color:white">IGNORED</span>';
-            actionBtn = `
-                <button class="btn action-ban" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#dc3545; padding:4px 8px; font-size:11px;" title="Ban this site anyway">BAN</button>
-            `;
-        } else {
-            // Pending status
-            actionBtn = `
-                <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                    <button class="btn action-ban" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#dc3545; padding:4px 8px; font-size:11px;" title="Block">🚫 BAN</button>
-                    <button class="btn action-ignore" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#6c757d; padding:4px 8px; font-size:11px;" title="Ignore">✓ IGNORE</button>
-                    <button class="btn action-details" data-url="${escapedUrl}" data-id="${escapedId}" style="background:#0d6efd; padding:4px 8px; font-size:11px;" title="Details">🔍 DETAILS</button>
-                </div>
-            `;
         }
+
+        // Unified Action: Always show "View Details" to open Modal
+        actionBtn = `
+            <button class="btn btn-outline action-open-modal" data-id="${escapedId}" style="padding:4px 8px; font-size:12px;">View Details</button>
+        `;
 
         // Parse reporter to separate Name and Email if possible for better display
         let reporterDisplay = r.reporter || 'Anonymous';
@@ -824,6 +822,38 @@ function renderReports(reports) {
         tbody.appendChild(tr);
 
         // Attach event listeners to buttons (CSP-safe, no inline handlers)
+
+        // 1. Initial "View Details" Button Handler (Pending Status)
+        const initialViewBtn = tr.querySelector('.action-initial-view');
+        if (initialViewBtn) {
+            initialViewBtn.addEventListener('click', (e) => {
+                const container = e.target.closest('.action-wrapper');
+                if (container) {
+                    // Inject the full set of options
+                    container.innerHTML = `
+                        <button class="btn action-ban-dynamic" style="background:#dc3545; padding:4px 8px; font-size:11px;" title="Block">🚫 BAN</button>
+                        <button class="btn action-ignore-dynamic" style="background:#6c757d; padding:4px 8px; font-size:11px;" title="Ignore">✓ IGNORE</button>
+                        <button class="btn action-details-dynamic" style="background:#0d6efd; padding:4px 8px; font-size:11px;" title="Details">🔍 DETAILS</button>
+                    `;
+
+                    // Bind newly created buttons using closure variables
+                    container.querySelector('.action-ban-dynamic').addEventListener('click', () => window.banSite(r.url, r.id));
+                    container.querySelector('.action-ignore-dynamic').addEventListener('click', () => window.ignoreReport(r.url, r.id));
+                    container.querySelector('.action-details-dynamic').addEventListener('click', () => window.viewSiteDetails(r.url, r.id));
+                }
+            });
+        }
+
+        // 1. Modal trigger
+        const modalBtn = tr.querySelector('.action-open-modal');
+        if (modalBtn) {
+            modalBtn.addEventListener('click', () => {
+                const report = allReportsCache.find(x => x.id === (modalBtn.dataset.id || '')) || r;
+                openReportModal(report);
+            });
+        }
+
+        // 2. Standard Listeners (for Banned/Ignored status where buttons exist immediately)
         const banBtn = tr.querySelector('.action-ban');
         if (banBtn) {
             banBtn.addEventListener('click', () => {
@@ -1342,4 +1372,88 @@ function renderLogs(logs) {
         `;
         tbody.appendChild(row);
     });
+}
+
+function openReportModal(report) {
+    const modal = document.getElementById('report-modal');
+    if (!modal) return;
+
+    // Populate Data
+    document.getElementById('report-modal-url').textContent = report.url;
+    document.getElementById('report-modal-reporter').textContent = report.reporter || 'Anonymous';
+    document.getElementById('report-modal-date').textContent = new Date(report.timestamp).toLocaleString();
+
+    // Status Badge
+    const statusContainer = document.getElementById('report-modal-status-container');
+    const status = report.status || 'pending';
+    if (status === 'banned') statusContainer.innerHTML = '<span class="badge" style="background:#dc3545; color:white">🚫 BANNED</span>';
+    else if (status === 'ignored') statusContainer.innerHTML = '<span class="badge" style="background:#6c757d; color:white">IGNORED</span>';
+    else statusContainer.innerHTML = '<span class="badge" style="background:#ffc107; color:black">PENDING REVIEW</span>';
+
+    // Footer Actions
+    const footer = document.getElementById('report-modal-footer');
+    footer.innerHTML = '';
+
+    // Create Buttons dynamically
+    // 1. BAN (if not already banned)
+    if (status !== 'banned') {
+        const banBtn = document.createElement('button');
+        banBtn.className = 'btn';
+        banBtn.style.background = '#dc3545';
+        banBtn.style.color = 'white';
+        banBtn.innerHTML = '🚫 Ban Site';
+        banBtn.onclick = () => {
+            window.banSite(report.url, report.id);
+            modal.classList.add('hidden');
+        };
+        footer.appendChild(banBtn);
+    }
+
+    // 2. UNBAN (if banned)
+    if (status === 'banned') {
+        const unbanBtn = document.createElement('button');
+        unbanBtn.className = 'btn';
+        unbanBtn.style.background = '#198754';
+        unbanBtn.style.color = 'white';
+        unbanBtn.textContent = '✅ Unban Site';
+        unbanBtn.onclick = () => {
+            window.unbanSite(report.url, report.id);
+            modal.classList.add('hidden');
+        };
+        footer.appendChild(unbanBtn);
+    }
+
+    // 3. IGNORE (if pending)
+    if (status === 'pending') {
+        const ignoreBtn = document.createElement('button');
+        ignoreBtn.className = 'btn btn-outline';
+        ignoreBtn.textContent = '✓ Ignore Report';
+        ignoreBtn.onclick = () => {
+            window.ignoreReport(report.url, report.id);
+            modal.classList.add('hidden');
+        };
+        footer.appendChild(ignoreBtn);
+    }
+
+    // 4. Verify Link
+    const verifyBtn = document.createElement('button');
+    verifyBtn.className = 'btn btn-outline';
+    verifyBtn.style.borderColor = '#0d6efd';
+    verifyBtn.style.color = '#0d6efd';
+    verifyBtn.innerHTML = '🔗 Open Link';
+    verifyBtn.onclick = () => {
+        chrome.tabs.create({ url: report.url, active: false });
+    };
+    footer.appendChild(verifyBtn);
+
+    // 5. Close Button
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn btn-outline';
+    closeBtn.style.marginLeft = '10px';
+    closeBtn.textContent = 'Close';
+    closeBtn.onclick = () => modal.classList.add('hidden');
+    footer.appendChild(closeBtn);
+
+    // Show
+    modal.classList.remove('hidden');
 }
