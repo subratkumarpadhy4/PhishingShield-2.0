@@ -95,10 +95,20 @@ function setupReportFilters() {
     // 2. Refresh Button (Reports)
     const refreshReportsBtn = document.getElementById('btn-refresh-reports');
     if (refreshReportsBtn) {
-        refreshReportsBtn.onclick = null;
+        refreshReportsBtn.onclick = null; // Clear existing
         refreshReportsBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            loadDashboardData();
+            const originalText = refreshReportsBtn.innerText;
+            refreshReportsBtn.innerText = "Refreshing...";
+            refreshReportsBtn.disabled = true;
+
+            loadDashboardData(); // This is async but we don't have a promise wrapper here usually
+
+            // Revert UI after a delay (simulating async completion for UI feedback)
+            setTimeout(() => {
+                refreshReportsBtn.innerText = originalText;
+                refreshReportsBtn.disabled = false;
+            }, 1000);
         });
     }
 

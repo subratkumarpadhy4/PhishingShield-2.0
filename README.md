@@ -2,7 +2,7 @@
 
 **PhishingShield** is a comprehensive, client-side browser security suite designed to protect users from modern web threats in real-time. Unlike traditional antivirus software that relies solely on static blacklists, PhishingShield employs a multi-layered heuristic risk engine to detect new, zero-day phishing attacks, brand impersonation, and malicious browser extensions.
 
-> **Hackathon Edition**: Features gamification (XP levels), a real-time Risk HUD, and an Admin Portal for network-wide oversight.
+> **Enterprise Ready**: Features gamification (XP levels), a real-time Risk HUD, and an Admin Portal for network-wide oversight.
 
 ---
 
@@ -28,6 +28,8 @@ A futuristic, floating overlay (`content.js`) that provides instant feedback on 
 *   **Insecure Login Blocking**: Detects password fields on HTTP (unencrypted) pages and warns the user immediately to prevent credential theft.
 *   **Download Protection**: intercepts downloads of risky file types (`.exe`, `.zip`, `.msi`) and requires explicit confirmation.
 *   **Extension Security Audit**: Scans installed browser extensions, identifies those with high-risk permissions, and warns if they are unverified or potentially malicious.
+*   **Community Reporting**: Right-click on any page to **"Report to PhishingShield"**. Use the context menu to flag suspicious sites which are then reviewed by Admins and added to the global blocklist if confirmed.
+*   **Fortress Mode**: A "Zero Trust" setting for high-risk environments. When enabled, it blocks all third-party scripts, enforces strict download policies, and increases the sensitivity of the risk engine.
 
 ### 🎮 4. Gamification (XP System)
 Security doesn't have to be boring. PhishingShield turns safe browsing into a game.
@@ -63,7 +65,7 @@ PhishingShield requires specific permissions to function effectively. Here is a 
     *   `dashboard.js`: Logic for the user dashboard UI.
 *   **`/server`**: A Node.js + Express backend.
     *   `server.js`: Handles API requests for Reports, User Sync, and Global Leaderboards.
-    *   `users.json` / `reports.json`: Simple file-based databases for the hackathon (easily replaceable with MongoDB/Firebase).
+    *   `users.json` / `reports.json`: Simple file-based databases (easily replaceable with MongoDB/Firebase).
 *   **`/css`**: Styling for the Dashboard and the injected Risk HUD (`styles.css`).
 *   **`/images`**: Icons and badges for ranks.
 
@@ -104,5 +106,14 @@ node server.js
 
 ---
 
-## 📄 License
-MIT License. Built for the Hackathon 2024.
+## � Tech Stack
+*   **Frontend**: HTML5, CSS3, JavaScript (Vanilla - no heavy frameworks for performance)
+*   **Extension API**: Chrome Manifest V3 (declarativeNetRequest, scripting, storage)
+*   **Backend**: Node.js, Express.js
+*   **Database**: JSON-based storage (Mock DB) / Ready for Firebase integration
+*   **Analysis**: Custom Heuristic Engine (Levenshtein Distance, Entropy Calculation, Bayes Classifier)
+
+---
+
+## �📄 License
+MIT License.
