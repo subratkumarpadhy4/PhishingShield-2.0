@@ -6,247 +6,345 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PhishingShield Analytics Dashboard</title>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f0f2f5;
+        :root {
+            /* Professional Color Palette (Slate & Blue) */
+            --primary: #2563eb;
+            --primary-bg: rgba(37, 99, 235, 0.1);
+            --secondary: #64748b;
+            --success: #10b981;
+            --info: #06b6d4;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #0f172a;
+            --light: #f8fafc;
+            --bg: #f1f5f9;
+            --sidebar-width: 260px;
+            --border-color: #e2e8f0;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+
+        * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
+            outline: none;
         }
 
-        .header {
-            background-color: #ffffff;
-            padding: 20px 40px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: #334155;
+            height: 100vh;
             display: flex;
-            align-items: center;
-        }
-
-        .logo {
-            font-size: 24px;
-            font-weight: bold;
-            color: #0d6efd;
-            margin-right: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: transparent !important;
-        }
-
-        .logo img {
-            width: 80px;
-            height: 80px;
-            object-fit: contain;
-            clip-path: circle(50%);
-            background: transparent !important;
-            transform: scale(1.4);
-            display: block;
             overflow: hidden;
-            opacity: 1;
+            -webkit-font-smoothing: antialiased;
         }
 
-        .container {
-            max-width: 1000px;
-            margin: 40px auto;
-            padding: 0 20px;
+        /* --- SIDEBAR --- */
+        aside {
+            width: var(--sidebar-width);
+            background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            padding: 20px 0;
+            box-shadow: 4px 0 24px rgba(0, 0, 0, 0.05);
+            z-index: 20;
         }
 
+        .brand {
+            padding: 0 24px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand img {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(37, 99, 235, 0.5);
+        }
+
+        .brand h2 {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: white;
+        }
+
+        /* Navigation */
+        nav {
+            flex: 1;
+            margin-bottom: 20px;
+        }
+
+        nav ul {
+            list-style: none;
+        }
+
+        nav li {
+            margin-bottom: 4px;
+        }
+
+        nav a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 24px;
+            color: #94a3b8;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            font-weight: 500;
+            font-size: 14px;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+
+        nav a:hover,
+        nav a.active {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.05);
+            border-left-color: var(--primary);
+        }
+
+        .user-panel {
+            padding: 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        /* --- MAIN CONTENT --- */
+        main {
+            flex: 1;
+            padding: 32px;
+            overflow-y: auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--dark);
+            letter-spacing: -0.5px;
+        }
+
+        /* --- DASHBOARD CARDS --- */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
-            margin-bottom: 40px;
+            gap: 24px;
+            margin-bottom: 32px;
         }
 
         .stat-card {
             background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-            text-align: center;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-md);
+            border-color: #cbd5e1;
         }
 
         .stat-title {
-            color: #6c757d;
-            font-size: 14px;
+            color: var(--secondary);
+            font-size: 13px;
+            font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
         }
 
         .stat-value {
-            font-size: 36px;
-            font-weight: bold;
-            color: #343a40;
-            margin-top: 10px;
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--dark);
         }
 
         .stat-card.danger .stat-value {
-            color: #dc3545;
+            color: var(--danger);
         }
 
         .stat-card.safe .stat-value {
-            color: #28a745;
+            color: var(--success);
         }
 
-        .section-title {
-            margin-bottom: 20px;
-            color: #343a40;
-        }
-
+        /* --- TABLES --- */
         .log-table {
             width: 100%;
             background: white;
             border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
             overflow: hidden;
         }
 
-        .log-table th,
-        .log-table td {
-            padding: 15px 20px;
-            text-align: left;
-            border-bottom: 1px solid #dee2e6;
-        }
-
         .log-table th {
-            background-color: #f8f9fa;
-            color: #495057;
+            text-align: left;
+            padding: 16px;
+            color: var(--secondary);
             font-weight: 600;
-        }
-
-        .risk-badge {
-            padding: 4px 8px;
-            border-radius: 4px;
             font-size: 12px;
-            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border-color);
+            background: #f8fafc;
         }
 
-        .risk-low {
-            background-color: #d4edda;
-            color: #155724;
+        .log-table td {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+            font-size: 14px;
+            color: var(--dark);
         }
 
-        .risk-med {
-            background-color: #fff3cd;
-            color: #856404;
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 20px;
         }
 
-        .risk-high {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-
-        /* Dark Mode Styles */
-        body.dark-theme {
-            background-color: #121212;
-            color: #e0e0e0;
-        }
-
-        body.dark-theme .header {
-            background-color: #1e1e1e;
-            box-shadow: 0 2px 4px rgba(255, 255, 255, 0.05);
-        }
-
-        body.dark-theme .header span {
-            color: #e0e0e0;
-        }
-
-        body.dark-theme .section-title {
-            color: #e0e0e0;
-        }
-
-        body.dark-theme .stat-card,
-        body.dark-theme .log-table {
-            background-color: #1e1e1e;
-            border: 1px solid #333;
-        }
-
-        body.dark-theme .stat-title {
-            color: #aaa;
-        }
-
-        body.dark-theme .stat-value {
-            color: #ffffff;
-        }
-
-        body.dark-theme .log-table th {
-            background-color: #2c2c2c;
-            color: #e0e0e0;
-            border-bottom: 1px solid #444;
-        }
-
-        body.dark-theme .log-table td {
-            border-bottom: 1px solid #333;
-            color: #ccc;
-        }
-
-        body.dark-theme #report-info {
-            background-color: #2c2c2c;
-            color: #e0e0e0;
-        }
-
-        /* Print Override */
-        @media print {
-            body.dark-theme {
-                background-color: white;
-                color: black;
-            }
-
-            .header-actions {
-                display: none;
-            }
-        }
-
-        /* Print Styles for PDF Export */
-        @media print {
-            body {
-                background-color: white;
-            }
-
-            .header button {
-                display: none;
-            }
-
-            /* Hide export button */
-            .stats-grid {
-                gap: 10px;
-                margin-bottom: 20px;
-            }
-
-            .stat-card {
-                box-shadow: none;
-                border: 1px solid #dee2e6;
-            }
-
-            .log-table {
-                box-shadow: none;
-                border: 1px solid #dee2e6;
-            }
-
-            .container {
-                margin: 0;
-                width: 100%;
-                max-width: 100%;
-                padding: 0;
-            }
-
-            @page {
-                margin: 2cm;
-            }
-        }
-
-        /* Pie Chart Styles */
-
-        /* Metric Styles */
-        .pie-chart {
-            width: 120px;
-            height: 120px;
+        /* --- RADAR --- */
+        .radar-container {
+            width: 160px;
+            height: 160px;
+            background: #0f172a;
             border-radius: 50%;
-            background: conic-gradient(#dc3545 0deg 90deg, #ffc107 90deg 180deg, #0d6efd 180deg 360deg);
+            position: relative;
+            overflow: hidden;
             margin: 0 auto;
+            border: 4px solid #1e293b;
+            box-shadow: 0 0 25px rgba(37, 99, 235, 0.2);
         }
 
-        /* --- PREMIUM MODAL STYLES --- */
+        .radar-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(transparent 30%, rgba(37, 99, 235, 0.3) 31%, transparent 32%), radial-gradient(transparent 60%, rgba(37, 99, 235, 0.3) 61%, transparent 62%);
+            z-index: 1;
+        }
+
+        .radar-sweep {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: conic-gradient(transparent 270deg, rgba(37, 99, 235, 0.8) 360deg);
+            border-radius: 50%;
+            animation: radar-spin 2s linear infinite;
+            z-index: 2;
+        }
+
+        .radar-blip {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #ef4444;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #ef4444;
+            opacity: 0;
+            z-index: 3;
+            display: none;
+        }
+
+        .radar-container.danger-mode .radar-blip {
+            display: block;
+            animation: blip-pulse 3s infinite;
+        }
+
+        .blip-1 {
+            top: 30%;
+            left: 65%;
+            animation-delay: 0.5s;
+        }
+
+        .blip-2 {
+            top: 75%;
+            left: 35%;
+            animation-delay: 1.8s;
+        }
+
+        @keyframes radar-spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes blip-pulse {
+            0% {
+                opacity: 0;
+                transform: scale(0.5);
+            }
+
+            20% {
+                opacity: 1;
+                transform: scale(1.5);
+            }
+
+            100% {
+                opacity: 0;
+                transform: scale(0.5);
+            }
+        }
+
+        /* --- TABS --- */
+        .hidden {
+            display: none !important;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* --- MODAL --- */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -257,7 +355,6 @@
             backdrop-filter: blur(8px);
             z-index: 10000;
             display: none;
-            /* JS toggles this */
             align-items: center;
             justify-content: center;
             opacity: 0;
@@ -269,27 +366,20 @@
         }
 
         .modal-content {
-            background: rgba(255, 255, 255, 0.95);
+            background: white;
             padding: 40px 30px 30px;
             border-radius: 20px;
             width: 90%;
             max-width: 400px;
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.5);
-            transform: translateY(20px);
-            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             text-align: center;
             position: relative;
-        }
-
-        .modal-overlay.active .modal-content {
-            transform: translateY(0);
         }
 
         .modal-avatar-glow {
             width: 80px;
             height: 80px;
-            background: linear-gradient(135deg, #0d6efd, #0dcaf0);
+            background: linear-gradient(135deg, #2563eb, #06b6d4);
             border-radius: 50%;
             position: absolute;
             top: -40px;
@@ -300,8 +390,8 @@
             justify-content: center;
             font-size: 35px;
             color: white;
-            box-shadow: 0 10px 20px rgba(13, 110, 253, 0.3);
             border: 4px solid white;
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);
         }
 
         .form-group-modal {
@@ -309,298 +399,374 @@
             margin-bottom: 20px;
         }
 
-        .form-group-modal label {
-            font-size: 13px;
-            color: #6c757d;
-            font-weight: 600;
-            margin-bottom: 5px;
-            display: block;
-        }
-
         .form-input {
             width: 100%;
             padding: 12px;
-            border: 2px solid #e9ecef;
+            border: 2px solid #e2e8f0;
             border-radius: 8px;
             font-size: 14px;
-            transition: all 0.2s;
-            background: #f8f9fa;
-            color: #333;
-        }
-
-        .form-input:focus {
-            border-color: #0d6efd;
-            background: white;
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 25px;
         }
 
         .btn-modal {
-            flex: 1;
+            width: 100%;
             padding: 12px;
-            border: none;
             border-radius: 8px;
+            border: none;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s;
-            font-size: 14px;
-        }
-
-        .btn-modal:hover {
-            transform: translateY(-2px);
+            margin-top: 10px;
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #0d6efd 0%, #0056b3 100%);
+            background: var(--primary);
             color: white;
-            box-shadow: 0 4px 15px rgba(13, 110, 253, 0.2);
         }
 
         .btn-secondary {
             background: white;
-            color: #495057;
-            border: 1px solid #dee2e6;
+            border: 1px solid #e2e8f0;
+            color: var(--secondary);
         }
 
-        .btn-danger {
-            background: #fee2e2;
-            color: #dc3545;
-            width: 100%;
-            margin-top: 15px;
-            font-size: 13px;
+        /* --- PRINT REPORT (Custom View) --- */
+        #print-report-container {
+            display: none;
         }
 
-        .btn-danger:hover {
-            background: #fecaca;
+        body.printing-mode {
+            background-color: white !important;
+            height: auto !important;
+            overflow: visible !important;
         }
 
-        /* Dark Mode Adjustments */
-        body.dark-theme .modal-content {
-            background: #1e1e1e;
-            border-color: #333;
-        }
+        @media print {
+            body.printing-mode>*:not(#print-report-container) {
+                display: none !important;
+            }
 
-        body.dark-theme .form-input {
-            background: #2c2c2c;
-            border-color: #444;
-            color: white;
-        }
+            body.printing-mode #print-report-container {
+                display: block !important;
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                z-index: 99999;
+            }
 
-        body.dark-theme .modal-avatar-glow {
-            border-color: #1e1e1e;
-        }
+            body.printing-mode {
+                background: white;
+                color: black;
+            }
 
-        body.dark-theme h3 {
-            color: white !important;
-        }
+            .print-header {
+                text-align: center;
+                border-bottom: 2px solid #2563eb;
+                margin-bottom: 30px;
+                padding-bottom: 20px;
+            }
 
-        body.dark-theme .btn-secondary {
-            background: #2c2c2c;
-            border-color: #444;
-            color: white;
+            .print-section {
+                margin-bottom: 30px;
+            }
+
+            .print-section h3 {
+                border-bottom: 1px solid #ccc;
+                padding-bottom: 5px;
+                color: #2563eb;
+                font-size: 16px;
+                margin-bottom: 10px;
+                text-transform: uppercase;
+            }
+
+            .print-card {
+                border: 1px solid #ddd;
+                padding: 15px;
+                border-radius: 8px;
+                background: #f8fafc;
+                margin-bottom: 15px;
+            }
+
+            .print-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 12px;
+                margin-top: 10px;
+            }
+
+            .print-table th,
+            .print-table td {
+                border: 1px solid #eee;
+                padding: 8px;
+                text-align: left;
+            }
+
+            .print-table th {
+                background-color: #f1f5f9;
+                font-weight: bold;
+                color: #334155;
+            }
         }
     </style>
 </head>
 
 <body>
-    <div class="header">
-        <span class="logo">
-            <img src="images/image.png" alt="PhishingShield Logo">
-            PhishingShield
-        </span>
-        <span>Security Dashboard</span>
-
-        <div id="user-info"
-            style="margin-left: 20px; display: none; font-size: 14px; color: #495057; align-items: center; gap: 10px;">
-            <div id="user-avatar"
-                style="width: 32px; height: 32px; background: #e9ecef; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"
-                title="Edit Profile">
-                👤
-            </div>
-            <div style="line-height: 1.2;">
-                <div style="font-weight: bold;" id="user-name">User</div>
-                <div style="font-size: 11px;"><a href="#" id="edit-profile-link">Edit Profile</a></div>
+    <aside>
+        <div class="brand">
+            <img src="images/image.png" alt="Logo">
+            <div>
+                <h2>PhishingShield</h2>
+                <span style="font-size: 11px; font-weight: 500; opacity: 0.7;">User Dashboard</span>
             </div>
         </div>
 
-        <div id="guest-nav" style="display: none; margin-left: 20px; align-items: center; gap: 10px;">
-            <span style="font-size: 12px; color: #6c757d; font-style: italic;">Sign in to save your achievements!
-                🛡️</span>
-            <a href="login.html" id="btn-signin-nav"
-                style="text-decoration: none; background: #0d6efd; color: white; padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: bold;">Sign
-                In</a>
-        </div>
+        <nav>
+            <ul>
+                <li><a class="nav-item active" data-tab="tab-overview">📊 Overview</a></li>
+                <li><a class="nav-item" data-tab="tab-leaderboard">🏆 Leaderboard</a></li>
+                <li><a class="nav-item" data-tab="tab-logs">🛡️ Activity Log</a></li>
+                <li><a class="nav-item" data-tab="tab-extensions">🧩 Extensions</a></li>
+            </ul>
+        </nav>
 
-        <div class="header-actions" style="margin-left: auto; display: flex; gap: 10px;">
-            <div
-                style="display:flex; align-items:center; gap:5px; margin-right: 10px; border-right: 1px solid #ccc; padding-right: 10px;">
-                <!-- Auto-detected for Owner -->
+        <div class="user-panel">
+            <div id="user-info" style="display: none;">
+                <h6 id="user-rank">Rank: Novice</h6>
+                <p id="user-name">User</p>
+                <div style="font-size: 11px; margin-top: 5px; cursor: pointer; color: #94a3b8;" id="edit-profile-link">
+                    Edit Profile</div>
+            </div>
+            <div id="guest-nav" style="display: none;">
+                <h6 style="color: #cbd5e1;">Guest Mode</h6>
+                <a href="login.html"
+                    style="color: #60a5fa; font-size: 12px; font-weight: bold; text-decoration: none;">Sign In >></a>
+            </div>
+        </div>
+    </aside>
+
+    <main>
+        <header>
+            <h1 id="page-title">Dashboard Overview</h1>
+            <div style="display: flex; gap: 10px;">
+                <button id="theme-toggle"
+                    style="background:none; border:none; font-size:20px; cursor:pointer;">🌙</button>
+                <button id="export-pdf" class="btn-modal btn-primary" style="width: auto; margin-top:0;">Download
+                    Report</button>
+                <!-- Hidden Admin Link -->
                 <a href="admin.html" target="_blank" id="open-admin"
-                    style="display:none; color: #dc3545; text-decoration: none; font-weight: bold; font-size: 13px;">Admin</a>
+                    style="display:none; color: #ef4444; font-weight: bold; align-self: center;">Admin</a>
             </div>
-            <button id="theme-toggle"
-                style="background: none; border: 1px solid #ccc; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 16px;"
-                title="Toggle Dark Mode">🌙</button>
-            <button id="clear-history"
-                style="background: none; border: 1px solid #dc3545; color: #dc3545; padding: 8px; border-radius: 4px; cursor: pointer;"
-                title="Clear History">🗑️ Clear</button>
-            <button id="export-pdf"
-                style="background-color: #0d6efd; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Download
-                Report</button>
-        </div>
-    </div>
+        </header>
 
-    <div class="container">
-        <!-- Report Header (Visible mainly in Print) -->
-        <div id="report-info"
-            style="margin-bottom: 20px; padding: 15px; background: #e9ecef; border-radius: 8px; display: none;">
-            <h3 style="margin-top: 0; margin-bottom: 5px;">Executive Security Summary</h3>
-            <p style="margin: 0;" id="report-date"></p>
-            <p style="margin: 5px 0 0 0; font-weight: bold;" id="report-summary"></p>
-        </div>
+        <!-- TAB: OVERVIEW -->
+        <div id="tab-overview" class="tab-content active">
+            <div class="stats-grid">
+                <!-- Rank Card -->
+                <div class="stat-card" style="align-items: center; text-align: center;">
+                    <img id="rank-badge" src="images/badge_novice.png" alt="Rank Badge"
+                        style="width:64px; height:64px; margin-bottom:10px;">
+                    <div class="stat-title">Current Rank</div>
+                    <div class="stat-value" id="user-rank-display" style="font-size: 20px; color: var(--primary);">
+                        Novice</div>
+                    <span style="font-size: 12px; color: var(--secondary);">Level <span id="user-level">1</span></span>
+                </div>
 
-        <h2 class="section-title">Your Security Profile</h2>
-        <div class="stats-grid">
-            <div class="stat-card"
-                style="grid-column: span 1; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center;">
-                <img id="rank-badge" src="images/badge_novice.png" alt="Rank Badge"
-                    style="width:72px; height:72px; margin-bottom:10px;">
-                <div class="stat-title">Current Rank</div>
-                <div class="stat-value" id="user-rank" style="color: #0d6efd; font-size: 24px;">Novice</div>
-                <div style="font-size: 14px; color: #6c757d; margin-top: 5px;">Level <span id="user-level">1</span>
+                <!-- XP Card -->
+                <div class="stat-card" style="grid-column: span 2;">
+                    <div class="stat-title">Security Experience (XP)</div>
+                    <div
+                        style="background-color: #e2e8f0; height: 16px; border-radius: 10px; overflow: hidden; margin: 10px 0;">
+                        <div id="xp-bar"
+                            style="width: 0%; height: 100%; background-color: var(--primary); transition: width 0.5s;">
+                        </div>
+                    </div>
+                    <div
+                        style="display: flex; justify-content: space-between; font-size: 13px; color: var(--secondary);">
+                        <span><span id="current-xp">0</span> XP</span>
+                        <span>Next Level: <span id="next-level-xp">100</span> XP</span>
+                    </div>
                 </div>
             </div>
-            <div class="stat-card" style="grid-column: span 2;">
-                <div class="stat-title">XP Progress</div>
-                <div
-                    style="margin-top: 15px; background-color: #e9ecef; height: 20px; border-radius: 10px; overflow: hidden;">
-                    <div id="xp-bar"
-                        style="width: 0%; height: 100%; background-color: #0d6efd; transition: width 0.5s;"></div>
+
+            <div class="stats-grid" style="grid-template-columns: 2fr 1fr;">
+                <!-- Radar Section -->
+                <div class="stat-card" style="flex-direction: row; gap: 30px; align-items: center; padding: 30px;">
+                    <div style="text-align: center;">
+                        <div class="radar-container" id="threat-radar">
+                            <div class="radar-grid"></div>
+                            <div class="radar-sweep"></div>
+                            <div class="radar-blip blip-1"></div>
+                            <div class="radar-blip blip-2"></div>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 11px; font-weight: 700; color: var(--secondary);">LIVE
+                            THREAT MONITOR</div>
+                    </div>
+
+                    <div style="flex: 1;">
+                        <h4
+                            style="margin: 0 0 20px 0; color: var(--dark); text-transform: uppercase; font-size: 14px; letter-spacing: 1px; border-left: 4px solid var(--primary); padding-left: 15px;">
+                            Threat Intelligence
+                        </h4>
+
+                        <div style="margin-bottom: 15px;">
+                            <span
+                                style="display: block; font-size: 12px; color: var(--secondary); font-weight: 600;">STATUS</span>
+                            <span id="radar-status"
+                                style="color: var(--success); font-weight: bold; font-size: 16px;">Active
+                                Monitoring</span>
+                        </div>
+
+                        <div style="display: flex; gap: 30px;">
+                            <div>
+                                <span style="display: block; font-size: 11px; color: var(--secondary);">THREATS
+                                    BLOCKED</span>
+                                <span id="radar-threat-count"
+                                    style="font-size: 20px; font-weight: 700; color: var(--dark);">0</span>
+                            </div>
+                            <div>
+                                <span style="display: block; font-size: 11px; color: var(--secondary);">LAST
+                                    INTERCEPTION</span>
+                                <span id="radar-last-threat"
+                                    style="font-size: 14px; font-weight: 600; color: var(--secondary);">None</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div
-                    style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 14px; color: #6c757d;">
-                    <span><span id="current-xp">0</span> XP</span>
-                    <span>Next Level: <span id="next-level-xp">100</span> XP</span>
+
+                <!-- Quick Stats -->
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    <div class="stat-card safe" style="flex: 1; padding: 20px;">
+                        <div class="stat-title">Safe Streak</div>
+                        <div class="stat-value" id="safe-streak">0h</div>
+                    </div>
+                    <div class="stat-card" style="flex: 1; padding: 20px;">
+                        <div class="stat-title">Time Saved</div>
+                        <div class="stat-value" id="time-spent">0m</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card safe">
+                    <div class="stat-title">Safe Sites</div>
+                    <div class="stat-value" id="total-safe">0</div>
+                </div>
+                <div class="stat-card danger">
+                    <div class="stat-title">Total Threats</div>
+                    <div class="stat-value" id="total-threats">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Sites Scanned</div>
+                    <div class="stat-value" id="total-scanned">0</div>
                 </div>
             </div>
         </div>
 
-        <h2 class="section-title">Overview</h2>
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-title">Sites Scanned</div>
-                <div class="stat-value" id="total-scanned">0</div>
-            </div>
-            <div class="stat-card safe">
-                <div class="stat-title">Safe Sites</div>
-                <div class="stat-value" id="total-safe">0</div>
-            </div>
-            <div class="stat-card danger">
-                <div class="stat-title">Threats Detected</div>
-                <div class="stat-value" id="total-threats">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-title">Est. Time Saved</div>
-                <div class="stat-value" id="time-spent">0h</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-title">Safe Streak</div>
-                <div class="stat-value" id="safe-streak">0h</div>
-            </div>
-            <div class="stat-card" style="grid-column: span 3; text-align: left;">
-                <div class="stat-title" style="margin-bottom: 15px;">🏆 Top Defenders</div>
-                <div id="leaderboard-list">Loading...</div>
+        <!-- TAB: LEADERBOARD -->
+        <div id="tab-leaderboard" class="tab-content">
+            <h2 class="section-title">🏆 Top Defenders</h2>
+            <div class="stat-card" style="padding: 0; overflow: hidden;">
+                <div id="leaderboard-list" style="padding: 20px;">Loading...</div>
             </div>
         </div>
 
-        <h2 class="section-title">Threat Breakdown</h2>
-        <div class="stats-grid" style="grid-template-columns: 1fr 2fr;">
-            <div class="stat-card">
-                <div class="pie-chart" id="threat-pie"></div>
-                <div style="text-align:center; margin-top:10px; font-size:12px; color:#666;">
-                    <span style="color:#dc3545">●</span> Impersonation
-                    <span style="color:#ffc107">●</span> Urgent/AI
-                    <span style="color:#0d6efd">●</span> Malicious
-                </div>
+        <!-- TAB: LOGS -->
+        <div id="tab-logs" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 class="section-title" style="margin: 0;">Recent Activity Log</h2>
+                <button id="clear-history"
+                    style="background: white; border: 1px solid var(--danger); color: var(--danger); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">Clear
+                    History</button>
             </div>
-            <div class="stat-card" style="display:flex; align-items:center;">
-                <p style="color:#666;">This chart shows the types of threats neutralized. <strong>Impersonation</strong>
-                    covers brand spoofing and typosquatting; <strong>Urgent/AI</strong> covers social engineering text.
-                </p>
-            </div>
+            <table class="log-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Domain</th>
+                        <th>Risk Score</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="log-body">
+                    <!-- JS populated -->
+                </tbody>
+            </table>
         </div>
 
-        <h2 class="section-title">Suspected Extensions (Install Log)</h2>
-        <table class="log-table" style="margin-bottom: 40px;">
-            <thead>
-                <tr>
-                    <th>Time</th>
-                    <th>Extension Name</th>
-                    <th>Risk Tier</th>
-                    <th>Install Type</th>
-                </tr>
-            </thead>
-            <tbody id="ext-log-body">
-                <!-- Rows injected by JS -->
-            </tbody>
-        </table>
+        <!-- TAB: EXTENSIONS -->
+        <div id="tab-extensions" class="tab-content">
+            <h2 class="section-title">Extension Security Audit</h2>
+            <table class="log-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Extension Name</th>
+                        <th>Risk Tier</th>
+                        <th>Install Type</th>
+                    </tr>
+                </thead>
+                <tbody id="ext-log-body">
+                    <!-- JS populated -->
+                </tbody>
+            </table>
+        </div>
 
-        <h2 class="section-title">Recent Activity Log</h2>
-        <table class="log-table">
-            <thead>
-                <tr>
-                    <th>Time</th>
-                    <th>Domain</th>
-                    <th>Risk Score</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody id="log-body">
-                <!-- Rows injected by JS -->
-            </tbody>
-        </table>
-    </div>
-    <!-- EDIT PROFILE MODAL -->
-    <!-- EDIT PROFILE MODAL (PREMIUM REDESIGN) -->
+    </main>
+
+    <!-- PROFILE MODAL -->
     <div id="profile-modal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-avatar-glow">👤</div>
-
-            <h3 style="margin: 25px 0 5px; color: #343a40;">Edit Profile</h3>
-            <p style="margin: 0 0 25px; color: #6c757d; font-size: 14px;">Update your personal details below.</p>
+            <h3 style="margin: 25px 0 5px; color: var(--dark);">Edit Profile</h3>
+            <p style="margin: 0 0 25px; color: var(--secondary); font-size: 14px;">Update your personal details below.
+            </p>
 
             <div class="form-group-modal">
                 <label>Full Name</label>
                 <input type="text" id="edit-name" class="form-input" placeholder="Your Name">
             </div>
-
             <div class="form-group-modal">
-                <label>New Password <small style="font-weight: normal; opacity: 0.7;">(Leave blank to
-                        keep)</small></label>
+                <label>New Password <small style="opacity: 0.7;">(Leave blank to keep)</small></label>
                 <input type="password" id="edit-password" class="form-input" placeholder="••••••••">
             </div>
 
-            <div class="btn-group">
-                <button id="cancel-profile" class="btn-modal btn-secondary">Cancel</button>
-                <button id="save-profile" class="btn-modal btn-primary">Save Changes</button>
-            </div>
-
-            <div
-                style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px; display: flex; flex-direction: column; gap: 10px;">
-                <button id="logout-btn" class="btn-modal" style="background: #6c757d; color: white;">Log Out</button>
-                <button id="delete-profile" class="btn-modal btn-danger">Delete Account</button>
+            <button id="save-profile" class="btn-modal btn-primary">Save Changes</button>
+            <button id="cancel-profile" class="btn-modal btn-secondary">Cancel</button>
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+                <button id="logout-btn" class="btn-modal" style="background: var(--secondary); color: white;">Log
+                    Out</button>
+                <button id="delete-profile" class="btn-modal"
+                    style="background: #fee2e2; color: #dc2626; border: none;">Delete Account</button>
             </div>
         </div>
     </div>
 
+    <!-- PDF Export Hidden Container (re-used logic) -->
+    <div id="report-info" style="display: none;"></div>
+
+    <!-- PRINT REPORT CONTAINER -->
+    <div id="print-report-container"></div>
+
     <script src="js/auth.js"></script>
     <script src="js/dashboard.js"></script>
+    <script>
+        // Tab Logic
+        const navLinks = document.querySelectorAll('.nav-item');
+        const tabs = document.querySelectorAll('.tab-content');
+        const pageTitle = document.getElementById('page-title');
+
+        navLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                navLinks.forEach(l => l.classList.remove('active'));
+                tabs.forEach(t => t.classList.remove('active'));
+                link.classList.add('active');
+                const target = link.getAttribute('data-tab');
+                document.getElementById(target).classList.add('active');
+
+                // Update Title
+                pageTitle.textContent = link.textContent.substring(3) + (target === 'tab-overview' ? ' Overview' : '');
+            });
+        });
+    </script>
 </body>
 
 </html>

@@ -768,7 +768,7 @@ function renderReports(reports) {
     }
 
     // Sort by Date (newest first)
-    const sorted = [...dataToRender].reverse();
+    const sorted = [...dataToRender].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
     sorted.forEach((r, index) => {
         const date = new Date(r.timestamp).toLocaleDateString();

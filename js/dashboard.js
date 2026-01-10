@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
         checkAdminAccess();
 
         // 1. NAVIGATION TABS
-        const navLinks = document.querySelectorAll('.nav-link');
+        const navLinks = document.querySelectorAll('.nav-item');
         const tabs = document.querySelectorAll('.tab-content');
         const pageTitle = document.getElementById('page-title');
 
@@ -14,15 +14,25 @@ document.addEventListener('DOMContentLoaded', () => {
             navLinks.forEach(link => {
                 link.addEventListener('click', (e) => {
                     e.preventDefault();
+
+                    // Remove Active Class from all
                     navLinks.forEach(l => l.classList.remove('active'));
                     tabs.forEach(t => t.classList.remove('active'));
 
+                    // Add Active to Clicked
                     link.classList.add('active');
                     const tabId = link.getAttribute('data-tab');
                     const tab = document.getElementById(tabId);
                     if (tab) tab.classList.add('active');
 
-                    if (pageTitle) pageTitle.textContent = link.textContent.replace(/^.\s/, '');
+                    // Update Title
+                    if (pageTitle) {
+                        let text = link.innerText.trim();
+                        // Remove emoji prefix if present (likely 2 chars + space)
+                        if (text.length > 3) text = text.substring(2).trim();
+                        pageTitle.textContent = text + (tabId === 'tab-overview' ? ' Overview' : '');
+                    }
+                    console.log("Tab Switched to:", tabId);
                 });
             });
         }
@@ -135,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const exportBtn = document.getElementById('export-pdf');
         if (exportBtn) {
             exportBtn.addEventListener('click', () => {
-                window.print();
+                generateAndPrintReport();
             });
         }
 
@@ -360,6 +370,60 @@ function updateStats(log) {
         const p = level === 1 ? (xp / 100) * 100 : ((xp - prev) / (next - prev)) * 100;
         if (bar) bar.style.width = Math.min(p, 100) + '%';
     });
+
+    // --- NEW: Radar Stats Population ---
+    const elRadarCount = document.getElementById('radar-threat-count');
+    const elRadarLast = document.getElementById('radar-last-threat');
+
+    // Updates
+    if (elRadarCount) elRadarCount.innerText = threats.toLocaleString();
+
+    if (elRadarLast) {
+        if (threats > 0) {
+            // Find most recent threat
+            // log items have {timestamp, core, hostname, etc.}
+            const lastThreat = [...log]
+                .filter(e => e.score > 20)
+                .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+
+            if (lastThreat) {
+                elRadarLast.innerText = lastThreat.hostname || "Unknown";
+                elRadarLast.style.color = "#dc3545"; // Red for danger
+                elRadarLast.title = `Score: ${lastThreat.score} | Detected: ${new Date(lastThreat.timestamp || Date.now()).toLocaleString()}`;
+            } else {
+                elRadarLast.innerText = "None";
+                elRadarLast.style.color = "#adb5bd";
+            }
+        } else {
+            elRadarLast.innerText = "None";
+            elRadarLast.style.color = "#28a745"; // Green/Grey if clean
+        }
+    }
+
+    // --- NEW: Radar Visualization Logic ---
+    const radarContainer = document.getElementById('threat-radar');
+    if (radarContainer) {
+        // Get the absolute latest entry (regardless of whether it's a threat or not)
+        const absoluteLast = [...log].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+
+        // If the very last site visited was High Risk, show red alert blips
+        if (absoluteLast && absoluteLast.score > 20) {
+            radarContainer.classList.add('danger-mode');
+            if (document.getElementById('radar-status')) {
+                document.getElementById('radar-status').innerHTML =
+                    '<span style="display:inline-block; width:8px; height:8px; background:#dc3545; border-radius:50%; margin-right:5px; animation: blink 0.5s infinite;"></span> Threat Detected!';
+                document.getElementById('radar-status').style.color = '#dc3545';
+            }
+        } else {
+            radarContainer.classList.remove('danger-mode');
+            // Revert status to normal
+            if (document.getElementById('radar-status')) {
+                document.getElementById('radar-status').innerHTML =
+                    '<span style="display:inline-block; width:8px; height:8px; background:#28a745; border-radius:50%; margin-right:5px; animation: blink 2s infinite;"></span> Active Monitoring';
+                document.getElementById('radar-status').style.color = '#28a745';
+            }
+        }
+    }
 }
 
 function renderExtensionTable(log) {
@@ -409,6 +473,58 @@ function renderTable(log) {
             <td><span class="risk-badge ${badgeClass}">${status}</span></td>
         `;
         tbody.appendChild(tr);
+    });
+}
+
+
+function generateAndPrintReport() {
+    chrome.storage.local.get(['visitLog', 'userXP', 'userLevel', 'currentUser'], (data) => {
+        const log = data.visitLog || [];
+        const user = data.currentUser || { name: 'User' };
+
+        const html = `
+            <div class="print-header">
+                <img src="images/image.png" style="width:60px; height:60px;">
+                <h1>PhishingShield Security Report</h1>
+                <p>Generated: ${new Date().toLocaleString()}</p>
+            </div>
+            <div class="print-section">
+                <h3>👤 User Profile</h3>
+                <div class="print-card">
+                    <p><strong>Name:</strong> ${user.name}</p>
+                    <p><strong>Security Rank:</strong> Level ${data.userLevel || 1} (${(data.userLevel || 1) >= 20 ? 'Sentinel' : 'Novice'})</p>
+                </div>
+            </div>
+            <div class="print-section">
+                <h3>🔍 Security Summary</h3>
+                <div class="print-card">
+                    <p><strong>Total Sites Scanned:</strong> ${log.length}</p>
+                    <p><strong>Threats Blocked:</strong> ${log.filter(e => e.score > 20).length}</p>
+                </div>
+            </div>
+            <div class="print-section">
+                <h3>📅 Recent Activity</h3>
+                <table class="print-table">
+                    <thead><tr><th>Time</th><th>Domain</th><th>Status</th></tr></thead>
+                    <tbody>
+                        ${[...log].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 10).map(e =>
+            `<tr><td>${new Date(e.timestamp).toLocaleTimeString()}</td><td>${e.hostname}</td><td>${e.score > 20 ? 'Threat' : 'Safe'}</td></tr>`
+        ).join('')}
+                    </tbody>
+                </table>
+            </div>
+            <div style="text-align:center; font-size:10px; color:#999; margin-top:50px;">
+                Generated by PhishingShield Extension
+            </div>
+        `;
+
+        const container = document.getElementById('print-report-container');
+        if (container) {
+            container.innerHTML = html;
+            document.body.classList.add('printing-mode');
+            window.print();
+            document.body.classList.remove('printing-mode');
+        }
     });
 }
 
