@@ -31,14 +31,24 @@ A futuristic, floating overlay (`content.js`) that provides instant feedback on 
 *   **Community Reporting**: Right-click on any page to **"Report to PhishingShield"**. Use the context menu to flag suspicious sites which are then reviewed by Admins and added to the global blocklist if confirmed.
 *   **Fortress Mode**: A "Zero Trust" setting for high-risk environments. When enabled, it blocks all third-party scripts, enforces strict download policies, and increases the sensitivity of the risk engine.
 
-### 🎮 4. Gamification (XP System)
+### 🎮 4. Gamification (XP System) & Training Dojo 🥋
 Security doesn't have to be boring. PhishingShield turns safe browsing into a game.
 *   **Earn XP**: Get points for browsing safe sites, reporting phish, and keeping your browser clean.
+*   **Streak Bonuses**: Earn extra XP for consecutive correct answers in the Dojo.
 *   **Ranks**:
     *   🥉 **Novice** (Level 1-4)
     *   🥈 **Scout** (Level 5-19)
     *   🥇 **Sentinel** (Level 20+)
 *   **Leaderboard**: Compete with others in your network for the top spot.
+
+### 🧠 5. Training Dojo (Enhanced)
+A dedicated interactive learning module built right into the extension popup.
+*   **Real-World Scenarios**: Test your skills against realistic phishing attempts (Fake Emails, SMS Smishing, Bank Login Spoofs).
+*   **Advanced Curriculum (Levels 1-8)**: 
+    *   **Basic**: Typosquatting (facebo0k.com) & Subdomain tricks.
+    *   **Intermediate**: Brand Spoofing & TLD misuse (.xyz, .tk).
+    *   **Advanced**: Homograph Attacks (Cyrillic characters), URL Obfuscation (@ symbols), and IP-based scams.
+*   **Instant Feedback**: Get detailed, educational explanations for every answer—whether right or wrong.
 
 ---
 

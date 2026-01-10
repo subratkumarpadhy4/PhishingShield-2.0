@@ -5,6 +5,7 @@
 
 const Dojo = {
     currentQuestion: null,
+    streak: 0, // Added streak tracking
 
     // Question Bank: A mix of obvious and subtle phishing scenarios
     questions: [
@@ -96,6 +97,51 @@ const Dojo = {
             url: "http://company-internal-hr.biz",
             isPhishing: true,
             explanation: "Unless your company explicitly uses .biz (rare), this generic domain is suspicious for internal tools."
+        },
+        // --- LEVEL 6: Homograph & IDN Attacks ---
+        {
+            id: 13,
+            scenario: "Checking Apple's homepage.",
+            url: "https://www.appIe.com",
+            isPhishing: true,
+            explanation: "Look VERY closely. The 'l' is actually a capital 'I' (Eye). This is a Homograph attack."
+        },
+        {
+            id: 14,
+            scenario: "A generic secure login page.",
+            url: "https://secure-login.com",
+            isPhishing: true,
+            explanation: "Generic names like 'secure-login.com' are often owned by attackers to harvest credentials from various services."
+        },
+        // --- LEVEL 7: Obfuscation & Redirects ---
+        {
+            id: 15,
+            scenario: "A link from a friend.",
+            url: "https://google.com@evil-site.com",
+            isPhishing: true,
+            explanation: "Everything before the '@' is treated as a username! The browser will actually take you to 'evil-site.com'."
+        },
+        {
+            id: 16,
+            scenario: "Clicking a shortened link.",
+            url: "http://bit.ly/secure-bank-login",
+            isPhishing: true,
+            explanation: "Banks almost never use URL shorteners for login pages. This hides the true destination."
+        },
+        // --- LEVEL 8: Advanced Structure ---
+        {
+            id: 17,
+            scenario: "Connecting to your Router.",
+            url: "http://192.168.1.1/admin",
+            isPhishing: false,
+            explanation: "This is a standard local IP address for home routers. It is safe and internal."
+        },
+        {
+            id: 18,
+            scenario: "A link asking for urgent action.",
+            url: "http://45.33.22.11/login",
+            isPhishing: true,
+            explanation: "Legitimate professional sites use domain names, not raw public IP addresses. This is highly suspicious."
         }
     ],
 
@@ -150,9 +196,23 @@ const Dojo = {
         const feedbackEl = document.getElementById('dojo-feedback');
 
         if (isCorrect) {
-            feedbackEl.innerHTML = `<span style="color: #28a745; font-weight: bold;">Correct! 🎉</span> <br> ${this.currentQuestion.explanation}`;
-            this.grantXP(50);
+            this.streak++;
+            let xpReward = 50;
+            let msg = `<span style="color: #28a745; font-weight: bold;">Correct! 🎉</span> <br> ${this.currentQuestion.explanation}`;
+
+            // Streak Bonus Logic
+            if (this.streak > 1) {
+                msg += `<br><div style="margin-top:5px; font-size:12px; color:#f59e0b; font-weight:bold;">🔥 Streak: ${this.streak}</div>`;
+            }
+            if (this.streak % 3 === 0) {
+                xpReward += 25; // Bonus XP
+                msg += `<span style="color: #f59e0b; font-size: 11px;">(+25 Streak Bonus!)</span>`;
+            }
+
+            feedbackEl.innerHTML = msg;
+            this.grantXP(xpReward);
         } else {
+            this.streak = 0; // Reset streak
             feedbackEl.innerHTML = `<span style="color: #dc3545; font-weight: bold;">Wrong! 💀</span> <br> ${this.currentQuestion.explanation}`;
         }
 
