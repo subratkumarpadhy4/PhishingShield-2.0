@@ -354,19 +354,25 @@ app.post('/api/users/sync', (req, res) => {
 
         // SMART SYNC: Keep the highest value to prevent Client overwriting Admin Promotion
         // and prevent Admin Promotion from being lost by a stale client sync.
+        // SMART SYNC: Check for specific "isPenalty" flag to allow reduction
+        // If it's a penalty, we TRUST the client's lower value.
+        // Otherwise, we keep the highest value (Server Authority) to prevent data loss.
+        const isPenalty = userData.isPenalty === true;
         const incomingXP = (userData.xp !== undefined) ? Number(userData.xp) : 0;
-        const finalXP = Math.max(incomingXP, serverXP);
+        const finalXP = isPenalty ? incomingXP : Math.max(incomingXP, serverXP);
 
-        // Logic for Level: If XP increased, recalculate level if not provided explicit
-        // But if Admin set level specifically, we respect it.
-        // Actually, just trust the max strategy for Level too or recalculate based on XP?
-        // Let's stick to what we had but use Math.max for XP.
+        // Logic for Level: 
+        // If it's a penalty, we also accept the client's (potentially lower) level.
+        // Otherwise, we use the standard max logic to prevent accidental demotions.
+        const incomingLevel = (userData.level !== undefined) ? Number(userData.level) : 1;
+        const finalLevel = isPenalty ? incomingLevel :
+            (incomingLevel > serverLevel ? incomingLevel : (finalXP > serverXP ? Math.floor(Math.sqrt(finalXP / 100)) + 1 : serverLevel));
 
         finalUser = {
             ...users[idx],
             ...userData,
             xp: finalXP,
-            level: (userData.level !== undefined && Number(userData.level) > serverLevel) ? Number(userData.level) : (finalXP > serverXP ? Math.floor(Math.sqrt(finalXP / 100)) + 1 : serverLevel)
+            level: finalLevel
         };
 
         // If simple overwrite is preferred for Admin demotions, we need a flag.

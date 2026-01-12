@@ -21,7 +21,50 @@
             --sidebar-width: 260px;
             --border-color: #e2e8f0;
             --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
             --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+
+        body.dark-theme {
+            --bg: #0f172a;
+            --light: #1e293b;
+            --dark: #f8fafc;
+            --secondary: #94a3b8;
+            --border-color: #334155;
+            color: #f8fafc;
+        }
+
+        body.dark-theme .stat-card,
+        body.dark-theme .log-table,
+        body.dark-theme .modal-content,
+        body.dark-theme .user-panel,
+        body.dark-theme div[style*="background: white"] {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            color: white !important;
+        }
+
+        body.dark-theme .log-table th {
+            background-color: #0f172a;
+            color: #cbd5e1;
+            border-color: #334155;
+        }
+
+        body.dark-theme .log-table td {
+            border-color: #334155;
+            color: #e2e8f0;
+        }
+
+        body.dark-theme nav a.active {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        body.dark-theme .leaderboard-item .lb-name {
+            color: #f8fafc !important;
+        }
+
+        body.dark-theme .leaderboard-item .lb-rank {
+            color: #cbd5e1 !important;
         }
 
         * {
@@ -710,6 +753,37 @@
                     <!-- JS populated -->
                 </tbody>
             </table>
+
+            <!-- NEW: Activity Status Guide -->
+            <div
+                style="margin-top: 30px; background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--border-color);">
+                <h3 style="font-size: 16px; margin-bottom: 15px; color: var(--dark);">Status Legend</h3>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                    <div
+                        style="padding: 15px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444;">
+                        <span class="risk-badge risk-high"
+                            style="display:inline-block; margin-bottom: 8px;">CRITICAL</span>
+                        <p style="font-size: 13px; color: #7f1d1d; line-height: 1.5;">
+                            Extreme risk (Score >= 60). Validated phishing or malware. Block immediately.
+                        </p>
+                    </div>
+                    <div
+                        style="padding: 15px; background: #fffbeb; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                        <span class="risk-badge"
+                            style="background:#f59e0b; color:white; padding:2px 8px; border-radius:12px; font-size:11px; display:inline-block; margin-bottom: 8px;">WARNING</span>
+                        <p style="font-size: 13px; color: #78350f; line-height: 1.5;">
+                            Suspicious elements detected (Score 20-59). Proceed with caution.
+                        </p>
+                    </div>
+                    <div
+                        style="padding: 15px; background: #f0fdf4; border-radius: 8px; border-left: 4px solid #10b981;">
+                        <span class="risk-badge"
+                            style="background:#10b981; color:white; padding:2px 8px; border-radius:12px; font-size:11px; display:inline-block; margin-bottom: 8px;">SAFE</span>
+                        <p style="font-size: 13px; color: #14532d; line-height: 1.5;">
+                            Low risk (Score < 20). Verified safe or clean content. </p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- TAB: EXTENSIONS -->
@@ -728,6 +802,39 @@
                     <!-- JS populated -->
                 </tbody>
             </table>
+
+            <!-- NEW: Risk Guide Section -->
+            <div
+                style="margin-top: 30px; background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--border-color);">
+                <h3 style="font-size: 16px; margin-bottom: 15px; color: var(--dark);">Risk Status Guide</h3>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                    <div
+                        style="padding: 15px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444;">
+                        <span class="risk-badge risk-high"
+                            style="display:inline-block; margin-bottom: 8px;">HIGH_RISK</span>
+                        <p style="font-size: 13px; color: #7f1d1d; line-height: 1.5;">
+                            Extensions from unknown sources or with suspicious permissions. Highly recommended to
+                            remove.
+                        </p>
+                    </div>
+                    <div
+                        style="padding: 15px; background: #fffbeb; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                        <span class="risk-badge"
+                            style="background:#f59e0b; color:white; padding:2px 8px; border-radius:12px; font-size:11px; display:inline-block; margin-bottom: 8px;">CAUTION</span>
+                        <p style="font-size: 13px; color: #78350f; line-height: 1.5;">
+                            Extensions that are new or unverified. Use with care and monitor their activity.
+                        </p>
+                    </div>
+                    <div
+                        style="padding: 15px; background: #f0fdf4; border-radius: 8px; border-left: 4px solid #10b981;">
+                        <span class="risk-badge"
+                            style="background:#10b981; color:white; padding:2px 8px; border-radius:12px; font-size:11px; display:inline-block; margin-bottom: 8px;">TRUSTED</span>
+                        <p style="font-size: 13px; color: #14532d; line-height: 1.5;">
+                            Verified extensions from known developers or the official Web Store. Safe to use.
+                        </p>
+                    </div>
+                </div>
+            </div>
         </div>
 
     </main>

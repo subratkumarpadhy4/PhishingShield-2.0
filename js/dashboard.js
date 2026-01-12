@@ -463,8 +463,17 @@ function renderTable(log) {
     // Sort by timestamp (newest first) and show most recent 50
     [...log].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 50).forEach(e => {
         const tr = document.createElement('tr');
-        const status = e.score > 20 ? 'Critical' : 'Safe';
-        const badgeClass = e.score > 20 ? 'risk-high' : 'risk-low';
+
+        let status = 'Safe';
+        let badgeClass = 'risk-low';
+
+        if (e.score >= 60) {
+            status = 'Critical';
+            badgeClass = 'risk-high';
+        } else if (e.score >= 20) {
+            status = 'Warning';
+            badgeClass = 'risk-med';
+        }
 
         tr.innerHTML = `
             <td>${e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '-'}</td>
@@ -558,12 +567,12 @@ function renderLeaderboard(users) {
         else if (level >= 5) rankName = 'Scout';
 
         html += `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding: 10px; border-bottom: 1px solid #eee;">
+            <div class="leaderboard-item" style="display:flex; justify-content:space-between; align-items:center; padding: 10px; border-bottom: 1px solid var(--border-color);">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <div style="font-weight:bold; font-size:16px; width:30px; text-align:center;">${medal}</div>
                     <div>
-                        <div style="font-weight:600; color:#343a40; font-size:14px;">${name}</div>
-                        <div style="font-size:12px; color:#6c757d;">Level ${level} <span style="font-size:10px; color:#adb5bd;">(${rankName})</span></div>
+                        <div class="lb-name" style="font-weight:600; color:#343a40; font-size:14px;">${name}</div>
+                        <div class="lb-rank" style="font-size:12px; color:#6c757d;">Level ${level} <span style="font-size:10px; color:#adb5bd;">(${rankName})</span></div>
                     </div>
                 </div>
                 <div style="font-weight:bold; color:#0d6efd; font-size:14px;">${xp} XP</div>

@@ -362,9 +362,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // 5. UPDATE BLOCKLIST
     else if (request.type === "UPDATE_BLOCKLIST") {
-        updateBlocklistFromStorage();
-        if (sendResponse) sendResponse({ success: true });
-        return true;
+        const bypassUrl = request.bypassUrl || null;
+        updateBlocklistFromStorage(bypassUrl, function () {
+            // Callback when blocklist update is complete
+            if (sendResponse) sendResponse({ success: true, blocklistUpdated: true });
+        });
+        return true; // Keep channel open for async response
     }
 
     // 6. SYNC XP (Force Sync from Frontend)
@@ -389,16 +392,21 @@ function updateXP(amount) {
     console.log("[PhishingShield] ========== updateXP CALLED ==========");
     console.log("[PhishingShield] Amount:", amount);
 
-    if (!amount || amount <= 0) {
+    if (amount === undefined || amount === null || amount === 0) {
         console.warn("[PhishingShield] Invalid XP amount:", amount);
         return;
     }
 
-    // Show badge notification
+    // Show badge notification (different color for negative amounts)
     try {
-        chrome.action.setBadgeText({ text: `+${amount}` });
-        chrome.action.setBadgeBackgroundColor({ color: '#28a745' });
-        setTimeout(() => chrome.action.setBadgeText({ text: "" }), 2000);
+        if (amount > 0) {
+            chrome.action.setBadgeText({ text: `+${amount}` });
+            chrome.action.setBadgeBackgroundColor({ color: '#28a745' });
+        } else {
+            chrome.action.setBadgeText({ text: `${amount}` });
+            chrome.action.setBadgeBackgroundColor({ color: '#dc3545' });
+        }
+        setTimeout(() => chrome.action.setBadgeText({ text: "" }), 3000);
     } catch (e) {
         console.warn("[PhishingShield] Badge update failed:", e);
     }
@@ -413,8 +421,12 @@ function updateXP(amount) {
         let users = Array.isArray(data.users) ? data.users : [];
         let currentUser = data.currentUser || null;
 
-        // Add XP
+        // Add XP (can be negative for penalties)
         currentXP = currentXP + amount;
+        // Ensure XP doesn't go below 0
+        if (currentXP < 0) {
+            currentXP = 0;
+        }
         const newLevel = calculateLevel(currentXP);
 
         console.log("[PhishingShield] XP Update: " + (currentXP - amount) + " + " + amount + " = " + currentXP + " (Level " + newLevel + ")");
@@ -441,6 +453,16 @@ function updateXP(amount) {
             });
         }
 
+        // Check for XP penalty (negative amount)
+        if (amount < 0) {
+            chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'images/icon48.png',
+                title: '⚠️ XP Penalty Applied',
+                message: `You lost ${Math.abs(amount)} XP for visiting a banned website.`
+            });
+        }
+
         // Prepare update object
         const updateData = {
             userXP: currentXP,
@@ -455,13 +477,6 @@ function updateXP(amount) {
                 users[userIndex].xp = currentXP;
                 users[userIndex].level = newLevel;
                 updateData.users = users;
-
-                // Send to Backend
-                fetch('https://phishingshield.onrender.com/api/reports', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(users[userIndex])
-                }).catch(() => { });
             }
         }
 
@@ -473,15 +488,12 @@ function updateXP(amount) {
             } else {
                 console.log("[PhishingShield] ✅ XP saved successfully:", currentXP);
 
-                // Double-check by reading it back
-                chrome.storage.local.get(['userXP'], (verify) => {
-                    console.log("[PhishingShield] Verification - XP in storage:", verify.userXP);
-                    if (verify.userXP !== currentXP) {
-                        console.error("[PhishingShield] ⚠️ MISMATCH! Expected:", currentXP, "Got:", verify.userXP);
-                    } else {
-                        console.log("[PhishingShield] ✅✅✅ XP VERIFIED IN STORAGE!");
-                    }
-                });
+                // -----------------------------------------------------------
+                // [FIX] Trigger Immediate Sync
+                // Replaces the old broken fetch('/api/reports') logic.
+                // If amount is negative, flag as PENALTY so server accepts drop.
+                // -----------------------------------------------------------
+                syncXPToServer({ isPenalty: amount < 0 });
             }
         });
     });
@@ -585,11 +597,35 @@ self.testServiceWorker = function () {
  * Converts 'banned' reports into active blocking rules.
  * Syncs with server to get global banned sites.
  */
-function updateBlocklistFromStorage() {
-    // First get local banned sites and blacklist
-    chrome.storage.local.get(['reportedSites', 'blacklist'], (result) => {
+function updateBlocklistFromStorage(bypassUrl = null, callback = null) {
+    // First get local banned sites and blacklist, and bypass tokens
+    chrome.storage.local.get(['reportedSites', 'blacklist', 'bypassTokens'], (result) => {
         const reports = result.reportedSites || [];
         const blacklist = result.blacklist || [];
+        let bypassTokens = result.bypassTokens || [];
+
+        // Clean up old bypass tokens (older than 5 minutes or already used)
+        const now = Date.now();
+        bypassTokens = bypassTokens.filter(token => {
+            // Remove tokens older than 5 minutes or already used
+            return !token.used && (now - token.timestamp) < 5 * 60 * 1000;
+        });
+
+        // If a specific URL is being bypassed, ensure it's in the tokens
+        if (bypassUrl) {
+            const existingToken = bypassTokens.find(t => t.url === bypassUrl);
+            if (!existingToken) {
+                bypassTokens.push({
+                    url: bypassUrl,
+                    timestamp: now,
+                    used: false
+                });
+            }
+        }
+
+        // Save cleaned up tokens
+        chrome.storage.local.set({ bypassTokens: bypassTokens });
+
         let banned = reports.filter(r => r.status === 'banned');
 
         // Also add any URLs from blacklist array that aren't in reports
@@ -629,6 +665,35 @@ function updateBlocklistFromStorage() {
                 });
                 banned = Array.from(bannedMap.values());
 
+                // Filter out URLs that have active bypass tokens
+                // Match by both full URL and hostname for flexibility
+                const activeBypassUrls = new Set();
+                const activeBypassHostnames = new Set();
+                bypassTokens.forEach(token => {
+                    activeBypassUrls.add(token.url);
+                    try {
+                        const urlObj = new URL(token.url);
+                        activeBypassHostnames.add(urlObj.hostname);
+                    } catch (e) {
+                        // If URL parsing fails, skip hostname
+                    }
+                });
+
+                banned = banned.filter(r => {
+                    // Check if URL matches
+                    if (activeBypassUrls.has(r.url)) return false;
+                    // Check if hostname matches
+                    try {
+                        const rHostname = r.hostname || new URL(r.url).hostname;
+                        if (activeBypassHostnames.has(rHostname)) return false;
+                    } catch (e) {
+                        // If parsing fails, continue
+                    }
+                    return true;
+                });
+
+                console.log(`[PhishingShield] Blocklist: ${banned.length} sites (${bypassTokens.length} bypassed)`);
+
                 // Convert to Rules
                 const newRules = banned.map((r, index) => {
                     let hostname;
@@ -660,6 +725,7 @@ function updateBlocklistFromStorage() {
                         addRules: newRules
                     }, () => {
                         console.log(`[PhishingShield] Blocklist Updated: ${newRules.length} sites blocked globally.`);
+                        if (callback) callback();
                     });
                 });
             })
@@ -695,6 +761,7 @@ function updateBlocklistFromStorage() {
                         addRules: newRules
                     }, () => {
                         console.log(`[PhishingShield] Blocklist Updated (local only): ${newRules.length} sites blocked.`);
+                        if (callback) callback();
                     });
                 });
             });
@@ -706,6 +773,50 @@ chrome.runtime.onStartup.addListener(updateBlocklistFromStorage);
 chrome.runtime.onInstalled.addListener(updateBlocklistFromStorage);
 
 // UPDATE_BLOCKLIST is handled in the main message listener above
+
+// -----------------------------------------------------------------------------
+// BYPASS TOKEN MANAGEMENT - One-time bypass for banned sites
+// -----------------------------------------------------------------------------
+
+// Listen for tab updates to detect when user navigates to a bypassed URL
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    // Only process when navigation is complete (status === 'complete')
+    if (changeInfo.status === 'complete' && tab.url) {
+        chrome.storage.local.get(['bypassTokens'], (data) => {
+            const tokens = data.bypassTokens || [];
+            const activeTokens = tokens.filter(t => !t.used);
+
+            // Check if this URL matches any active bypass token
+            const matchingToken = activeTokens.find(token => {
+                try {
+                    const tokenUrl = new URL(token.url);
+                    const currentUrl = new URL(tab.url);
+                    // Match by hostname (allows navigation to any page on the domain)
+                    return tokenUrl.hostname === currentUrl.hostname;
+                } catch (e) {
+                    // Fallback to exact URL match
+                    return token.url === tab.url;
+                }
+            });
+
+            if (matchingToken) {
+                console.log('[PhishingShield] User navigated to bypassed URL:', tab.url);
+                console.log('[PhishingShield] Marking bypass token as used (one-time use)');
+
+                // Mark token as used
+                matchingToken.used = true;
+                matchingToken.usedAt = Date.now();
+
+                // Save updated tokens
+                chrome.storage.local.set({ bypassTokens: tokens }, () => {
+                    // Rebuild blocklist to re-block this URL
+                    console.log('[PhishingShield] Rebuilding blocklist - URL will be blocked again on next visit');
+                    updateBlocklistFromStorage();
+                });
+            }
+        });
+    }
+});
 
 // -----------------------------------------------------------------------------
 // XP SYNC (Global Leaderboard)
@@ -720,7 +831,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     }
 });
 
-function syncXPToServer() {
+function syncXPToServer(customData = {}) {
     chrome.storage.local.get(['currentUser', 'userXP', 'userLevel', 'pendingXPSync'], (res) => {
         // Sync always if user is logged in (acts as heartbeat to fetch server updates like Admin Promotions)
         if (res.currentUser && res.currentUser.email) {
@@ -729,7 +840,8 @@ function syncXPToServer() {
             const userData = {
                 ...res.currentUser,
                 xp: res.userXP,
-                level: res.userLevel
+                level: res.userLevel,
+                ...customData // Allow overrides like { isPenalty: true }
             };
 
             // Sync to server

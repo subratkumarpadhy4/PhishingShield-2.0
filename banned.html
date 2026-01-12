@@ -197,7 +197,7 @@
 
 <body>
     <!-- Proceed Anyway button in top right corner -->
-    <button class="btn btn-danger" onclick="proceedAnyway()" style="position: fixed; top: 20px; right: 20px; 
+    <button id="proceed-anyway-btn" class="btn btn-danger" style="position: fixed; top: 20px; right: 20px; 
               background: white;
               color: #dc3545;
               border: 2px solid #dc3545;
@@ -205,8 +205,7 @@
               font-size: 14px;
               font-weight: 600;
               box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-              z-index: 1000;" onmouseover="this.style.background='#dc3545'; this.style.color='white';"
-        onmouseout="this.style.background='white'; this.style.color='#dc3545';">
+              z-index: 1000;">
         ⚠️ Proceed Anyway (Unsafe)
     </button>
 
@@ -219,6 +218,9 @@
             <h3>⚠️ Community Ban Active</h3>
             <p>This site has been reported by PhishingShield users and banned by administrators due to malicious or
                 fraudulent activity.</p>
+            <p style="margin-top: 10px; font-weight: bold; color: #dc3545;">
+                ⚠️ Penalty: You have lost 500 XP for attempting to visit this banned website.
+            </p>
         </div>
 
         <div class="url-display" id="blocked-url">
@@ -246,8 +248,8 @@
         </div>
 
         <div style="margin-top: 30px;">
-            <button class="btn btn-primary" onclick="goBack()">← Go Back to Safety</button>
-            <button class="btn btn-secondary" onclick="goHome()">🏠 Go to Homepage</button>
+            <button id="go-back-btn" class="btn btn-primary">← Go Back to Safety</button>
+            <button id="go-home-btn" class="btn btn-secondary">🏠 Go to Homepage</button>
         </div>
 
         <div class="footer">
@@ -256,48 +258,7 @@
         </div>
     </div>
 
-    <script>
-        // Get URL from query parameter
-        const urlParams = new URLSearchParams(window.location.search);
-        const blockedUrl = urlParams.get('url') || 'Unknown URL';
-
-        document.getElementById('blocked-url').textContent = blockedUrl;
-
-        function goBack() {
-            if (window.history.length > 1) {
-                window.history.back();
-            } else {
-                window.location.href = 'about:blank';
-            }
-        }
-
-        function goHome() {
-            window.location.href = 'https://www.google.com';
-        }
-
-        function proceedAnyway() {
-            console.log('[PhishingShield] Proceed Anyway button clicked on banned.html');
-            console.log('[PhishingShield] Blocked URL:', blockedUrl);
-
-            if (confirm('⚠️ FINAL WARNING\n\nThis site has been banned by PhishingShield administrators.\n\nProceeding may result in:\n• Identity theft\n• Financial loss\n• Malware infection\n• Data breach\n\nAre you absolutely sure you want to continue?')) {
-                console.log('[PhishingShield] User confirmed, attempting navigation...');
-                // Extract the actual URL and navigate to it
-                const actualUrl = blockedUrl;
-                if (actualUrl && actualUrl !== 'Unknown URL') {
-                    console.log('[PhishingShield] Navigating to:', actualUrl);
-                    window.location.href = actualUrl;
-                } else {
-                    console.error('[PhishingShield] Cannot proceed - URL is:', actualUrl);
-                    alert('Cannot proceed - URL not available');
-                }
-            } else {
-                console.log('[PhishingShield] User cancelled navigation');
-            }
-        }
-
-        // Log the block event
-        console.log('[PhishingShield] Community-banned site blocked:', blockedUrl);
-    </script>
+    <script src="js/banned.js"></script>
 </body>
 
 </html>

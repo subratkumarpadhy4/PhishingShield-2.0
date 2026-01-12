@@ -180,15 +180,6 @@ function setupDebugTools() {
         btnRestore.title = "Restores missing reports from this browser's memory to the server.";
         btnRestore.onclick = restoreFromMemory;
         container.appendChild(btnRestore);
-
-        // Debug Button
-        const btnDebug = document.createElement('button');
-        btnDebug.className = "btn btn-outline";
-        btnDebug.textContent = "🛠️ Inject Fake Data (Debug)";
-        btnDebug.style.marginTop = "10px";
-        btnDebug.style.display = "block"; // New line
-        btnDebug.onclick = injectFakeData;
-        container.appendChild(btnDebug);
     }
 
 }
@@ -279,26 +270,6 @@ function restoreFromMemory() {
             });
     });
 }
-
-function injectFakeData() {
-    const fakeLogs = [
-        { timestamp: Date.now(), url: "http://malicious-test.com", hostname: "malicious-test.com", score: 85, reasons: ["High Risk Geo", "Unusual Script"], reporter: "test@user.com" },
-        { timestamp: Date.now() - 50000, url: "http://google.com", hostname: "google.com", score: 5, reasons: ["Safe"], reporter: "me@gmail.com" }
-    ];
-
-    // Save to storage (Polyfill aware)
-    if (chrome.storage && chrome.storage.local) {
-        chrome.storage.local.set({ visitLog: fakeLogs }, () => {
-            alert('Fake Data Injected. Reloading...');
-            loadDashboardData();
-        });
-    } else {
-        localStorage.setItem('visitLog', JSON.stringify(fakeLogs));
-        alert('Fake Data Injected into LocalStorage. Reloading...');
-        loadDashboardData();
-    }
-}
-
 
 async function checkAdminAccess() {
     const lockScreen = document.getElementById('lock-screen');
@@ -576,13 +547,20 @@ function loadDashboardData() {
                             console.log("[Admin] Updating Local Cache with latest Server Data");
                             chrome.storage.local.set({ cachedGlobalReports: serverReports });
 
-                            // MERGE logic for UI
+                            // MERGE logic for UI - Server data takes precedence for status
                             const localReports = data.reportedSites || [];
                             const mergedReports = [...serverReports];
 
+                            // Add local reports that don't exist on server, but prioritize server status
                             localReports.forEach(localR => {
-                                const exists = mergedReports.find(serverR => serverR.id === localR.id);
-                                if (!exists) mergedReports.push(localR);
+                                const serverReport = mergedReports.find(serverR => serverR.id === localR.id);
+                                if (!serverReport) {
+                                    // Local report not on server, add it
+                                    mergedReports.push(localR);
+                                } else {
+                                    // Report exists on both - server status takes precedence
+                                    // Server already has the correct status, so we keep it
+                                }
                             });
 
                             mergedReports.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
@@ -613,33 +591,6 @@ function loadDashboardData() {
                     });
                 });
 
-            // DEBUG: Inject Test Report Button if not exists
-            if (!document.getElementById('btn-add-test-report')) {
-                const header = document.querySelector('#reports .section-header');
-                if (header) {
-                    const btn = document.createElement('button');
-                    btn.id = 'btn-add-test-report';
-                    btn.className = 'btn btn-outline';
-                    btn.textContent = '+ Add Test Report';
-                    btn.style.marginLeft = '10px';
-                    btn.onclick = () => {
-                        // Send Test Report to Server
-                        fetch('https://phishingshield.onrender.com/api/reports', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                url: 'http://test-malicious-site.com',
-                                reporter: 'Admin Test',
-                                hostname: 'test-malicious-site.com'
-                            })
-                        }).then(() => {
-                            alert("Test Report Sent to Server.");
-                            loadDashboardData();
-                        });
-                    };
-                    header.appendChild(btn);
-                }
-            }
         });
     };
 
@@ -822,8 +773,10 @@ function renderReports(reports) {
         }
 
         const tr = document.createElement('tr');
+        // Truncate URL if too long for display
+        const displayUrl = escapedUrl.length > 50 ? escapedUrl.substring(0, 47) + '...' : escapedUrl;
         tr.innerHTML = `
-            <td style="font-family:monospace; color:#0d6efd;">${escapeHtml(r.url)}</td>
+            <td style="font-family:monospace; color:#0d6efd;" title="${escapedUrl}">${displayUrl}</td>
             <td>${reporterDisplay}</td>
             <td>${date}</td>
             <td>${statusBadge}</td>
@@ -895,7 +848,7 @@ function renderReports(reports) {
 }
 
 // Global function to ban a harmful site
-window.banSite = function (url, reportId) {
+window.banSite = async function (url, reportId) {
     console.log('[Admin] banSite called with:', { url, reportId });
 
     try {
@@ -914,13 +867,44 @@ window.banSite = function (url, reportId) {
 
         console.log('[Admin] User confirmed ban, proceeding...');
 
-        // Update status on server first
-        fetch('https://phishingshield.onrender.com/api/reports/update', {
+        // Update status on server first and WAIT for response
+        const response = await fetch('https://phishingshield.onrender.com/api/reports/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: reportId, status: 'banned' })
-        }).then(res => res.json()).catch(err => console.error('Server update failed:', err));
+        });
 
+        const resData = await response.json();
+
+        if (!response.ok || !resData.success) {
+            throw new Error(resData.message || 'Server returned error');
+        }
+
+        console.log('[Admin] Server updated successfully, status set to banned');
+
+        // Update cached global reports to reflect the ban immediately
+        chrome.storage.local.get(['cachedGlobalReports'], (cacheData) => {
+            const cachedReports = cacheData.cachedGlobalReports || [];
+            const reportIndex = cachedReports.findIndex(r => r.id === reportId || r.url === url);
+            if (reportIndex !== -1) {
+                cachedReports[reportIndex].status = 'banned';
+                cachedReports[reportIndex].bannedAt = Date.now();
+            } else {
+                // Add to cache if not present
+                cachedReports.push({
+                    id: reportId,
+                    url: url,
+                    hostname: hostname,
+                    status: 'banned',
+                    bannedAt: Date.now(),
+                    timestamp: Date.now(),
+                    reporter: 'Admin'
+                });
+            }
+            chrome.storage.local.set({ cachedGlobalReports: cachedReports });
+        });
+
+        // Update local storage for immediate UI feedback
         chrome.storage.local.get(['reportedSites', 'blacklist'], (data) => {
             let reports = data.reportedSites || [];
             let blacklist = data.blacklist || [];
@@ -959,14 +943,15 @@ window.banSite = function (url, reportId) {
                     if (chrome.runtime.lastError) {
                         console.error('[Admin] Error sending UPDATE_BLOCKLIST:', chrome.runtime.lastError);
                     }
-                    alert(`✅ Site Banned Successfully!\n\n${hostname} is now blocked.\n\nAll users will see a warning page when visiting this site.`);
+                    alert(`✅ Site Banned Successfully!\n\n${hostname} is now blocked globally.\n\nAll users across all devices will see a warning page when visiting this site.`);
                     loadDashboardData(); // Refresh UI
+                    loadBannedSites(); // Refresh banned sites table
                 });
             });
         });
     } catch (error) {
         console.error('[Admin] Error in banSite:', error);
-        alert('Error banning site: ' + error.message);
+        alert('Error banning site: ' + error.message + '\n\nPlease try again or check your connection.');
     }
 };
 
@@ -1009,7 +994,7 @@ window.ignoreReport = async function (url, reportId) {
 };
 
 // Global function to unban a site
-window.unbanSite = function (url, reportId) {
+window.unbanSite = async function (url, reportId) {
     console.log('[Admin] unbanSite called with:', { url, reportId });
 
     try {
@@ -1028,12 +1013,31 @@ window.unbanSite = function (url, reportId) {
 
         console.log('[Admin] User confirmed unban, proceeding...');
 
-        // Update status on server
-        fetch('https://phishingshield.onrender.com/api/reports/update', {
+        // Update status on server and WAIT for response
+        const response = await fetch('https://phishingshield.onrender.com/api/reports/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: reportId, status: 'pending' })
-        }).then(res => res.json()).catch(err => console.error('Server update failed:', err));
+        });
+
+        const resData = await response.json();
+
+        if (!response.ok || !resData.success) {
+            throw new Error(resData.message || 'Server returned error');
+        }
+
+        console.log('[Admin] Server updated successfully, status set to pending');
+
+        // Update cached global reports to reflect the unban immediately
+        chrome.storage.local.get(['cachedGlobalReports'], (cacheData) => {
+            const cachedReports = cacheData.cachedGlobalReports || [];
+            const reportIndex = cachedReports.findIndex(r => r.id === reportId || r.url === url);
+            if (reportIndex !== -1) {
+                cachedReports[reportIndex].status = 'pending';
+                delete cachedReports[reportIndex].bannedAt;
+            }
+            chrome.storage.local.set({ cachedGlobalReports: cachedReports });
+        });
 
         chrome.storage.local.get(['reportedSites', 'blacklist'], (data) => {
             let reports = data.reportedSites || [];
@@ -1057,13 +1061,14 @@ window.unbanSite = function (url, reportId) {
                         console.error('[Admin] Error sending UPDATE_BLOCKLIST:', chrome.runtime.lastError);
                     }
                     alert(`✅ Site Unbanned\n\nUsers can now visit this site.`);
-                    loadDashboardData();
+                    loadDashboardData(); // Refresh UI
+                    loadBannedSites(); // Refresh banned sites table
                 });
             });
         });
     } catch (error) {
         console.error('[Admin] Error in unbanSite:', error);
-        alert('Error unbanning site: ' + error.message);
+        alert('Error unbanning site: ' + error.message + '\n\nPlease try again or check your connection.');
     }
 };
 
@@ -1306,38 +1311,44 @@ function loadBannedSites() {
 
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
 
-    chrome.storage.local.get(['reports'], (res) => {
-        const reports = res.reports || [];
-        // Filter for banned sites
-        // In a real server scenario, we would fetch from /api/banned-sites or similar
-        // For now, we simulate by filtering reports with status 'banned'
-        const bannedSites = reports.filter(r => r.status === 'banned');
+    // Fetch from server to get global banned sites
+    fetch('https://phishingshield.onrender.com/api/reports')
+        .then(res => res.json())
+        .then(serverReports => {
+            // Filter for banned sites from server (global bans)
+            const bannedSites = serverReports.filter(r => r.status === 'banned');
 
-        if (bannedSites.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px; color:#adb5bd;">No banned sites found.</td></tr>';
-            return;
-        }
+            if (bannedSites.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px; color:#adb5bd;">No banned sites found.</td></tr>';
+                return;
+            }
 
-        tbody.innerHTML = '';
-        bannedSites.forEach(site => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>
-                    <div style="font-weight:600;">${site.url}</div>
-                    <div style="font-size:12px; color:#adb5bd;">${site.hostname}</div>
-                </td>
-                <td>${new Date(site.timestamp).toLocaleDateString()}</td>
-                <td>${site.reportedBy || 'Unknown'}</td>
-                <td>
-                    <button class="btn btn-outline" style="color: #28a745; border-color: #28a745; font-size: 12px; padding: 4px 8px;" onclick="unbanSite('${site.url}', '${site.id}')">
-                        ✅ Unban
-                    </button>
-                    ${site.notes ? `<div style="font-size:10px; margin-top:5px; color:#6c757d;">Note: ${site.notes}</div>` : ''}
-                </td>
-            `;
-            tbody.appendChild(row);
+            tbody.innerHTML = '';
+            bannedSites.forEach(site => {
+                const row = document.createElement('tr');
+                const escapedUrl = site.url.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const escapedId = (site.id || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                row.innerHTML = `
+                    <td>
+                        <div style="font-weight:600;">${site.url}</div>
+                        <div style="font-size:12px; color:#adb5bd;">${site.hostname || site.url}</div>
+                    </td>
+                    <td>${new Date(site.timestamp || site.bannedAt || Date.now()).toLocaleDateString()}</td>
+                    <td>${site.reporter || site.reportedBy || 'Unknown'}</td>
+                    <td>
+                        <button class="btn btn-outline" style="color: #28a745; border-color: #28a745; font-size: 12px; padding: 4px 8px;" onclick="unbanSite('${escapedUrl}', '${escapedId}')">
+                            ✅ Unban
+                        </button>
+                        ${site.notes ? `<div style="font-size:10px; margin-top:5px; color:#6c757d;">Note: ${site.notes}</div>` : ''}
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        })
+        .catch(err => {
+            console.error('[Admin] Failed to fetch banned sites from server:', err);
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px; color:#dc3545;">Error loading banned sites. Please refresh.</td></tr>';
         });
-    });
 }
 
 

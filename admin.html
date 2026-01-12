@@ -329,6 +329,19 @@
             font-size: 14px;
         }
 
+        /* Limit URL column width in reports table */
+        #reports-table td:first-child {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            word-break: break-all;
+        }
+
+        #reports-table th:first-child {
+            max-width: 300px;
+        }
+
         tr:last-child td {
             border-bottom: none;
         }
