@@ -4,10 +4,14 @@
     "email": "rajkumarpadhy2006@gmail.com",
     "password": "rajkumarpadhy2006@gmail.com",
     "joined": 1703800000000,
-    "xp": 37920,
+    "xp": 37960,
     "level": 20,
     "history": [],
-    "lastCriticalTime": 1703800000000
+    "lastCriticalTime": 1703800000000,
+    "isPenalty": true,
+    "settings": {
+      "enableDownloads": true
+    }
   },
   {
     "name": "subrat kumar padhy",
@@ -35,5 +39,24 @@
     "level": 3,
     "joined": 1766993673694,
     "rank": "Novice"
+  },
+  {
+    "email": "jenapriyanshu2006@gmail.com",
+    "isPenalty": true,
+    "joined": 1768240676930,
+    "level": 11,
+    "name": "PRIYANSHU JENA",
+    "password": "jenapriyanshu2006@gmail.com",
+    "rank": "Novice",
+    "xp": 10200
+  },
+  {
+    "email": "gopakishor007@gmail.com",
+    "joined": 1768151047531,
+    "level": 2,
+    "name": "kishor",
+    "password": "gopakishor007@gmail.com",
+    "rank": "Novice",
+    "xp": 140
   }
 ]

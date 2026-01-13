@@ -532,3 +532,62 @@ input:checked+.slider:before {
     margin-top: 15px;
     font-weight: 600;
 }
+
+/* --- New Aesthetic Vote Buttons --- */
+.vote-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.btn-vote {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+    /* Dark text for white button */
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.btn-vote:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    border-color: #cbd5e1;
+}
+
+.btn-vote:active {
+    transform: translateY(0);
+}
+
+.btn-vote span.icon {
+    font-size: 18px;
+    /* Slightly larger emoji */
+}
+
+/* Specific button colors on hover/active */
+#btn-vote-safe:hover {
+    color: #10b981;
+    /* Green text on hover */
+    border-color: #10b981;
+    background: #f0fdf4;
+    /* Very light green tint */
+}
+
+#btn-vote-unsafe:hover {
+    color: #ef4444;
+    /* Red text on hover */
+    border-color: #ef4444;
+    background: #fef2f2;
+    /* Very light red tint */
+}

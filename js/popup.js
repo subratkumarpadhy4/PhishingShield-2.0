@@ -217,4 +217,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
+    // --- 7. TRUST SYSTEM ---
+    if (typeof ThreatIntel !== 'undefined') {
+        chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+            if (tabs[0] && tabs[0].url) {
+                const url = tabs[0].url;
+                if (!url.startsWith('http')) {
+                    const el = document.getElementById('trust-score-val');
+                    if (el) el.textContent = 'N/A';
+                    return;
+                }
+
+                // Update Domain Name Display
+                const domainEl = document.getElementById('trust-domain');
+                if (domainEl) {
+                    try {
+                        const hostname = new URL(url).hostname;
+                        domainEl.textContent = hostname;
+                    } catch (e) {
+                        domainEl.textContent = "Current Site";
+                    }
+                }
+
+                // Fetch Score with Timeout
+                const fetchPromise = ThreatIntel.getTrustScore(url);
+                const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 2000));
+
+                const data = await Promise.race([fetchPromise, timeoutPromise]);
+                const scoreDisplay = document.getElementById('trust-score-val');
+
+                if (data && data.timeout) {
+                    if (scoreDisplay) scoreDisplay.textContent = "Offline";
+                } else if (data && scoreDisplay) {
+                    scoreDisplay.textContent = `${data.score}% (${data.votes} votes)`;
+                    scoreDisplay.style.color = data.status === 'safe' ? '#28a745' : (data.status === 'malicious' ? '#dc3545' : '#ffc107');
+                } else if (scoreDisplay) {
+                    scoreDisplay.textContent = "No Data";
+                }
+
+                // Bind Vote Buttons
+                const btnSafe = document.getElementById('btn-vote-safe');
+                const btnUnsafe = document.getElementById('btn-vote-unsafe');
+
+                if (btnSafe) {
+                    btnSafe.onclick = async () => {
+                        btnSafe.innerHTML = "⏳";
+                        const result = await ThreatIntel.vote(url, 'safe');
+                        if (result.message) alert(result.message);
+                        setTimeout(() => location.reload(), 100);
+                    };
+                }
+                if (btnUnsafe) {
+                    btnUnsafe.onclick = async () => {
+                        btnUnsafe.innerHTML = "⏳";
+                        const result = await ThreatIntel.vote(url, 'unsafe');
+                        if (result.message) alert(result.message);
+                        setTimeout(() => location.reload(), 100);
+                    };
+                }
+            }
+        });
+    }
+
 });

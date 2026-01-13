@@ -487,6 +487,7 @@
 
                 <li><a href="#" class="nav-link" data-tab="reports">🚩 Reports <span class="badge badge-active"
                             style="margin-left:auto; font-size:10px;">NEW</span></a></li>
+                <li><a href="#" class="nav-link" data-tab="trust">🤝 Community Trust</a></li>
                 <li><a href="#" class="nav-link" data-tab="logs">🛡️ Threat Logs</a></li>
                 <li><a href="#" class="nav-link" data-tab="settings">⚙️ System Settings</a></li>
             </ul>
@@ -641,6 +642,50 @@
                     <tbody>
                         <tr>
                             <td colspan="5" style="text-align:center;">Loading reports...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TRUST TAB (New) -->
+        <div id="trust" class="tab-content">
+            <div class="table-container">
+                <div class="section-header">
+                    <h3>Community Trust Manager</h3>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn btn-outline" id="btn-sync-trust" title="Push local data to Global Server">
+                            ☁️ Sync to Global
+                        </button>
+                        <button class="btn btn-outline" id="btn-refresh-trust">Refresh List</button>
+                        <button class="btn btn-outline" id="btn-clear-trust"
+                            style="color:#dc3545; border-color:#dc3545;">🗑️ Clear History</button>
+                    </div>
+                </div>
+                <div style="margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+                    <p style="color:#6c757d; margin:0;">
+                        Aggregated reputation scores from user votes. <br>
+                        <span style="font-size:12px;">Local Server Mode: Votes are saved locally until synced.</span>
+                    </p>
+                    <div style="font-size:12px; color:#6c757d; text-align:right;">
+                        Global Sync Status: <span id="trust-sync-status" class="badge badge-user">Checking...</span>
+                        <div id="trust-last-sync" style="font-size:11px; margin-top:4px;">Last: Never</div>
+                    </div>
+                </div>
+
+                <table id="trust-table">
+                    <thead>
+                        <tr>
+                            <th>Domain</th>
+                            <th>Trust Score</th>
+                            <th>Safe Votes</th>
+                            <th>Unsafe Votes</th>
+                            <th>Status Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="5" style="text-align:center;">Loading trust data...</td>
                         </tr>
                     </tbody>
                 </table>

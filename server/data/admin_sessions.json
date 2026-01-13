@@ -5,5 +5,12 @@
     "ip": "127.0.0.1",
     "createdAt": 1767462177797,
     "expiresAt": 1768326177797
+  },
+  "admin_sess_1768329451718_zzgflsvng": {
+    "userId": "rajkumarpadhy2006@gmail.com",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyYWprdW1hcnBhZGh5MjAwNkBnbWFpbC5jb20iLCJlbWFpbCI6InJhamt1bWFycGFkaHkyMDA2QGdtYWlsLmNvbSIsInJvbGUiOiJhZG1pbiIsIm1mYVZlcmlmaWVkIjp0cnVlLCJpcEFkZHJlc3MiOiIxMjcuMC4wLjEiLCJzZXNzaW9uSWQiOiJhZG1pbl9zZXNzXzE3NjgzMjk0NTE3MThfenpnZmxzdm5nIiwiaWF0IjoxNzY4MzI5NDUxLCJleHAiOjE3NjkxOTM0NTF9.yhCSrBG66z8U9puNjxvNsFx3Uct6sWqqhEjYbJKQEgg",
+    "ip": "127.0.0.1",
+    "createdAt": 1768329451719,
+    "expiresAt": 1769193451719
   }
 }

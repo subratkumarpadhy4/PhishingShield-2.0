@@ -41,6 +41,7 @@
       ],
       "js": [
         "js/ai_model.js",
+        "js/threat_intel.js",
         "js/risk_engine.js",
         "js/content.js"
       ],

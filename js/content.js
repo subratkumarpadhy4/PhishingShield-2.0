@@ -108,6 +108,9 @@ setInterval(() => {
 
 // ... (Link Preview and Login - No changes needed) ...
 
+// Cache for sync access (Download Protection)
+let currentPageAnalysis = { score: 0, reasons: [] };
+
 /**
  * Feature 3 (Hackathon): Real-Time Risk Analysis HUD
  */
@@ -129,7 +132,7 @@ function initRiskAnalysis(isFortressMode) {
 
         if (typeof Engine !== 'undefined' && Engine.analyzePage) {
             try {
-                analysis = Engine.analyzePage();
+                analysis = await Engine.analyzePage();
             } catch (e) {
                 console.error("Risk Engine Crashed:", e);
                 analysis.reasons.push("Error: " + e.message);
@@ -149,6 +152,9 @@ function initRiskAnalysis(isFortressMode) {
 
         // Cap score at 100
         analysis.score = Math.min(analysis.score, 100);
+
+        // Update Cache
+        currentPageAnalysis = analysis;
 
         console.log("[Content] Sending LOG_VISIT message...");
 
@@ -173,7 +179,8 @@ function initRiskAnalysis(isFortressMode) {
                     const newLevel = Math.floor(Math.sqrt(currentXP / 100)) + 1;
 
                     const logs = Array.isArray(data.visitLog) ? data.visitLog : [];
-                    if (logs.length > 50) logs.shift();
+                    // Keep last 200 entries for better history tracking
+                    if (logs.length > 200) logs.shift();
                     logs.push(visitData);
 
                     const updateData = {
@@ -298,7 +305,7 @@ function initDownloadProtection(isFortressMode, isEnabled) {
 
         if (isRiskyFile || (isFortressMode && isFileDownload)) {
             const isHttp = window.location.protocol === 'http:';
-            const analysis = RiskEngine.analyzePage(); // Recalculate if needed
+            const analysis = currentPageAnalysis; // Use cached sync result
             const isRiskyScore = analysis.score > 30;
 
             // Trigger if: HTTP OR Risky Score OR Fortress Mode (Zero Trust)

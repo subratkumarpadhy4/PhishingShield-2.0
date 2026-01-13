@@ -29,7 +29,7 @@ window.RiskEngine = {
         "axis bank": ["axisbank.com"]
     },
 
-    analyzePage: function () {
+    analyzePage: async function () {
         let score = 0;
         let reasons = [];
         let primaryThreat = "Generic Suspicion"; // Initialized early to prevent TDZ error
@@ -55,6 +55,24 @@ window.RiskEngine = {
         // 0. Search Engine Whitelist
         if (/google|bing|yahoo|duckduckgo|search|msn/.test(hostname)) {
             return { score: 0, reasons: [] };
+        }
+
+        // 0. Search Engine Whitelist
+        if (/google|bing|yahoo|duckduckgo|search|msn/.test(hostname)) {
+            return { score: 0, reasons: [] };
+        }
+
+        // 0.1 Threat Intel Check (Async)
+        if (typeof ThreatIntel !== 'undefined') {
+            const intel = await ThreatIntel.check(window.location.href);
+            if (intel.isThreat) {
+                console.warn(`[RiskEngine] CRITICAL BLOCKED by Threat Intel: ${intel.source}`);
+                return {
+                    score: intel.riskScore,
+                    reasons: [`🚨 BLOCKED: ${intel.source} (${intel.type}) (+${intel.riskScore})`],
+                    primaryThreat: `${intel.type} Detected`
+                };
+            }
         }
 
         // 1. Official Brand Verification (The "Green Pattern")
