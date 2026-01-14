@@ -1454,16 +1454,39 @@ function renderUsers(users, allLogs) {
                 deleteUserBtn.style.color = '#dc3545';
                 deleteUserBtn.style.borderColor = '#dc3545';
                 deleteUserBtn.onclick = () => {
-                    if (confirm(`Delete ${name}? This cannot be undone.`)) {
+                    if (confirm(`⚠️ DELETE USER: ${name}?\n\nThis will permanently remove:\n- Account Access\n- XP & Rank History\n- Trust Score Votes\n\nThis action will typically propagate to the Global Server as well.\n\nAre you sure?`)) {
+
+                        // Disable button to prevent double-click
+                        deleteUserBtn.disabled = true;
+                        deleteUserBtn.innerText = "Deleting...";
+
                         fetch('http://localhost:3000/api/users/delete', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ email: email })
-                        }).then(() => {
-                            alert("User deleted.");
-                            document.getElementById('user-modal').classList.add('hidden');
-                            loadDashboardData();
-                        }).catch(e => alert("Delete failed: " + e));
+                        })
+                            .then(async (res) => {
+                                const data = await res.json();
+                                if (data.success) {
+                                    // 1. Remove from Local Cache Immediately (Optimistic UI)
+                                    chrome.storage.local.get(['cachedUsers'], (storage) => {
+                                        const cached = storage.cachedUsers || [];
+                                        const updated = cached.filter(u => u.email !== email);
+                                        chrome.storage.local.set({ cachedUsers: updated }, () => {
+                                            alert("✅ User deleted successfully.");
+                                            document.getElementById('user-modal').classList.add('hidden');
+                                            loadDashboardData(); // Refresh UI
+                                        });
+                                    });
+                                } else {
+                                    throw new Error(data.message || "Unknown server error");
+                                }
+                            })
+                            .catch(e => {
+                                alert("❌ Delete failed: " + e.message);
+                                deleteUserBtn.disabled = false;
+                                deleteUserBtn.innerText = "Delete User";
+                            });
                     }
                 };
 

@@ -1013,8 +1013,29 @@ function syncXPToServer(customData = {}) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(userData)
             })
-                .then(r => r.json())
-                .then(data => {
+                .then(async r => {
+                    const data = await r.json();
+
+                    // HANDLE DELETED USER (Force Logout)
+                    if (r.status === 410 || r.status === 404 || (data.error === "USER_DELETED") || (data.error === "USER_VIOLATION")) {
+                        console.warn("[PhishingShield] Account DELETED by Server. Logging out...");
+                        chrome.storage.local.remove(['currentUser', 'userXP', 'userLevel', 'pendingXPSync'], () => {
+                            chrome.notifications.create({
+                                type: 'basic',
+                                iconUrl: 'images/icon48.png',
+                                title: '🚨 Account Deleted',
+                                message: 'Your account has been removed by the administrator. You have been logged out.'
+                            });
+                            // Broadcast logout
+                            chrome.tabs.query({}, (tabs) => {
+                                tabs.forEach(tab => {
+                                    if (tab.id) chrome.tabs.sendMessage(tab.id, { type: "LOGOUT" }).catch(() => { });
+                                });
+                            });
+                        });
+                        return; // Stop processing
+                    }
+
                     if (data.success) {
                         console.log("[PhishingShield] ✅ XP Global Sync Successful");
                         chrome.storage.local.set({ pendingXPSync: false });
@@ -1038,11 +1059,14 @@ function syncXPToServer(customData = {}) {
                                 });
                             });
                         }
+                    } else if (r.status === 403 || r.status === 401) {
+                        // Soft Logout / Auth Token Invalid?
+                        console.warn("[PhishingShield] Auth Error during sync:", data.message);
                     }
 
                     // --- REPORT SELF-HEALING (Persistence) ---
                     // Check if my reports exist on server. If not (Wipe), re-upload.
-                    syncReportsHeal();
+                    if (data.success) syncReportsHeal();
                 })
                 .catch(e => console.error("[PhishingShield] ❌ XP Sync Failed:", e));
         }

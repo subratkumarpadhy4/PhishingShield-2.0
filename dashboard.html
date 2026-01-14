@@ -179,6 +179,21 @@
             gap: 4px;
         }
 
+        #guest-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            /* Added gap */
+        }
+
+        #guest-nav h6 {
+            margin-bottom: 0 !important;
+            /* Remove bottom margin conflict */
+            font-size: 12px;
+            font-weight: 600;
+        }
+
         /* --- MAIN CONTENT --- */
         main {
             flex: 1;
@@ -511,6 +526,22 @@
             color: var(--secondary);
         }
 
+        .btn-signin {
+            color: #60a5fa;
+            font-size: 12px;
+            font-weight: bold;
+            text-decoration: none;
+            background: rgba(37, 99, 235, 0.1);
+            padding: 6px 12px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-signin:hover {
+            background: rgba(37, 99, 235, 0.2);
+            color: #93c5fd;
+        }
+
         /* --- PRINT REPORT (Custom View) --- */
         #print-report-container {
             display: none;
@@ -619,9 +650,8 @@
                     Edit Profile</div>
             </div>
             <div id="guest-nav" style="display: none;">
-                <h6 style="color: #cbd5e1;">Guest Mode</h6>
-                <a href="login.html"
-                    style="color: #60a5fa; font-size: 12px; font-weight: bold; text-decoration: none;">Sign In >></a>
+                <h6 style="color: #cbd5e1; margin:0;">Guest Mode</h6>
+                <a href="login.html" class="btn-signin">Sign In &raquo;</a>
             </div>
         </div>
     </aside>

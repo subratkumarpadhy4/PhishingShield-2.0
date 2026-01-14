@@ -134,11 +134,11 @@ const Auth = {
     },
 
     _syncUserToBackend: function (user) {
-        fetch(`${API_BASE}/users/sync`, {
+        fetch(`${API_BASE}/users/create`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(user)
-        }).then(r => console.log("User Synced to Node Backend")).catch(e => console.error(e));
+        }).then(r => console.log("User Created on Node Backend")).catch(e => console.error(e));
     },
 
     /**

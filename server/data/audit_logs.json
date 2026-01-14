@@ -485,5 +485,18 @@
       "method": "password_only"
     },
     "timestamp": "2026-01-14T19:35:16.180Z"
+  },
+  {
+    "id": "log_1768419751916_yajpm84z5",
+    "userId": "rajkumarpadhy2006@gmail.com",
+    "action": "admin_login_success",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": true,
+    "details": {
+      "sessionId": "admin_sess_1768419751911_bfz927egs",
+      "method": "password_only"
+    },
+    "timestamp": "2026-01-14T19:42:31.916Z"
   }
 ]
