@@ -21,3 +21,8 @@ Thumbs.db
 # Build outputs
 dist/
 build/
+
+# Server Data (Local Database)
+server/users.json
+server/reports.json
+server/data/

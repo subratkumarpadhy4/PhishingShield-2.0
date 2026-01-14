@@ -1,9 +1,0 @@
-[
-  {
-    "name": "Backend Test User",
-    "email": "backend_test@example.com",
-    "password": "password123",
-    "level": 1,
-    "xp": 0
-  }
-]
