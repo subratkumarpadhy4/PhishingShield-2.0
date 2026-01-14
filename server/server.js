@@ -302,11 +302,30 @@ async function sendEmail(to, subject, htmlContent, options = {}) {
 // In-memory OTP store (Global variable)
 const otpStore = {};
 
+// Automatic cleanup for OTPs and Rate Limits (Every 5 minutes)
+setInterval(() => {
+    const now = Date.now();
+
+    // Clean OTPs
+    Object.keys(otpStore).forEach(email => {
+        if (otpStore[email].expires < now) {
+            delete otpStore[email];
+        }
+    });
+
+    // Clean Rate Limits
+    Object.keys(adminRateLimit).forEach(key => {
+        // defined below
+        if (adminRateLimit[key].expires < now) {
+            delete adminRateLimit[key];
+        }
+    });
+}, 5 * 60 * 1000);
+
 // Admin-specific stores
 const adminPendingSessions = {}; // Stores temporary admin sessions before MFA
 const adminSessions = {}; // Stores active admin sessions
 const adminRateLimit = {}; // Rate limiting for admin endpoints
-
 
 
 
@@ -340,7 +359,30 @@ function logAdminAction(userId, action, ipAddress, success, details = {}) {
 
 // Helper: Rate limiting check for admin
 function checkAdminRateLimit(ip, endpoint) {
-    // RATE LIMIT DISABLED BY ADMIN REQUEST
+    const key = `${ip}:${endpoint}`;
+    const now = Date.now();
+    const LIMIT = 15; // 15 attempts (Updated by User)
+    const WINDOW = 15 * 60 * 1000; // 15 minutes
+
+    if (!adminRateLimit[key]) {
+        adminRateLimit[key] = { count: 1, expires: now + WINDOW };
+        return true;
+    }
+
+    const record = adminRateLimit[key];
+
+    // Check if window expired (should be handled by cleanup, but double check)
+    if (now > record.expires) {
+        record.count = 1;
+        record.expires = now + WINDOW;
+        return true;
+    }
+
+    if (record.count >= LIMIT) {
+        return false;
+    }
+
+    record.count++;
     return true;
 }
 
@@ -359,7 +401,11 @@ app.post('/api/send-otp', async (req, res) => {
 
     // Generate 4-digit code
     const code = Math.floor(1000 + Math.random() * 9000).toString();
-    otpStore[email] = code;
+    // Expires in 10 minutes
+    otpStore[email] = {
+        code: code,
+        expires: Date.now() + 10 * 60 * 1000
+    };
 
     // Log for Dev
     console.log(`[OTP] Preparing to send ${code} to ${email}...`);
@@ -437,11 +483,23 @@ app.post('/api/send-otp', async (req, res) => {
 app.post('/api/verify-otp', (req, res) => {
     const { email, otp } = req.body;
 
+    const record = otpStore[email];
+
+    if (!record) {
+        return res.status(400).json({ success: false, message: "OTP expired or invalid" });
+    }
+
+    // Check Expiry
+    if (Date.now() > record.expires) {
+        delete otpStore[email];
+        return res.status(400).json({ success: false, message: "OTP expired" });
+    }
+
     // Check against stored code (Robust string comparison)
-    const stored = otpStore[email] ? String(otpStore[email]).trim() : null;
+    const stored = String(record.code).trim();
     const input = otp ? String(otp).trim() : '';
 
-    if (stored && stored === input) {
+    if (stored === input) {
         console.log(`[OTP] ✅ Verified for ${email}`);
         delete otpStore[email]; // Clear after use
         res.json({ success: true });

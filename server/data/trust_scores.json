@@ -63,5 +63,13 @@
     "voters": {
       "jenapriyanshu2006@gmail.com": "safe"
     }
+  },
+  {
+    "domain": "chromewebstore.google.com",
+    "safe": 1,
+    "unsafe": 0,
+    "voters": {
+      "rajkumarpadhy2006@gmail.com": "safe"
+    }
   }
 ]
