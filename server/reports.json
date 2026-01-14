@@ -15,19 +15,31 @@
     }
   },
   {
-    "id": "1768243508980ycoxmdheb",
-    "url": "https://www.pinterest.com/",
-    "hostname": "www.pinterest.com",
-    "reporter": "kishor (gopakishor007@gmail.com)",
-    "timestamp": 1768243508980,
+    "id": "1768394314166zi4a8quw9",
+    "url": "https://www.instagram.com/",
+    "hostname": "www.instagram.com",
+    "reporter": "System Admin",
+    "timestamp": 1768394314166,
     "status": "pending",
-    "bannedAt": 1768288734617,
     "aiAnalysis": {
-      "score": 10,
+      "score": 0,
       "suggestion": "IGNORE",
-      "reason": "No obvious threats detected in URL patterns.",
-      "timestamp": 1768286556432
-    },
-    "ignoredAt": 1768287250601
+      "reason": "The provided URL, https://www.instagram.com/, is the official website of the well-known social media platform Instagram. The page title and meta description match the expected content of the legitimate Instagram website. The URL does not contain any suspicious characters, typos, or redirects, which are common indicators of phishing attempts. The domain 'instagram.com' has a high reputation and is owned by Meta Platforms, Inc., a reputable company. The HTTPS protocol is used, indicating that the connection is secure and encrypted. There are no apparent security concerns or red flags associated with this URL. Overall, the analysis suggests that the URL is legitimate and safe for users to access.\n\n🎯 Confidence: HIGH",
+      "timestamp": 1768394321119
+    }
+  },
+  {
+    "id": "1768394360959ljfkyr9zl",
+    "url": "https://www.instagram.com/",
+    "hostname": "www.instagram.com",
+    "reporter": "System Admin",
+    "timestamp": 1768394360959,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "The provided URL, https://www.instagram.com/, is a legitimate and well-known website belonging to Instagram, a popular social media platform. The page title and meta description match the expected content of the official Instagram website, indicating no signs of phishing or malicious intent. The domain 'instagram.com' has a high reputation and is owned by Meta Platforms, Inc., a reputable company. The URL pattern follows the standard HTTPS protocol and does not contain any suspicious characters or redirects. The page context, including the page title and meta description, aligns with the expected content of the official Instagram website, further supporting its legitimacy. There are no apparent security concerns or red flags associated with this URL.\n\n🎯 Confidence: HIGH",
+      "timestamp": 1768394372308
+    }
   }
 ]
