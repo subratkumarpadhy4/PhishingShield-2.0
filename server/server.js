@@ -79,10 +79,10 @@ app.get('/api/trust/score', (req, res) => {
     const scores = readData(TRUST_FILE);
     const domainData = scores.find(s => s.domain === domain);
 
-    if (!domainData) return res.json({ score: 50, votes: 0, status: 'unknown' }); // Neutral start
+    if (!domainData) return res.json({ score: null, votes: 0, status: 'unknown' }); // No data
 
     const total = domainData.safe + domainData.unsafe;
-    const score = total === 0 ? 50 : Math.round((domainData.safe / total) * 100);
+    const score = total === 0 ? null : Math.round((domainData.safe / total) * 100);
 
     res.json({
         score,
@@ -138,6 +138,14 @@ app.post('/api/trust/vote', (req, res) => {
 
     writeData(TRUST_FILE, scores);
     console.log(`[Trust] New vote for ${domain}: ${vote} (User: ${userId || 'Anon'})`);
+
+    // --- GLOBAL SYNC (FORWARD WRITE) ---
+    fetch('https://phishingshield.onrender.com/api/trust/vote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain, vote, userId })
+    }).catch(e => console.warn(`[Trust-Sync] Failed to forward vote: ${e.message}`));
+
     res.json({ success: true, message: "Vote recorded." });
 });
 
@@ -584,40 +592,44 @@ app.post("/api/users/sync", (req, res) => {
     let finalUser;
 
     if (idx !== -1) {
-        // SERVER AUTHORITY STRATEGY:
-        // We prioritize the Server's stored XP/Level over the Client's claim.
-        // This allows Admin to demote users (Server < Client) and have it reflect on the client.
-
+        // TIMESTAMP AUTHORITY STRATEGY:
+        // We prioritize the most recent update. This allows penalties (XP drops) to persist.
         const serverXP = Number(users[idx].xp) || 0;
         const serverLevel = Number(users[idx].level) || 1;
+        const serverUpdated = users[idx].lastUpdated || 0;
 
-        // SMART SYNC: Keep the highest value to prevent Client overwriting Admin Promotion
-        // and prevent Admin Promotion from being lost by a stale client sync.
-        // SMART SYNC: Check for specific "isPenalty" flag to allow reduction
-        // If it's a penalty, we TRUST the client's lower value.
-        // Otherwise, we keep the highest value (Server Authority) to prevent data loss.
-        const isPenalty = userData.isPenalty === true;
         const incomingXP = userData.xp !== undefined ? Number(userData.xp) : 0;
-        const finalXP = isPenalty ? incomingXP : Math.max(incomingXP, serverXP);
+        const incomingLevel = userData.level !== undefined ? Number(userData.level) : 1;
+        const incomingUpdated = userData.lastUpdated || 0;
 
-        // Logic for Level:
-        // If it's a penalty, we also accept the client's (potentially lower) level.
-        // Otherwise, we use the standard max logic to prevent accidental demotions.
-        const incomingLevel =
-            userData.level !== undefined ? Number(userData.level) : 1;
-        const finalLevel = isPenalty
-            ? incomingLevel
-            : incomingLevel > serverLevel
-                ? incomingLevel
-                : finalXP > serverXP
-                    ? Math.floor(Math.sqrt(finalXP / 100)) + 1
-                    : serverLevel;
+        const isPenalty = userData.isPenalty === true;
+
+        let finalXP = serverXP;
+        let finalLevel = serverLevel;
+        let finalUpdated = serverUpdated;
+
+        // Logic: 
+        // 1. If explicit Penalty flag, trust incoming (Visual feedback immediate).
+        // 2. If Incoming is NEWER, trust incoming (General sync).
+        // 3. If Incoming is OLDER, keep Server (prevent replay attacks/stale attributes).
+
+        if (isPenalty || incomingUpdated > serverUpdated) {
+            finalXP = incomingXP;
+            finalLevel = incomingLevel;
+            finalUpdated = incomingUpdated || Date.now();
+        } else if (incomingXP > serverXP) {
+            // Fallback: If no timestamp but strictly higher XP (progress), take it.
+            finalXP = incomingXP;
+            finalLevel = incomingLevel;
+            finalUpdated = Date.now();
+        }
 
         finalUser = {
             ...users[idx],
             ...userData,
             xp: finalXP,
             level: finalLevel,
+            lastUpdated: finalUpdated
         };
 
         // If simple overwrite is preferred for Admin demotions, we need a flag.
@@ -633,6 +645,17 @@ app.post("/api/users/sync", (req, res) => {
     }
 
     writeData(USERS_FILE, users);
+
+    // --- GLOBAL SYNC (FORWARD WRITE) ---
+    // Fire and forget - don't block local success
+    fetch('https://phishingshield.onrender.com/api/users/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData)
+    })
+        .then(r => console.log(`[Global-Forward] User sync sent to cloud. Status: ${r.status}`))
+        .catch(e => console.warn(`[Global-Forward] Failed to sync user with cloud: ${e.message}`));
+
     res.json({ success: true, user: finalUser });
 });
 
@@ -646,6 +669,14 @@ app.post("/api/users/delete", (req, res) => {
     if (users.length !== initialLen) {
         writeData(USERS_FILE, users);
         console.log(`[User] Deleted: ${email}`);
+
+        // --- GLOBAL SYNC ---
+        fetch('https://phishingshield.onrender.com/api/users/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        }).catch(e => console.warn(`[User-Del-Sync] Failed: ${e.message}`));
+
         res.json({ success: true });
     } else {
         res.status(404).json({ success: false, message: "User not found" });
@@ -662,6 +693,14 @@ app.post("/api/users/reset-password", (req, res) => {
         users[idx].password = password;
         writeData(USERS_FILE, users);
         console.log(`[User] Password reset for: ${email}`);
+
+        // --- GLOBAL SYNC ---
+        fetch('https://phishingshield.onrender.com/api/users/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        }).catch(e => console.warn(`[Pass-Reset-Sync] Failed: ${e.message}`));
+
         res.json({ success: true });
     } else {
         res.status(404).json({ success: false, message: "User not found" });
@@ -703,8 +742,30 @@ app.post("/api/auth/admin/login", async (req, res) => {
     }
 
     // Find user
-    const users = readData(USERS_FILE);
-    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    let users = readData(USERS_FILE);
+    let user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+
+    if (!user) {
+        // --- GLOBAL SYNC FALLBACK ---
+        console.log(`[Login] User ${email} not found locally. Checking global...`);
+        try {
+            const r = await fetch('https://phishingshield.onrender.com/api/users');
+            if (r.ok) {
+                const globalUsers = await r.json();
+                if (Array.isArray(globalUsers)) {
+                    user = globalUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+                    if (user) {
+                        // Sync to local
+                        console.log(`[Login] Found ${email} globally. Syncing to local...`);
+                        users.push(user);
+                        writeData(USERS_FILE, users);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn(`[Login] Global fetch failed: ${e.message}`);
+        }
+    }
 
     if (!user) {
         logAdminAction(email, "admin_login_attempt", ip, false, {
@@ -1012,9 +1073,31 @@ app.post("/api/reports/ai-verify", async (req, res) => {
         // FIX: Read reports from file instead of assuming global variable
         const reports = readData(REPORTS_FILE);
 
-        const reportIndex = reports.findIndex((r) => r.id === id);
+        let reportIndex = reports.findIndex((r) => r.id === id);
+
+        // FALLBACK: If not found locally, check Global Server (Lazy Import)
         if (reportIndex === -1) {
-            console.warn("[AI-Verify] Report not found in DB:", id);
+            console.log("[AI-Verify] Report not found locally. Checking Global Server...");
+            try {
+                // Use the same global URL as the sync process
+                const response = await fetch('https://phishingshield.onrender.com/api/reports');
+                if (response.ok) {
+                    const globalReports = await response.json();
+                    const globalReport = globalReports.find(r => r.id === id);
+                    if (globalReport) {
+                        console.log("[AI-Verify] Found report remotely. Importing to local DB for analysis...");
+                        reports.push(globalReport);
+                        writeData(REPORTS_FILE, reports);
+                        reportIndex = reports.length - 1;
+                    }
+                }
+            } catch (e) {
+                console.warn("[AI-Verify] Global fetch failed:", e.message);
+            }
+        }
+
+        if (reportIndex === -1) {
+            console.warn("[AI-Verify] Report not found in DB or Global:", id);
             return res.status(404).json({ error: "Report not found" });
         }
 
@@ -1309,6 +1392,17 @@ app.post("/api/reports/update", (req, res) => {
 
         writeData(REPORTS_FILE, reports);
         console.log(`[Report] Updated status for ${id} to ${status}`);
+
+        // --- GLOBAL SYNC (FORWARD WRITE) ---
+        // Fire and forget - don't block local success
+        fetch('https://phishingshield.onrender.com/api/reports/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, status })
+        })
+            .then(r => console.log(`[Global-Forward] Report update sent to cloud. Status: ${r.status}`))
+            .catch(e => console.warn(`[Global-Forward] Failed to sync with cloud: ${e.message}`));
+
         res.json({ success: true });
     } else {
         res.status(404).json({ success: false, message: "Report not found" });
@@ -1332,9 +1426,112 @@ app.post("/api/reports/delete", (req, res) => {
     if (reports.length !== initialLen) {
         writeData(REPORTS_FILE, reports);
         console.log(`[Report] Deleted ${initialLen - reports.length} reports.`);
+
+        // --- GLOBAL SYNC ---
+        fetch('https://phishingshield.onrender.com/api/reports/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids })
+        }).catch(e => console.warn(`[Report-Del-Sync] Failed: ${e.message}`));
+
         res.json({ success: true, deletedCount: initialLen - reports.length });
     } else {
         res.json({ success: true, deletedCount: 0, message: "No matching reports found to delete." });
+    }
+});
+
+// --- NEW: Global Sync Endpoint ---
+// Proxies request to global server to avoid CORS issues in the browser
+// and merges with local data.
+app.get("/api/reports/global-sync", async (req, res) => {
+    try {
+        const localReports = readData(REPORTS_FILE) || [];
+        console.log(`[Global-Sync] Loaded ${localReports.length} local reports.`);
+
+        let globalReports = [];
+        try {
+            // Native fetch in Node 18+
+            const response = await fetch('https://phishingshield.onrender.com/api/reports');
+            if (response.ok) {
+                globalReports = await response.json();
+                console.log(`[Global-Sync] Fetched ${globalReports.length} global reports.`);
+            } else {
+                console.warn(`[Global-Sync] Global fetch failed: ${response.status}`);
+            }
+        } catch (e) {
+            console.warn(`[Global-Sync] Global fetch error: ${e.message}`);
+        }
+
+        // Merge Logic: Deduplicate by ID
+        const mergedReports = [...localReports];
+        if (Array.isArray(globalReports)) {
+            globalReports.forEach(item => {
+                if (!mergedReports.some(loc => loc.id === item.id)) {
+                    mergedReports.push(item);
+                }
+            });
+        }
+
+        console.log(`[Global-Sync] Returning ${mergedReports.length} merged reports.`);
+        res.json(mergedReports);
+
+    } catch (error) {
+        console.error("[Global-Sync] Error:", error);
+        res.json(readData(REPORTS_FILE) || []);
+    }
+});
+
+// --- NEW: Global User Sync Endpoint (Leaderboard) ---
+app.get("/api/users/global-sync", async (req, res) => {
+    try {
+        const localUsers = readData(USERS_FILE) || [];
+        console.log(`[User-Sync] Loaded ${localUsers.length} local users.`);
+
+        let globalUsers = [];
+        try {
+            const response = await fetch('https://phishingshield.onrender.com/api/users');
+            if (response.ok) {
+                globalUsers = await response.json();
+                console.log(`[User-Sync] Fetched ${globalUsers.length} global users.`);
+            }
+        } catch (e) {
+            console.warn(`[User-Sync] Global fetch error: ${e.message}`);
+        }
+
+        // Merge Logic: By Email. Maximize XP.
+        const mergedUsers = [...localUsers];
+
+        if (Array.isArray(globalUsers)) {
+            globalUsers.forEach(gUser => {
+                const idx = mergedUsers.findIndex(lUser => lUser.email === gUser.email);
+                if (idx === -1) {
+                    // New user from global
+                    mergedUsers.push(gUser);
+                } else {
+                    // Conflict Resolution:
+                    // Prioritize specific timestamp if available. 
+                    // This allows a recent penalty (XP drop) to correctly override an old high score.
+                    const localTime = mergedUsers[idx].lastUpdated || 0;
+                    const globalTime = gUser.lastUpdated || 0;
+
+                    if (globalTime > localTime) {
+                        mergedUsers[idx] = gUser; // Global is newer
+                    } else if (globalTime === 0 && localTime === 0) {
+                        // Fallback: Max XP (Legacy behavior)
+                        if ((gUser.xp || 0) > (mergedUsers[idx].xp || 0)) {
+                            mergedUsers[idx] = gUser;
+                        }
+                    }
+                }
+            });
+        }
+
+        console.log(`[User-Sync] Returning ${mergedUsers.length} merged users for leaderboard.`);
+        res.json(mergedUsers);
+
+    } catch (error) {
+        console.error("[User-Sync] Error:", error);
+        res.json(readData(USERS_FILE) || []);
     }
 });
 

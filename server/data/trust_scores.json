@@ -1,14 +1,25 @@
 [
   {
     "domain": "www.instagram.com",
-    "safe": 1,
+    "safe": 4,
     "unsafe": 0,
     "voters": {
-      "rajkumarpadhy2006@gmail.com": "safe"
+      "rajkumarpadhy2006@gmail.com": "safe",
+      "padhysubratkumar7@gmail.com": "safe",
+      "subratkumarpadhy.g.new@gmail.com": "safe",
+      "subratkumar_padhy@srmap.edu.in": "safe"
     }
   },
   {
     "domain": "www.bput.ac.in",
+    "safe": 0,
+    "unsafe": 1,
+    "voters": {
+      "rajkumarpadhy2006@gmail.com": "unsafe"
+    }
+  },
+  {
+    "domain": "chatgpt.com",
     "safe": 1,
     "unsafe": 0,
     "voters": {

@@ -4,59 +4,66 @@
     "email": "rajkumarpadhy2006@gmail.com",
     "password": "rajkumarpadhy2006@gmail.com",
     "joined": 1703800000000,
-    "xp": 35435,
-    "level": 19,
+    "xp": 30835,
+    "level": 18,
     "history": [],
     "lastCriticalTime": 1703800000000,
     "isPenalty": true,
     "settings": {
       "enableDownloads": true
-    }
+    },
+    "lastUpdated": 1768415911100
   },
   {
     "name": "subrat kumar padhy",
     "email": "padhysubratkumar7@gmail.com",
     "password": "padhysubratkumar7@gmail.com",
-    "xp": 150,
-    "level": 2,
+    "xp": 885,
+    "level": 3,
     "joined": 1766952392006,
-    "rank": "Novice"
+    "rank": "Novice",
+    "isPenalty": false,
+    "lastUpdated": 1768415898630
   },
   {
     "name": "subrat.g",
     "email": "subratkumarpadhy.g.new@gmail.com",
     "password": "subratkumarpadhy.g.new@gmail.com",
-    "xp": 3395,
-    "level": 6,
+    "xp": 4035,
+    "level": 7,
     "joined": 1766954223620,
-    "rank": "Novice"
-  },
-  {
-    "name": "subrat clg id",
-    "email": "subratkumar_padhy@srmap.edu.in",
-    "password": "subratkumar_padhy@srmap.edu.in",
-    "xp": 700,
-    "level": 3,
-    "joined": 1766993673694,
-    "rank": "Novice"
+    "rank": "Novice",
+    "lastUpdated": 1768415918030,
+    "isPenalty": false
   },
   {
     "email": "jenapriyanshu2006@gmail.com",
     "isPenalty": false,
     "joined": 1768240676930,
-    "level": 11,
+    "level": 100,
     "name": "PRIYANSHU JENA",
     "password": "jenapriyanshu2006@gmail.com",
     "rank": "Novice",
-    "xp": 10400
+    "xp": 999991,
+    "lastUpdated": 1768411596076
   },
   {
     "email": "gopakishor007@gmail.com",
     "joined": 1768151047531,
-    "level": 2,
+    "level": 7,
     "name": "kishor",
     "password": "gopakishor007@gmail.com",
     "rank": "Novice",
-    "xp": 140
+    "xp": 4000
+  },
+  {
+    "email": "subratkumar_padhy@srmap.edu.in",
+    "joined": 1766993673694,
+    "lastUpdated": 1768411018443,
+    "level": 3,
+    "name": "subrat clg id",
+    "password": "subratkumar_padhy@srmap.edu.in",
+    "rank": "Novice",
+    "xp": 790
   }
 ]

@@ -15,65 +15,128 @@
     }
   },
   {
-    "id": "1768394314166zi4a8quw9",
-    "url": "https://www.instagram.com/",
-    "hostname": "www.instagram.com",
+    "id": "1768411731490g19rmu2ns",
+    "url": "https://www.bput.ac.in/convocation-news.html",
+    "hostname": "www.bput.ac.in",
     "reporter": "System Admin",
-    "timestamp": 1768394314166,
+    "timestamp": 1768411731490,
     "status": "pending",
     "aiAnalysis": {
       "score": 0,
       "suggestion": "IGNORE",
-      "reason": "The provided URL, https://www.instagram.com/, is the official website of the well-known social media platform Instagram. The page title and meta description match the expected content of the legitimate Instagram website. The URL does not contain any suspicious characters, typos, or redirects, which are common indicators of phishing attempts. The domain 'instagram.com' has a high reputation and is owned by Meta Platforms, Inc., a reputable company. The HTTPS protocol is used, indicating that the connection is secure and encrypted. There are no apparent security concerns or red flags associated with this URL. Overall, the analysis suggests that the URL is legitimate and safe for users to access.\n\n🎯 Confidence: HIGH",
-      "timestamp": 1768394321119
+      "reason": "",
+      "timestamp": 1768411731490
     }
   },
   {
-    "id": "1768394360959ljfkyr9zl",
-    "url": "https://www.instagram.com/",
-    "hostname": "www.instagram.com",
-    "reporter": "System Admin",
-    "timestamp": 1768394360959,
-    "status": "pending",
-    "aiAnalysis": {
-      "score": 0,
-      "suggestion": "IGNORE",
-      "reason": "The provided URL, https://www.instagram.com/, is a legitimate and well-known website belonging to Instagram, a popular social media platform. The page title and meta description match the expected content of the official Instagram website, indicating no signs of phishing or malicious intent. The domain 'instagram.com' has a high reputation and is owned by Meta Platforms, Inc., a reputable company. The URL pattern follows the standard HTTPS protocol and does not contain any suspicious characters or redirects. The page context, including the page title and meta description, aligns with the expected content of the official Instagram website, further supporting its legitimacy. There are no apparent security concerns or red flags associated with this URL.\n\n🎯 Confidence: HIGH",
-      "timestamp": 1768394372308
-    }
-  },
-  {
-    "id": "17683962797095bayrkn8u",
-    "url": "file:///Users/subratkumarpadhy/PhishingShield/tests/critical_threat.html?fake_host_for_testing=xn--paypal-bad.com",
-    "hostname": "",
-    "reporter": "System Admin (rajkumarpadhy2006@gmail.com)",
-    "timestamp": 1768396279709,
-    "status": "pending",
-    "aiAnalysis": {
-      "score": 95,
-      "suggestion": "BAN",
-      "reason": "The URL pattern exhibits several red flags indicative of a phishing attempt. The use of 'file://' protocol suggests this is a local file, potentially used for testing or simulation of a phishing attack. The presence of 'xn--paypal-bad.com' as a parameter value is particularly concerning, as it appears to be an attempt at IDN homograph attack or typosquatting, mimicking the legitimate PayPal domain but with a potentially malicious intent. The fact that the page context could not be fetched due to the host being unreachable or blocking bots further raises suspicions, as legitimate sites are less likely to be inaccessible in such a manner. Given these indicators, it's reasonable to classify this URL as malicious, especially considering the context of 'critical_threat.html' which implies an awareness of potential threats.\n\n🚨 Threat Indicators:\n• IDN homograph attack or typosquatting attempt with 'xn--paypal-bad.com'\n• Use of 'file://' protocol which could be used to simulate phishing scenarios locally\n• Inaccessibility of the page context, potentially indicating evasion techniques\n\n🎯 Confidence: HIGH",
-      "timestamp": 1768396554709
-    },
-    "bannedAt": 1768396629491
-  },
-  {
-    "id": "17683966949961lizhz30c",
+    "id": "17674647750364zczox6i0",
     "url": "https://netmirror.gg/1/en",
     "hostname": "netmirror.gg",
-    "reporter": "System Admin",
-    "timestamp": 1768396694996,
+    "reporter": "subrat.g (subratkumarpadhy.g.new@gmail.com)",
+    "timestamp": 1767464775036,
     "status": "pending",
-    "aiAnalysis": null
+    "aiAnalysis": {
+      "score": 45,
+      "suggestion": "CAUTION",
+      "reason": "The URL https://netmirror.gg/1/en appears suspicious due to several indicators. Firstly, the domain 'netmirror.gg' is not a well-known or established brand in the entertainment industry, and the use of a generic top-level domain (gTLD) '.gg' raises concerns. The page title and meta description suggest that the site offers access to a wide range of movies and TV series from popular streaming services like Netflix, Amazon Prime Video, and Disney+, which could be a red flag for copyright infringement or unauthorized content distribution. The promise of 'No Ads with 1 click play' may also be an attempt to lure users into a potentially malicious or scam site. Furthermore, the site's claim to offer content from 50+ OTT platforms seems unrealistic and may be an exaggeration to attract users. The lack of clear information about the site's ownership, terms of service, and privacy policy adds to the suspicion. Overall, while the site may not be overtly malicious, its unclear intent, potential copyright infringement, and unrealistic claims warrant caution.\n\n🚨 Threat Indicators:\n• Unknown domain reputation\n• Generic top-level domain (.gg)\n• Potential copyright infringement\n• Unrealistic claims of content offerings\n• Lack of clear ownership and terms of service information\n\n🎯 Confidence: MEDIUM",
+      "timestamp": 1768412122648
+    }
   },
   {
-    "id": "1768396705779limx1v36d",
+    "id": "1768412219029rym77fclc",
     "url": "https://www.bput.ac.in/",
     "hostname": "www.bput.ac.in",
     "reporter": "System Admin",
-    "timestamp": 1768396705779,
+    "timestamp": 1768412219029,
     "status": "pending",
-    "aiAnalysis": null,
-    "bannedAt": 1768396767241
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "✅ Adaptive Trust: Domain matches Page Title (-40)",
+      "timestamp": 1768412219029
+    }
+  },
+  {
+    "id": "17684125567116tmuij5mp",
+    "url": "https://www.bput.ac.in/",
+    "hostname": "www.bput.ac.in",
+    "reporter": "System Admin",
+    "timestamp": 1768412556711,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "The provided URL, https://www.bput.ac.in/, appears to be the official website of Biju Patnaik University of Technology, a well-known educational institution in India. The domain 'bput.ac.in' is a legitimate academic domain, and the URL pattern follows standard conventions for university websites. The page title clearly indicates the institution's name, suggesting an official presence. Although the meta description is empty, which could be seen as a minor oversight in search engine optimization, it does not inherently suggest malicious intent. The domain reputation assessment indicates that the site is trusted and has been in operation for a significant period, which further supports its legitimacy. There are no apparent threat indicators such as URL shorteners, typosquatting, or suspicious redirects. Given the information, the confidence in this classification is high.\n\n🎯 Confidence: HIGH",
+      "timestamp": 1768412593869
+    },
+    "bannedAt": 1768412603691
+  },
+  {
+    "id": "1768074651563rg9u78yd4",
+    "url": "https://github.com/subratkumarpadhy4/PhishingShield",
+    "hostname": "github.com",
+    "reporter": "subrat kumar padhy (padhysubratkumar7@gmail.com)",
+    "timestamp": 1768074651563,
+    "status": "pending"
+  },
+  {
+    "id": "1768413932469rhq32nuxo",
+    "url": "https://www.bput.ac.in/",
+    "hostname": "www.bput.ac.in",
+    "reporter": "System Admin",
+    "timestamp": 1768413932469,
+    "status": "banned",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "✅ Adaptive Trust: Domain matches Page Title (-40)",
+      "timestamp": 1768413932469
+    },
+    "bannedAt": 1768414062734
+  },
+  {
+    "id": "1768414196907p416aun02",
+    "url": "https://www.instagram.com/",
+    "hostname": "www.instagram.com",
+    "reporter": "System Admin",
+    "timestamp": 1768414196907,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "The provided URL, https://www.instagram.com/, is the official website of Instagram, a well-known and legitimate social media platform. The page title and meta description match the expected content of the Instagram homepage, indicating no signs of phishing or malicious intent. The domain 'instagram.com' is a reputable and trusted domain, owned by Meta Platforms, Inc. The URL pattern follows the standard HTTPS protocol, ensuring a secure connection. The page context, including the title and meta description, aligns with the typical content of the Instagram login page, suggesting no attempt to deceive or mislead users. Overall, the analysis suggests that the URL is legitimate and safe for users to access.\n\n🎯 Confidence: HIGH",
+      "timestamp": 1768415783122
+    },
+    "bannedAt": 1768414203065
+  },
+  {
+    "id": "1767465487476h0okcgav8",
+    "url": "https://netmirror.gg/1/en",
+    "hostname": "netmirror.gg",
+    "reporter": "subrat.g (subratkumarpadhy.g.new@gmail.com)",
+    "timestamp": 1767465487476,
+    "status": "pending"
+  },
+  {
+    "id": "1767465791305bavlrvxkg",
+    "url": "https://netmirror.gg/1/en",
+    "hostname": "netmirror.gg",
+    "reporter": "subrat.g (subratkumarpadhy.g.new@gmail.com)",
+    "timestamp": 1767465791305,
+    "status": "pending"
+  },
+  {
+    "id": "1768415247513c1knlg3zy",
+    "url": "https://www.instagram.com/",
+    "hostname": "www.instagram.com",
+    "reporter": "System Admin",
+    "timestamp": 1768415247514,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "The provided URL, https://www.instagram.com/, is a legitimate and well-known website belonging to Instagram, a popular social media platform. The page title and meta description match the expected content of the official Instagram website, indicating no signs of phishing or malicious intent. The URL itself is correctly formatted and does not contain any suspicious characters or redirects. The domain 'instagram.com' has a high reputation and is owned by Meta Platforms, Inc., further confirming its legitimacy. There are no apparent threat indicators such as URL shorteners, typosquatting, or unclear intent. The HTTPS protocol is used, ensuring a secure connection. Overall, the analysis suggests that the website is genuine and safe for users to access.\n\n🎯 Confidence: HIGH",
+      "timestamp": 1768415770526
+    }
   }
 ]
