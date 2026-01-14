@@ -639,7 +639,9 @@ async function fetchLogTrustScores(entries) {
             const el = document.getElementById(entry.elementId);
 
             if (el && data) {
-                if (data.score >= 80) {
+                if (data.score === null) {
+                    el.innerHTML = `<span style="color:#adb5bd;">N/A</span>`;
+                } else if (data.score >= 80) {
                     el.innerHTML = `<span style="color:#198754; font-weight:bold;">${data.score}%</span>`;
                 } else if (data.score <= 40) {
                     el.innerHTML = `<span style="color:#dc3545; font-weight:bold;">${data.score}%</span>`;

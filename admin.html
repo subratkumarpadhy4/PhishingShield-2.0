@@ -41,6 +41,28 @@
             -webkit-font-smoothing: antialiased;
         }
 
+        /* --- AI BUTTON --- */
+        .btn-ai-verify {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            width: 100%;
+            padding: 12px;
+            font-weight: 600;
+            font-size: 13px;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-ai-verify:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6) !important;
+        }
+
         /* --- SIDEBAR --- */
         aside {
             width: var(--sidebar-width);
@@ -679,7 +701,7 @@
                     <thead>
                         <tr>
                             <th>Domain</th>
-                            <th>Trust Score</th>
+                            <th>Community Score</th>
                             <th>Safe Votes</th>
                             <th>Unsafe Votes</th>
                             <th>Status Details</th>
@@ -1000,22 +1022,7 @@
 
                             <!-- Action Button -->
                             <div id="ai-action-container" style="margin-top: 15px; display: none;">
-                                <button id="btn-run-ai" class="btn btn-sm" style="
-                                    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-                                    width: 100%;
-                                    padding: 12px;
-                                    font-weight: 600;
-                                    font-size: 13px;
-                                    border: none;
-                                    border-radius: 8px;
-                                    color: white;
-                                    cursor: pointer;
-                                    transition: all 0.3s ease;
-                                    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
-                                    position: relative;
-                                    overflow: hidden;
-                                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(59, 130, 246, 0.6)';"
-                                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(59, 130, 246, 0.4)';">
+                                <button id="btn-run-ai" class="btn btn-sm btn-ai-verify">
                                     <span style="position: relative; z-index: 1;">⚡ Run AI Verification</span>
                                     <div style="
                                         position: absolute;

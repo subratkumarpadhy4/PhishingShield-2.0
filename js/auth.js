@@ -156,7 +156,7 @@ const Auth = {
                     if (user.password === password) {
                         this._restoreSession(user, callback);
                     } else {
-                        callback({ success: false, message: "Invalid Password. Expected: " + user.password }); // DEBUG MSG
+                        callback({ success: false, message: "Invalid Password." });
                     }
                 } else {
                     // Try Local Fallback (maybe offline mode)
@@ -283,9 +283,9 @@ const Auth = {
             });
     },
 
-    // For Admin/Dashboard: Fetch Global Users
+    // For Admin/Dashboard: Fetch Global Users (Synced)
     getUsers: function (callback) {
-        fetch(`${API_BASE}/users`)
+        fetch(`${API_BASE}/users/global-sync?t=${Date.now()}`)
             .then(res => res.json())
             .then(data => {
                 // PROTECTION: If Server Wipe detected (empty list), DO NOT overwrite local cache

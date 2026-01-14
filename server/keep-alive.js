@@ -13,6 +13,7 @@ function ping() {
             console.log(`[Keep-Alive] ✅ Alive! Status: ${res.status}`);
         })
         .catch(err => {
+            
             console.error(`[Keep-Alive] ⚠️ Ping Failed: ${err.message}`);
         });
 }

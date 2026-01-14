@@ -590,6 +590,7 @@ function updateXP(amount) {
         const updateData = {
             userXP: currentXP,
             userLevel: newLevel,
+            lastXpUpdate: Date.now(), // Timestamp for precise sync
             pendingXPSync: true
         };
 
@@ -778,8 +779,9 @@ function updateBlocklistFromStorage(bypassUrl = null, callback = null, forceRefr
             }
         });
 
-        // Also fetch banned sites from server for global protection
-        const API_BASE = 'https://phishingshield.onrender.com/api';
+        // FETCH BANNED SITES FROM SERVER (GLOBAL PROTECTION)
+        const API_GLOBAL = 'https://phishingshield.onrender.com/api/reports';
+        const API_LOCAL = 'http://localhost:3000/api/reports';
         const nowServer = Date.now();
 
         // Use cache if available and not expired, unless force refresh
@@ -789,21 +791,30 @@ function updateBlocklistFromStorage(bypassUrl = null, callback = null, forceRefr
             return;
         }
 
-        // Fetch fresh data from server
-        fetch(`${API_BASE}/reports`)
-            .then(res => res.json())
-            .then(serverReports => {
-                // Update cache
-                blocklistCache.data = serverReports;
-                blocklistCache.timestamp = nowServer;
+        // Fetch from BOTH Local and Global servers
+        Promise.allSettled([
+            fetch(API_LOCAL).then(res => res.json()).catch(err => []),
+            fetch(API_GLOBAL).then(res => res.json()).catch(err => [])
+        ]).then(results => {
+            const localData = results[0].status === 'fulfilled' ? results[0].value : [];
+            const globalData = results[1].status === 'fulfilled' ? results[1].value : [];
 
-                processBlocklist(serverReports, banned, bypassTokens, callback);
-            })
-            .catch(err => {
-                console.warn("[PhishingShield] Failed to fetch server blocklist, using local only:", err);
-                // Fallback to local only
-                processBlocklist([], banned, bypassTokens, callback);
+            // Helper to merge arrays unique by ID
+            const mergedReports = [...localData];
+            globalData.forEach(item => {
+                if (!mergedReports.some(loc => loc.id === item.id)) {
+                    mergedReports.push(item);
+                }
             });
+
+            console.log(`[PhishingShield] Fetched Reports: ${localData.length} Local, ${globalData.length} Global. Merged: ${mergedReports.length}`);
+
+            // Update cache
+            blocklistCache.data = mergedReports;
+            blocklistCache.timestamp = nowServer;
+
+            processBlocklist(mergedReports, banned, bypassTokens, callback);
+        });
     });
 }
 
@@ -903,14 +914,13 @@ function startBlocklistSync() {
     }
     console.log("[PhishingShield] Periodic sync disabled. Use 'Force Sync' in Admin Panel.");
 
-    // Sync every 3 seconds - DISABLED
-    /*
+    // Sync every 10 seconds (Global Protection Heartbeat)
     blocklistSyncInterval = setInterval(() => {
         updateBlocklistFromStorage(null, () => {
-            console.log("[PhishingShield] Blocklist synced (periodic - 3s)");
+            // success callback (silent)
         });
-    }, 3000); // 3 seconds
-    */
+    }, 10000); // 10 seconds
+    console.log("[PhishingShield] Periodic blocklist sync enabled (10s)");
 }
 
 // Start the sync interval (Effectively does nothing now)
@@ -992,6 +1002,8 @@ function syncXPToServer(customData = {}) {
                 ...res.currentUser,
                 xp: res.userXP,
                 level: res.userLevel,
+                lastUpdated: res.lastXpUpdate || Date.now(), // Send timestamp
+
                 ...customData // Allow overrides like { isPenalty: true }
             };
 

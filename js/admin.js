@@ -505,21 +505,9 @@ function loadDashboardData() {
             // --- Populate Reports Table ---
             // Fetch from Backend (Data Source Logic: Localhost > Cloud)
             // We prioritize Localhost because if the user is running the server locally, they expect to see those reports.
-            fetch('http://localhost:3000/api/reports')
-                .then(res => {
-                    if (!res.ok) {
-                        throw new Error(`Localhost HTTP ${res.status}`);
-                    }
-                    return res.json();
-                })
-                .catch(err => {
-                    console.warn('[Admin] Localhost fetch failed, falling back to Cloud:', err);
-                    return fetch('https://phishingshield.onrender.com/api/reports')
-                        .then(res => {
-                            if (!res.ok) throw new Error(`Cloud HTTP ${res.status}`);
-                            return res.json();
-                        });
-                })
+            // [FIX] Use Global Sync Proxy with Timestamp to force fresh fetch (Bust Cache)
+            fetch(`http://localhost:3000/api/reports/global-sync?t=${Date.now()}`)
+                .then(res => res.json())
                 .then(serverReports => {
                     console.log("[Admin] Fetched Global Reports:", serverReports);
                     console.log("[Admin] Number of reports:", Array.isArray(serverReports) ? serverReports.length : 'Not an array');
@@ -1464,12 +1452,12 @@ function loadBannedSites() {
 
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
 
-    // Fetch from server to get global banned sites
-    fetch('http://localhost:3000/api/reports')
+    // Use the PROXY endpoint which handles CORS and merging automatically (Cache-Busted)
+    fetch(`http://localhost:3000/api/reports/global-sync?t=${Date.now()}`)
         .then(res => res.json())
-        .then(serverReports => {
-            // Filter for banned sites from server (global bans)
-            const bannedSites = serverReports.filter(r => r.status === 'banned');
+        .then(mergedReports => {
+            // Filter for banned sites from the merged list
+            const bannedSites = mergedReports.filter(r => r.status === 'banned');
 
             if (bannedSites.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px; color:#adb5bd;">No banned sites found.</td></tr>';
@@ -1489,12 +1477,21 @@ function loadBannedSites() {
                     <td>${new Date(site.timestamp || site.bannedAt || Date.now()).toLocaleDateString()}</td>
                     <td>${site.reporter || site.reportedBy || 'Unknown'}</td>
                     <td>
-                        <button class="btn btn-outline" style="color: #28a745; border-color: #28a745; font-size: 12px; padding: 4px 8px;" onclick="unbanSite('${escapedUrl}', '${escapedId}')">
+                        <button class="btn btn-outline btn-unban" style="color: #28a745; border-color: #28a745; font-size: 12px; padding: 4px 8px;">
                             ✅ Unban
                         </button>
                         ${site.notes ? `<div style="font-size:10px; margin-top:5px; color:#6c757d;">Note: ${site.notes}</div>` : ''}
                     </td>
                 `;
+
+                // CSP-Safe Event Listener
+                const unbanBtn = row.querySelector('.btn-unban');
+                if (unbanBtn) {
+                    unbanBtn.addEventListener('click', () => {
+                        window.unbanSite(site.url, site.id);
+                    });
+                }
+
                 tbody.appendChild(row);
             });
         })
@@ -1578,18 +1575,21 @@ function openReportModal(report) {
     // ALWAYS show the Action Button first, never auto-show result
     aiAction.style.display = 'block';
 
-    // Logic: If we have data, we just "reveal" it. If not, we fetch it.
+    // Logic: Allow running/re-running analysis anytime
+    if (report.aiAnalysis) {
+        renderAIResult(report.aiAnalysis);
+        btnRunAI.innerHTML = '<i class="fas fa-sync"></i> Re-Analyze (AI)';
+        aiAction.style.display = 'block'; // Allow re-scan
+    } else {
+        btnRunAI.innerHTML = 'Run AI Analysis';
+        aiAction.style.display = 'block';
+    }
+
     btnRunAI.onclick = () => {
         aiAction.style.display = 'none';
-
-        if (report.aiAnalysis) {
-            // Just Reveal Existing Data
-            renderAIResult(report.aiAnalysis);
-            return;
-        }
-
-        // Else, Fetch New Data
         aiLoading.style.display = 'block';
+
+        // Force server request
         fetch('http://localhost:3000/api/reports/ai-verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1598,12 +1598,17 @@ function openReportModal(report) {
             .then(res => res.json())
             .then(data => {
                 aiLoading.style.display = 'none';
+                aiAction.style.display = 'block'; // Show button again for re-scan
+
                 if (data.success && data.aiAnalysis) {
                     report.aiAnalysis = data.aiAnalysis;
                     renderAIResult(report.aiAnalysis);
+                    btnRunAI.innerHTML = '<i class="fas fa-check"></i> Analysis Updated';
+                    setTimeout(() => {
+                        btnRunAI.innerHTML = '<i class="fas fa-sync"></i> Re-Analyze (AI)';
+                    }, 2000);
                 } else {
                     alert("AI Analysis Failed: " + (data.error || 'Unknown Error'));
-                    aiAction.style.display = 'block'; // Reset
                 }
             })
             .catch(err => {
@@ -1782,19 +1787,29 @@ function loadTrustData() {
 
             data.forEach(item => {
                 const total = item.safe + item.unsafe;
-                const score = total === 0 ? 50 : Math.round((item.safe / total) * 100);
+
+                let scoreVal = 0;
+                let scoreText = 'N/A';
+                let barColor = '#e2e8f0'; // Gray for empty
+
+                if (total > 0) {
+                    scoreVal = Math.round((item.safe / total) * 100);
+                    scoreText = scoreVal + '%';
+                    barColor = scoreVal >= 70 ? '#10b981' : (scoreVal > 30 ? '#f59e0b' : '#ef4444');
+                }
 
                 let statusBadge = '';
-                if (score >= 70) statusBadge = '<span class="badge" style="background:#dcfce7; color:#166534">SAFE</span>';
-                else if (score <= 30) statusBadge = '<span class="badge" style="background:#fee2e2; color:#991b1b">MALICIOUS</span>';
+                if (total === 0) statusBadge = '<span class="badge" style="background:#f1f5f9; color:#64748b">NO DATA</span>';
+                else if (scoreVal >= 70) statusBadge = '<span class="badge" style="background:#dcfce7; color:#166534">SAFE</span>';
+                else if (scoreVal <= 30) statusBadge = '<span class="badge" style="background:#fee2e2; color:#991b1b">MALICIOUS</span>';
                 else statusBadge = '<span class="badge" style="background:#fff7ed; color:#9a3412">SUSPICIOUS</span>';
 
                 // Progress Bar for visual score
                 const progressBar = `
                     <div style="width:100px; height:6px; background:#e2e8f0; border-radius:3px; overflow:hidden; display:inline-block; vertical-align:middle; margin-right:8px;">
-                        <div style="width:${score}%; height:100%; background:${score >= 70 ? '#10b981' : (score > 30 ? '#f59e0b' : '#ef4444')}"></div>
+                        <div style="width:${total === 0 ? 0 : scoreVal}%; height:100%; background:${barColor}"></div>
                     </div>
-                    <span style="font-weight:bold; font-size:12px;">${score}%</span>
+                    <span style="font-weight:bold; font-size:12px;">${scoreText}</span>
                 `;
 
                 const tr = document.createElement('tr');
