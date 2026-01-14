@@ -234,53 +234,12 @@ app.get("/api/users", (req, res) => {
     res.json(users);
 });
 
-<<<<<<< HEAD
-// GET /api/users/global-sync (Proxy + Cache Merge)
-app.get("/api/users/global-sync", async (req, res) => {
-    let localUsers = readData(USERS_FILE);
 
-    // Try to fetch from Global Server to ensure we have the absolute latest
-    try {
-        const globalRes = await axios.get('https://phishingshield.onrender.com/api/users', { timeout: 2000 });
-        const globalUsers = globalRes.data;
 
-        if (Array.isArray(globalUsers) && globalUsers.length > 0) {
-            let updated = false;
 
-            // Simple Merge Strategy: Trust the one with the later 'lastUpdated' timestamp or higher XP if no timestamp
-            globalUsers.forEach(gUser => {
-                const localIdx = localUsers.findIndex(u => u.email === gUser.email);
-                if (localIdx === -1) {
-                    localUsers.push(gUser);
-                    updated = true;
-                } else {
-                    const lUser = localUsers[localIdx];
-                    // Logic: If global is newer, take it.
-                    const lTime = lUser.lastUpdated || 0;
-                    const gTime = gUser.lastUpdated || 0;
 
-                    if (gTime > lTime) {
-                        localUsers[localIdx] = gUser;
-                        updated = true;
-                    } else if (lTime === 0 && gTime === 0 && gUser.xp > lUser.xp) {
-                        // Legacy fallback: Higher XP wins
-                        localUsers[localIdx] = gUser;
-                        updated = true;
-                    }
-                }
-            });
 
-            if (updated) {
-                writeData(USERS_FILE, localUsers);
-                console.log("[Global-Sync] Merged users from Cloud.");
-            }
-        }
-    } catch (e) {
-        console.warn("[Global-Sync] Cloud fetch failed, serving local:", e.message);
-    }
 
-    res.json(localUsers);
-=======
 // GET /api/users/global-sync (Proxy for Client Auth)
 app.get("/api/users/global-sync", async (req, res) => {
     try {
@@ -288,18 +247,14 @@ app.get("/api/users/global-sync", async (req, res) => {
         if (!r.ok) return res.json([]); // Fail silently to empty list
 
         const globalUsers = await r.json();
-        const deletedUsers = readData(DELETED_USERS_FILE) || [];
 
-        // STRICT FILTER: Do not allow deleted users to pass through sync
-        const cleanUsers = globalUsers.filter(u => !deletedUsers.includes(u.email));
-
-        console.log(`[Global-Sync-Proxy] Fetched ${globalUsers.length}, Filtered to ${cleanUsers.length}`);
-        res.json(cleanUsers);
+        console.log(`[Global-Sync-Proxy] Fetched ${globalUsers.length}`);
+        res.json(globalUsers);
     } catch (e) {
         console.warn(`[Global-Sync-Proxy] Failed: ${e.message}`);
         res.json([]);
     }
->>>>>>> PJ123
+
 });
 
 // GET /test-phish (Simulation Page)
@@ -724,42 +679,7 @@ app.post("/api/users/create", (req, res) => {
 });
 
 
-// POST /api/users/delete
-app.post("/api/users/delete", (req, res) => {
-    const { email } = req.body;
-    let users = readData(USERS_FILE);
-    const initialLen = users.length;
-    users = users.filter((u) => u.email !== email);
 
-    if (users.length !== initialLen) {
-        writeData(USERS_FILE, users);
-
-        // ADD TO DELETED LIST (Persistent Ban)
-        const deletedUsers = readData(DELETED_USERS_FILE);
-        console.log(`[DEBUG] Current Deleted Users: ${JSON.stringify(deletedUsers)}`);
-
-        if (!deletedUsers.includes(email)) {
-            deletedUsers.push(email);
-            writeData(DELETED_USERS_FILE, deletedUsers);
-            console.log(`[DEBUG] Wrote ${email} to ${DELETED_USERS_FILE}`);
-        } else {
-            console.log(`[DEBUG] ${email} already in deleted list`);
-        }
-
-        console.log(`[User] Deleted: ${email}`);
-
-        // --- GLOBAL SYNC ---
-        fetch('https://phishingshield.onrender.com/api/users/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
-        }).catch(e => console.warn(`[User-Del-Sync] Failed: ${e.message}`));
-
-        res.json({ success: true });
-    } else {
-        res.status(404).json({ success: false, message: "User not found" });
-    }
-});
 
 // POST /api/users/reset-password
 app.post("/api/users/reset-password", (req, res) => {
