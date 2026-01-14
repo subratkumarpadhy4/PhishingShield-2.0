@@ -912,16 +912,39 @@ app.post("/api/ai/scan", async (req, res) => {
                     messages: [
                         {
                             role: "system",
-                            content: `You are PhishingShield AI. Analyze the URL and Page Content.
-Task: Classify the site into one of 3 categories:
-1. 'SAFE' (Legitimate sites like Instagram, Google, Gamma).
-2. 'SUSPICIOUS' (Unknown, shortened, or typos).
-3. 'MALICIOUS' (Phishing, scam, fake login).
-Return JSON: {classification: 'SAFE'|'SUSPICIOUS'|'MALICIOUS', reason: 'Short explanation'}.`
+                            content: `You are PhishingShield AI, an expert cybersecurity analyst specializing in phishing detection.
+
+Your task is to analyze URLs and page content to identify potential threats.
+
+Classify the site into one of 3 categories:
+1. 'SAFE' - Legitimate, well-known sites (e.g., Instagram, Google, GitHub, universities, established companies)
+2. 'SUSPICIOUS' - Unknown domains, URL shorteners, typosquatting, or unclear intent
+3. 'MALICIOUS' - Clear phishing attempts, scams, fake login pages, credential harvesting
+
+Provide a DETAILED analysis including:
+- Overall classification
+- Specific threat indicators found (if any)
+- Domain reputation assessment
+- URL pattern analysis
+- Security concerns or red flags
+- Recommended action for users
+
+Return JSON format:
+{
+  "classification": "SAFE|SUSPICIOUS|MALICIOUS",
+  "reason": "Detailed multi-sentence explanation covering all findings",
+  "threatIndicators": ["list", "of", "specific", "threats", "found"],
+  "confidence": "high|medium|low"
+}`
                         },
                         {
                             role: "user",
-                            content: `URL: ${url}\\nContent: \"${safeContent.replace(/(\\r\\n|\\n|\\r)/gm, " ")}\"`
+                            content: `Analyze this URL for phishing threats:
+
+URL: ${url}
+Page Content: "${safeContent.replace(/(\\r\\n|\\n|\\r)/gm, " ")}"
+
+Provide comprehensive analysis with specific details.`
                         }
                     ],
                     model: "llama-3.3-70b-versatile",
@@ -939,10 +962,25 @@ Return JSON: {classification: 'SAFE'|'SUSPICIOUS'|'MALICIOUS', reason: 'Short ex
 
                 const suggestion = (score > 70) ? "BAN" : (score > 30 ? "CAUTION" : "IGNORE");
 
+                // Enhanced reason with threat indicators
+                let reason = result.reason || "No detailed analysis available";
+
+                // Add threat indicators if present
+                if (result.threatIndicators && result.threatIndicators.length > 0) {
+                    reason += "\n\n🚨 Threat Indicators:\n" + result.threatIndicators.map(t => `• ${t}`).join("\n");
+                }
+
+                // Add confidence level
+                if (result.confidence) {
+                    reason += `\n\n🎯 Confidence: ${result.confidence.toUpperCase()}`;
+                }
+
                 return {
                     score: score,
                     suggestion: suggestion,
-                    reason: result.reason
+                    reason: reason,
+                    threatIndicators: result.threatIndicators || [],
+                    confidence: result.confidence || "medium"
                 };
             }
 
@@ -1041,8 +1079,42 @@ app.post("/api/reports/ai-verify", async (req, res) => {
                     const groq = new Groq(textConfig);
                     const completion = await groq.chat.completions.create({
                         messages: [
-                            { role: "system", content: "You are PhishingShield AI. Analyze the URL and Page Context.\nTask: Classify the site into one of 3 categories:\n1. 'SAFE' (Legitimate sites like Instagram, Google, Gamma).\n2. 'SUSPICIOUS' (Unknown, shortened, or typos).\n3. 'MALICIOUS' (Phishing, scam, fake login).\nReturn JSON: {classification: 'SAFE'|'SUSPICIOUS'|'MALICIOUS', reason: 'Short explanation'}." },
-                            { role: "user", content: `URL: ${url}\nContext: ${pageContext}` }
+                            {
+                                role: "system",
+                                content: `You are PhishingShield AI, an expert cybersecurity analyst specializing in phishing detection.
+
+Your task is to analyze URLs and page context to identify potential threats.
+
+Classify the site into one of 3 categories:
+1. 'SAFE' - Legitimate, well-known sites (e.g., Instagram, Google, GitHub, universities, established companies)
+2. 'SUSPICIOUS' - Unknown domains, URL shorteners, typosquatting, or unclear intent
+3. 'MALICIOUS' - Clear phishing attempts, scams, fake login pages, credential harvesting
+
+Provide a DETAILED analysis including:
+- Overall classification
+- Specific threat indicators found (if any)
+- Domain reputation assessment
+- URL pattern analysis
+- Security concerns or red flags
+- Recommended action for users
+
+Return JSON format:
+{
+  "classification": "SAFE|SUSPICIOUS|MALICIOUS",
+  "reason": "Detailed multi-sentence explanation covering all findings",
+  "threatIndicators": ["list", "of", "specific", "threats", "found"],
+  "confidence": "high|medium|low"
+}`
+                            },
+                            {
+                                role: "user",
+                                content: `Analyze this URL for phishing threats:
+
+URL: ${url}
+Page Context: ${pageContext}
+
+Provide comprehensive analysis with specific details.`
+                            }
                         ],
                         model: modelName,
                         temperature: 0.1,
@@ -1057,7 +1129,20 @@ app.post("/api/reports/ai-verify", async (req, res) => {
                     else aiScore = 45; // SUSPICIOUS
 
                     aiSuggestion = (aiScore > 70) ? "BAN" : (aiScore > 30 ? "CAUTION" : "IGNORE");
-                    aiReason = result.reason;
+
+                    // Enhanced reason with threat indicators
+                    aiReason = result.reason || "No detailed analysis available";
+
+                    // Add threat indicators if present
+                    if (result.threatIndicators && result.threatIndicators.length > 0) {
+                        aiReason += "\n\n🚨 Threat Indicators:\n" + result.threatIndicators.map(t => `• ${t}`).join("\n");
+                    }
+
+                    // Add confidence level
+                    if (result.confidence) {
+                        aiReason += `\n\n🎯 Confidence: ${result.confidence.toUpperCase()}`;
+                    }
+
                     console.log("[AI-Verify] Groq Success:", result, "mapped to", aiScore);
                 } else {
                     // GEMINI LEGACY LOGIC

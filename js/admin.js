@@ -1588,8 +1588,22 @@ function openReportModal(report) {
             return;
         }
 
-        // Else, Fetch New Data
+        // Else, Fetch New Data with AI ANIMATIONS
+        const aiSection = document.getElementById('ai-analysis-section');
+
+        // Add AI scanning animation class
+        aiSection.classList.add('ai-scanning');
+
+        // Update loading text with animated dots and brain icon
+        aiLoading.innerHTML = `
+            <span class="ai-brain-icon">🤖</span>
+            <span class="ai-loading-dots">Analyzing URL with AI threat intelligence</span>
+        `;
         aiLoading.style.display = 'block';
+
+        // Add shimmer effect to button
+        btnRunAI.classList.add('btn-ai-shimmer');
+
         fetch('http://localhost:3000/api/reports/ai-verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1597,28 +1611,38 @@ function openReportModal(report) {
         })
             .then(res => res.json())
             .then(data => {
-                aiLoading.style.display = 'none';
-                if (data.success && data.aiAnalysis) {
-                    report.aiAnalysis = data.aiAnalysis;
-                    renderAIResult(report.aiAnalysis);
-                } else {
-                    alert("AI Analysis Failed: " + (data.error || 'Unknown Error'));
-                    aiAction.style.display = 'block'; // Reset
-                }
+                // Keep animation for a moment to show completion
+                setTimeout(() => {
+                    aiLoading.style.display = 'none';
+                    aiSection.classList.remove('ai-scanning');
+
+                    if (data.success && data.aiAnalysis) {
+                        report.aiAnalysis = data.aiAnalysis;
+                        renderAIResult(report.aiAnalysis);
+                    } else {
+                        alert("AI Analysis Failed: " + (data.error || 'Unknown Error'));
+                        aiAction.style.display = 'block'; // Reset
+                    }
+                }, 800); // Brief delay to show completion animation
             })
             .catch(err => {
                 aiLoading.style.display = 'none';
+                aiSection.classList.remove('ai-scanning');
                 aiAction.style.display = 'block';
                 alert("Network Error during AI Scan.");
             });
     };
 
     function renderAIResult(analysis) {
+        // Add success animation
+        aiResult.classList.add('ai-result-success');
         aiResult.style.display = 'block';
         const score = analysis.phishing_risk_score || analysis.score || 0;
         const suggestion = analysis.suggestion;
 
-        document.getElementById('ai-score').textContent = `Risk Score: ${score}/100`;
+        // Add holographic effect to score
+        const scoreEl = document.getElementById('ai-score');
+        scoreEl.innerHTML = `<span class="holographic-text">Risk Score: ${score}/100</span>`;
         document.getElementById('ai-reason').textContent = analysis.reason || "Analysis completed.";
 
         const badge = document.getElementById('ai-badge');

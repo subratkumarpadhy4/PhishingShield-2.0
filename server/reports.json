@@ -520,7 +520,7 @@
     "hostname": "www.instagram.com",
     "reporter": "System Admin",
     "timestamp": 1768387897690,
-    "status": "banned",
+    "status": "pending",
     "aiAnalysis": {
       "score": 0,
       "suggestion": "IGNORE",
@@ -528,5 +528,103 @@
       "timestamp": 1768387897690
     },
     "bannedAt": 1768388811787
+  },
+  {
+    "id": "1768390706456n6vcnvd1l",
+    "url": "https://fast.com/",
+    "hostname": "fast.com",
+    "reporter": "System Admin",
+    "timestamp": 1768390706456,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "URL matches a known legitimate domain pattern",
+      "timestamp": 1768390725086
+    }
+  },
+  {
+    "id": "1768390776862i8rfrcxbq",
+    "url": "https://www.bput.ac.in/",
+    "hostname": "www.bput.ac.in",
+    "reporter": "System Admin",
+    "timestamp": 1768390776862,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "✅ Adaptive Trust: Domain matches Page Title (-40)",
+      "timestamp": 1768390776862
+    }
+  },
+  {
+    "id": "1768391078927sjye4v418",
+    "url": "https://www.bput.ac.in/",
+    "hostname": "www.bput.ac.in",
+    "reporter": "System Admin",
+    "timestamp": 1768391078927,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "✅ Adaptive Trust: Domain matches Page Title (-40)",
+      "timestamp": 1768391078927
+    }
+  },
+  {
+    "id": "1768391117071g6orx7k1i",
+    "url": "https://www.bput.ac.in/",
+    "hostname": "www.bput.ac.in",
+    "reporter": "System Admin",
+    "timestamp": 1768391117071,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "Official university website with proper domain and context",
+      "timestamp": 1768391129804
+    }
+  },
+  {
+    "id": "1768391459169axy3lrhl6",
+    "url": "https://www.bput.ac.in/",
+    "hostname": "www.bput.ac.in",
+    "reporter": "System Admin",
+    "timestamp": 1768391459169,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "The URL https://www.bput.ac.in/ appears to be a legitimate website for Biju Patnaik University of Technology. The domain 'bput.ac.in' is a valid Indian educational institution domain, which suggests it is an official website for the university. The page title clearly indicates the name of the institution, further supporting its legitimacy. Although the meta description is empty, this alone does not indicate malicious intent. The HTTPS protocol is used, which means the communication between the user's browser and the website is encrypted, adding a layer of security. There are no apparent URL shorteners, typosquatting, or unclear intent that would suggest phishing or malicious activity. The domain reputation assessment indicates that the domain is associated with a well-known educational institution in India, which supports its classification as safe.\n\n🎯 Confidence: HIGH",
+      "timestamp": 1768391481706
+    }
+  },
+  {
+    "id": "1768391554457tb0ijhyys",
+    "url": "https://netmirror.gg/1/en",
+    "hostname": "netmirror.gg",
+    "reporter": "System Admin",
+    "timestamp": 1768391554457,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 45,
+      "suggestion": "CAUTION",
+      "reason": "✅ Adaptive Trust: Domain matches Page Title (-40) | 🤖 Real AI Analysis: CAUTION (+45) | The URL https://netmirror.gg/1/en appears to be a streaming service, but several factors raise suspicions about its legitimacy. The domain 'netmirror.gg' is not well-known and does not clearly indicate its connection to a reputable company or organization. The URL pattern includes a numeric path '/1/en', which could be used for tracking or other purposes. The page content promises access to a large library of TV series and movies, which might be an attempt to lure users into signing in, potentially harvesting credentials. The requirement for sign-in to use the service on a computer, along with the promotion of specific browsers for 'better performance', could be tactics to gain user trust or to distribute malware. The presence of a 'Privacy Policy' link at the bottom of the page is a common practice among legitimate sites, but without further inspection of this policy and the site's actual practices, it does not significantly alleviate concerns. The overall design and content do not clearly indicate a malicious intent but lack the transparency and reputation expected from a legitimate streaming service.\n\n🚨 Threat Indicators:\n• Unknown domain reputation\n• Potential credential harvesting through sign-in requirement\n• Use of specific browser recommendations which could be a tactic for malware distribution\n• Lack of transparency about the service and its operators\n\n🎯 Confidence: MEDIUM",
+      "timestamp": 1768391554457
+    }
+  },
+  {
+    "id": "17683916471623llaj3w20",
+    "url": "file:///Users/subratkumarpadhy/PhishingShield/tests/fake_instagram.html",
+    "hostname": "",
+    "reporter": "System Admin",
+    "timestamp": 1768391647162,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 95,
+      "suggestion": "BAN",
+      "reason": "🚨 MITM / SSL Stripping Detected: Login over insecure HTTP! (+50) | 🤖 Real AI Analysis: BAN (+95) | The provided URL is a local file path, which is unusual for a legitimate login page. The page content mimics Instagram's login page but includes a security alert warning about an unencrypted password field, which is a clear indication of a phishing attempt. The presence of a 'Log in with Facebook' option and a 'Sign up' link further supports the notion that this is a fake login page designed to harvest credentials. The inclusion of various warning symbols and a 'Man-in-the-Middle Attack' mention may be an attempt to appear legitimate or to distract from the true nature of the page. The fact that this is a local file and not a legitimate Instagram URL raises significant security concerns, as it could be used to capture sensitive information from unsuspecting users.\n\n🚨 Threat Indicators:\n• Local file path instead of a legitimate domain\n• Unencrypted password field warning\n• Mimics a legitimate login page\n• Includes a 'Log in with Facebook' option\n• Includes a 'Sign up' link\n• Warning symbols and 'Man-in-the-Middle Attack' mention\n\n🎯 Confidence: HIGH",
+      "timestamp": 1768391647162
+    }
   }
 ]
