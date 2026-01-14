@@ -1230,6 +1230,29 @@ app.post("/api/reports/update", (req, res) => {
     }
 });
 
+// POST /api/reports/delete - Bulk Delete Reports
+app.post("/api/reports/delete", (req, res) => {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids))
+        return res.status(400).json({ success: false, message: "IDs array required" });
+
+    let reports = readData(REPORTS_FILE) || [];
+    const initialLen = reports.length;
+
+    // Filter out reports whose IDs are in the deletion list
+    // Crucially, we assume the FRONTEND has already filtered out 'banned' reports.
+    // The server just deletes what it is told to delete.
+    reports = reports.filter(r => !ids.includes(r.id));
+
+    if (reports.length !== initialLen) {
+        writeData(REPORTS_FILE, reports);
+        console.log(`[Report] Deleted ${initialLen - reports.length} reports.`);
+        res.json({ success: true, deletedCount: initialLen - reports.length });
+    } else {
+        res.json({ success: true, deletedCount: 0, message: "No matching reports found to delete." });
+    }
+});
+
 // Start Server
 // Bind to 0.0.0.0 to accept connections from Render's network
 app.listen(PORT, "0.0.0.0", () => {

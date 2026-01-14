@@ -71,5 +71,21 @@
     "voters": {
       "rajkumarpadhy2006@gmail.com": "safe"
     }
+  },
+  {
+    "domain": "fast.com",
+    "safe": 1,
+    "unsafe": 0,
+    "voters": {
+      "rajkumarpadhy2006@gmail.com": "safe"
+    }
+  },
+  {
+    "domain": "www.instagram.com",
+    "safe": 1,
+    "unsafe": 0,
+    "voters": {
+      "rajkumarpadhy2006@gmail.com": "safe"
+    }
   }
 ]

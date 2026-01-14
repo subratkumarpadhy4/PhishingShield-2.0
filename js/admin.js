@@ -502,17 +502,23 @@ function loadDashboardData() {
             renderLogs(aggregatedLogs);
 
             // --- Populate Reports Table ---
-            // Fetch from Node.js Backend (prefer cloud, fallback to local dev)
-            fetch('https://phishingshield.onrender.com/api/reports')
+            // --- Populate Reports Table ---
+            // Fetch from Backend (Data Source Logic: Localhost > Cloud)
+            // We prioritize Localhost because if the user is running the server locally, they expect to see those reports.
+            fetch('http://localhost:3000/api/reports')
                 .then(res => {
                     if (!res.ok) {
-                        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                        throw new Error(`Localhost HTTP ${res.status}`);
                     }
                     return res.json();
                 })
                 .catch(err => {
-                    console.warn('[Admin] Cloud reports fetch failed, falling back to localhost:', err);
-                    return fetch('http://localhost:3000/api/reports').then(r => r.json());
+                    console.warn('[Admin] Localhost fetch failed, falling back to Cloud:', err);
+                    return fetch('https://phishingshield.onrender.com/api/reports')
+                        .then(res => {
+                            if (!res.ok) throw new Error(`Cloud HTTP ${res.status}`);
+                            return res.json();
+                        });
                 })
                 .then(serverReports => {
                     console.log("[Admin] Fetched Global Reports:", serverReports);
@@ -607,6 +613,96 @@ function loadDashboardData() {
 
         });
     };
+
+    // Toggle Trust Panel
+    document.getElementById('btn-refresh-trust').addEventListener('click', () => {
+        loadTrustData();
+    });
+
+    // DELETE ALL REPORTS BUTTON (Fixed: Uses onclick to prevent duplicates)
+    const btnDeleteAll = document.getElementById('btn-delete-all-reports');
+    if (btnDeleteAll) {
+        btnDeleteAll.onclick = () => {
+            // 1. Single Confirmation
+            if (!confirm("⚠️ Remove all Pending/Ignored reports?\n\nThis will permanently delete 'Pending' and 'Ignored' reports from both Local Storage and the Server.\n\nNote: 'Banned' sites will be preserved.")) {
+                return;
+            }
+
+            chrome.storage.local.get(['reportedSites', 'cachedGlobalReports'], async (data) => {
+                const localReports = data.reportedSites || [];
+                const cachedReports = data.cachedGlobalReports || [];
+
+                // Merge Unique to get full picture
+                const allReports = [...localReports];
+                cachedReports.forEach(c => {
+                    if (!allReports.find(r => r.id === c.id)) allReports.push(c);
+                });
+
+                // FILTER LOGIC
+                const reportsToKeep = allReports.filter(r => r.status === 'banned');
+                const reportsToDelete = allReports.filter(r => r.status !== 'banned');
+                const deleteIds = reportsToDelete.map(r => r.id);
+
+                if (deleteIds.length === 0) {
+                    alert("No pending/ignored reports to delete.");
+                    return;
+                }
+
+                console.log(`[Admin] Deleting ${deleteIds.length} reports, Keeping ${reportsToKeep.length} banned.`);
+
+                // Disable button
+                btnDeleteAll.disabled = true;
+                btnDeleteAll.innerText = "Deleting...";
+
+                // 2. Delete from Server
+                try {
+                    let serverUrl = 'http://localhost:3000/api/reports/delete';
+                    // Simple connectivity check
+                    try {
+                        await fetch('http://localhost:3000/api/users', { method: 'HEAD', signal: AbortSignal.timeout(1000) });
+                    } catch (e) {
+                        // If Local fails, try Global
+                        serverUrl = 'https://phishingshield.onrender.com/api/reports/delete';
+                    }
+
+                    const response = await fetch(serverUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ids: deleteIds })
+                    });
+
+                    const resJson = await response.json();
+
+                    if (resJson.success) {
+                        console.log("[Admin] Server deletion successful.", resJson);
+                    } else {
+                        throw new Error(resJson.message);
+                    }
+
+                } catch (e) {
+                    console.warn("[Admin] Could not delete from server:", e);
+                    alert("⚠️ Server Warning: " + e.message + "\n\nReports deleted locally, but may reappear if you have a connection issue.");
+                }
+
+                // 3. Update Local Storage
+                chrome.storage.local.set({
+                    reportedSites: reportsToKeep,
+                    cachedGlobalReports: reportsToKeep
+                }, () => {
+                    console.log("[Admin] Local storage updated.");
+
+                    // Update UI Variables
+                    allReportsCache = reportsToKeep;
+                    renderReports(reportsToKeep);
+
+                    btnDeleteAll.disabled = false;
+                    btnDeleteAll.innerText = "🗑️ Delete All";
+
+                    alert(`✅ Successful!\n\nDeleted: ${deleteIds.length}\nPreserved (Banned): ${reportsToKeep.length}`);
+                });
+            });
+        };
+    }
 
     // Trigger Load
     console.log("Fetching Data...");

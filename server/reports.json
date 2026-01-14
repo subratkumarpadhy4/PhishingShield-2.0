@@ -47,7 +47,7 @@
     "hostname": "www.britannica.com",
     "reporter": "subrat.g (subratkumarpadhy.g.new@gmail.com)",
     "timestamp": 1768150471764,
-    "status": "banned",
+    "status": "pending",
     "bannedAt": 1768288646639,
     "aiAnalysis": {
       "score": 10,
@@ -167,7 +167,7 @@
     "hostname": "www.pinterest.com",
     "reporter": "kishor (gopakishor007@gmail.com)",
     "timestamp": 1768243508980,
-    "status": "banned",
+    "status": "pending",
     "bannedAt": 1768288734617,
     "aiAnalysis": {
       "score": 10,
@@ -388,5 +388,145 @@
       "timestamp": 1768373964197
     },
     "bannedAt": 1768374029864
+  },
+  {
+    "id": "1768386045833ib7jyxh3i",
+    "url": "https://fast.com/",
+    "hostname": "fast.com",
+    "reporter": "System Admin",
+    "timestamp": 1768386045833,
+    "status": "pending",
+    "aiAnalysis": null
+  },
+  {
+    "id": "1768386093009awvvxqhan",
+    "url": "https://fast.com/",
+    "hostname": "fast.com",
+    "reporter": "System Admin",
+    "timestamp": 1768386093009,
+    "status": "pending",
+    "aiAnalysis": null
+  },
+  {
+    "id": "1768386343130wn86ce10y",
+    "url": "https://fast.com/",
+    "hostname": "fast.com",
+    "reporter": "System Admin",
+    "timestamp": 1768386343130,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "✅ Adaptive Trust: Domain matches Page Title (-40)",
+      "timestamp": 1768386343130
+    }
+  },
+  {
+    "id": "17683868124408dttyhfos",
+    "url": "https://fast.com/",
+    "hostname": "fast.com",
+    "reporter": "System Admin",
+    "timestamp": 1768386812440,
+    "status": "pending",
+    "aiAnalysis": null
+  },
+  {
+    "id": "1768386835781c8bdq1hpr",
+    "url": "https://fast.com/",
+    "hostname": "fast.com",
+    "reporter": "System Admin",
+    "timestamp": 1768386835781,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "✅ Adaptive Trust: Domain matches Page Title (-40)",
+      "timestamp": 1768386835781
+    }
+  },
+  {
+    "id": "1768386908846wn22pwd9u",
+    "url": "https://www.instagram.com/",
+    "hostname": "www.instagram.com",
+    "reporter": "System Admin",
+    "timestamp": 1768386908846,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "✅ Adaptive Trust: Domain matches Page Title (-40)",
+      "timestamp": 1768386908846
+    }
+  },
+  {
+    "id": "1768387124237trbd4cb92",
+    "url": "https://www.instagram.com/",
+    "hostname": "www.instagram.com",
+    "reporter": "System Admin",
+    "timestamp": 1768387124237,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 10,
+      "suggestion": "IGNORE",
+      "reason": "[Heuristic] No suspicious keywords or IP patterns found.",
+      "timestamp": 1768387156148
+    }
+  },
+  {
+    "id": "1768387198196rkwyn14k7",
+    "url": "https://www.instagram.com/",
+    "hostname": "www.instagram.com",
+    "reporter": "System Admin",
+    "timestamp": 1768387198197,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 10,
+      "suggestion": "IGNORE",
+      "reason": "[Heuristic] No suspicious keywords or IP patterns found.",
+      "timestamp": 1768387207830
+    }
+  },
+  {
+    "id": "1768387431646x13u4is5r",
+    "url": "https://www.facebook.com/",
+    "hostname": "www.facebook.com",
+    "reporter": "System Admin",
+    "timestamp": 1768387431646,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "✅ Verified Official FACEBOOK Website",
+      "timestamp": 1768387431646
+    }
+  },
+  {
+    "id": "1768387482671noekx5206",
+    "url": "https://www.instagram.com/",
+    "hostname": "www.instagram.com",
+    "reporter": "System Admin",
+    "timestamp": 1768387482671,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "✅ Adaptive Trust: Domain matches Page Title (-40)",
+      "timestamp": 1768387482671
+    }
+  },
+  {
+    "id": "1768387897690hsxrxxlrt",
+    "url": "https://www.instagram.com/",
+    "hostname": "www.instagram.com",
+    "reporter": "System Admin",
+    "timestamp": 1768387897690,
+    "status": "banned",
+    "aiAnalysis": {
+      "score": 0,
+      "suggestion": "IGNORE",
+      "reason": "✅ Adaptive Trust: Domain matches Page Title (-40)",
+      "timestamp": 1768387897690
+    },
+    "bannedAt": 1768388811787
   }
 ]

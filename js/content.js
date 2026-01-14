@@ -84,6 +84,9 @@ function showToast(icon, title, text, color1, color2) {
 // Uses long-lived port instead of interval messaging
 let keepAlivePort;
 function connectKeepAlive() {
+    // Safety check: specific to "Extension context invalidated"
+    if (!chrome.runtime?.id) return;
+
     try {
         keepAlivePort = chrome.runtime.connect({ name: 'keepAlive' });
         keepAlivePort.onDisconnect.addListener(() => {
@@ -96,7 +99,7 @@ function connectKeepAlive() {
     }
 }
 // Start connection
-connectKeepAlive();
+if (chrome.runtime?.id) connectKeepAlive();
 // Fallback: Still ping occasionally to force activity if connection sits idle too long
 setInterval(() => {
     if (keepAlivePort) {

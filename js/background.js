@@ -172,56 +172,38 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
                     } : null
                 };
 
-                // Send to Backend
-                fetch('http://localhost:3000/api/reports', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(reportPayload)
-                })
-                    .then(res => {
-                        console.log("[PhishingShield] POST Response Status:", res.status);
-                        return res.json();
-                    })
-                    .then(() => {
-                        console.log("[PhishingShield] Report sent successfully!");
+                // Use Shared Submission Logic (Offline Sync Supported)
+                submitReport(reportPayload, (res) => {
+                    // Success (or Queued)
+                    console.log("[PhishingShield] Context Menu Report Handled:", res);
 
-                        // Add XP to user
-                        chrome.storage.local.get(['userXP', 'userLevel'], (data) => {
-                            let xp = data.userXP || 0;
-                            let level = data.userLevel || 1;
-                            xp += 10; // 10 XP for reporting
-                            updateXP(10); // Call updateXP with the amount
-                        });
+                    // Add XP
+                    chrome.storage.local.get(['userXP', 'userLevel'], (data) => {
+                        let xp = data.userXP || 0;
+                        xp += 10;
+                        updateXP(10);
+                    });
 
-                        // NOTIFY USER OF SUCCESS
-                        if (tab && tab.id) {
-                            chrome.tabs.sendMessage(tab.id, {
-                                type: "SHOW_NOTIFICATION",
-                                title: "Report Sent!",
-                                message: "Thank you for keeping the web safe.\n(+10 XP)"
-                            })
-                                .then(() => console.log("[PhishingShield] Toast Sent"))
-                                .catch(() => {
-                                    console.log("[PhishingShield] Content script inactive. Using fallback alert.");
-                                    chrome.scripting.executeScript({
-                                        target: { tabId: tab.id },
-                                        func: () => alert("✅ Report Sent to PhishingShield!\n\nThank you for keeping the web safe.\n(+10 XP)")
-                                    });
-                                });
-                        }
-                    })
-                    .catch(err => {
-                        console.error("[PhishingShield] Report failed:", err);
+                    // Notify User
+                    if (tab && tab.id) {
+                        const msg = res.queued ?
+                            "Report queued for offline sync.\n(+10 XP)" :
+                            "Thank you for keeping the web safe.\n(+10 XP)";
 
-                        // Notify failure
-                        if (tab && tab.id) {
+                        chrome.tabs.sendMessage(tab.id, {
+                            type: "SHOW_NOTIFICATION",
+                            title: res.queued ? "Report Queued" : "Report Sent!",
+                            message: msg
+                        }).catch(() => {
+                            // Fallback
                             chrome.scripting.executeScript({
                                 target: { tabId: tab.id },
-                                func: (msg) => alert("⚠️ Report Failed: " + msg),
-                                args: [err.message]
+                                func: (m) => alert("✅ " + m),
+                                args: [msg]
                             });
-                        }
-                    });
+                        });
+                    }
+                });
             }
 
             // Fetch Analysis from Content Script
@@ -261,15 +243,130 @@ chrome.runtime.onConnect.addListener((port) => {
 // -----------------------------------------------------------------------------
 // MESSAGE LISTENERS
 // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// OFFLINE SYNC & REPORTING LOGIC
+// -----------------------------------------------------------------------------
+const LOCAL_API = 'http://localhost:3000/api/reports';
+const GLOBAL_API = 'https://phishingshield.onrender.com/api/reports';
+
+/**
+ * reliable report submission with offline queueing
+ */
+function submitReport(payload, sendResponse) {
+    // 1. Always save to local history (User Experience)
+    chrome.storage.local.get(['reportedSites'], (res) => {
+        const logs = res.reportedSites || [];
+        // Avoid duplicates in history
+        if (!logs.some(r => r.id === payload.id)) {
+            logs.push(payload);
+            chrome.storage.local.set({ reportedSites: logs });
+        }
+    });
+
+    // 2. Send to LOCAL API (Best Effort for Local Admin Panel)
+    fetch(LOCAL_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).catch(() => console.log("[PhishingShield] Local API unreachable (ignoring)"));
+
+    // 3. Send to GLOBAL API (Critical)
+    fetch(GLOBAL_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+        .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        })
+        .then(data => {
+            console.log("[PhishingShield] ✅ Report Synced to Global Server:", data);
+            if (sendResponse) sendResponse({ success: true, data: data });
+        })
+        .catch(err => {
+            console.warn("[PhishingShield] ⚠️ Global Sync Failed. Queuing report...", err);
+            // Queue for later
+            queueReportForSync(payload);
+            if (sendResponse) sendResponse({ success: true, queued: true }); // treat as success to client
+        });
+}
+
+function queueReportForSync(payload) {
+    chrome.storage.local.get(['pendingReports'], (res) => {
+        const queue = res.pendingReports || [];
+        if (!queue.some(r => r.id === payload.id)) {
+            queue.push(payload);
+            chrome.storage.local.set({ pendingReports: queue }, () => {
+                console.log(`[PhishingShield] Report queued. Total pending: ${queue.length}`);
+                // Try to sync again soon
+                chrome.alarms.create('retrySync', { delayInMinutes: 1 });
+            });
+        }
+    });
+}
+
+function processPendingReports() {
+    chrome.storage.local.get(['pendingReports'], (res) => {
+        const queue = res.pendingReports || [];
+        if (queue.length === 0) return;
+
+        console.log(`[PhishingShield] 🔄 Processing ${queue.length} pending reports...`);
+
+        // Take first item
+        const report = queue[0];
+
+        fetch(GLOBAL_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(report)
+        })
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                console.log(`[PhishingShield] ✅ Pending report ${report.id} synced!`);
+
+                // Remove from queue on success
+                const newQueue = queue.slice(1);
+                chrome.storage.local.set({ pendingReports: newQueue }, () => {
+                    // Determine if we should continue immediately or wait
+                    if (newQueue.length > 0) {
+                        processPendingReports(); // Process next
+                    }
+                });
+            })
+            .catch(err => {
+                console.warn(`[PhishingShield] Sync retry failed for ${report.id}:`, err);
+                // Keep in queue, wait for next alarm
+            });
+    });
+}
+
+// Alarm Listener for Sync
+chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'retrySync' || alarm.name === 'periodicSync') {
+        processPendingReports();
+    }
+});
+
+// Create periodic sync alarm if not exists
+chrome.alarms.get('periodicSync', (a) => {
+    if (!a) chrome.alarms.create('periodicSync', { periodInMinutes: 5 });
+});
+
+// Also trigger on online check
+self.addEventListener('online', () => {
+    console.log("[PhishingShield] Came Online! Syncing...");
+    processPendingReports();
+});
+
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log("[PhishingShield] 🔵 Message received:", request.type, request);
-    console.log("[PhishingShield] Service Worker is ACTIVE at:", new Date().toISOString());
+    // console.log("[PhishingShield] 🔵 Message received:", request.type);
 
     // PING to wake up service worker
     if (request.type === "PING") {
-        console.log("[PhishingShield] PING received - Service Worker is awake");
-        if (sendResponse) sendResponse({ success: true, awake: true });
-        return true;
+        sendResponse({ success: true, awake: true });
+        return false; // Synchronous response
     }
 
     // 1. EXTENSION SECURITY CHECK (Async)
@@ -289,47 +386,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // 2. LOG VISIT
     if (request.type === "LOG_VISIT") {
-        console.log("[PhishingShield] LOG_VISIT handler triggered");
-        console.log("[PhishingShield] LOG_VISIT data:", request.data);
+        const data = request.data;
+        // Respond immediately
+        sendResponse({ success: true });
 
-        // Respond immediately to prevent timeout
-        if (sendResponse) {
-            sendResponse({ success: true });
-        }
-
-        // Award XP for visiting a website (async, but we already responded)
-        console.log("[PhishingShield] Calling updateXP(5)");
+        // Async processing (fire and forget)
         updateXP(5);
-
-        // Save visit to log (async)
         chrome.storage.local.get(['visitLog'], (res) => {
             const logs = Array.isArray(res.visitLog) ? res.visitLog : [];
-            // Keep last 200 entries for better history tracking
             if (logs.length > 200) logs.shift();
-            if (request.data) {
-                logs.push(request.data);
-            }
-            chrome.storage.local.set({ visitLog: logs }, () => {
-                console.log("[PhishingShield] Visit log saved, total:", logs.length);
-            });
+            if (data) logs.push(data);
+            chrome.storage.local.set({ visitLog: logs });
         });
-
-        return true; // Keep channel open for potential async response
+        return false; // Response already sent synchronously
     }
 
     // 3. ADD XP
-    else if (request.type === "ADD_XP") {
+    if (request.type === "ADD_XP") {
         const amount = request.amount || 10;
-        console.log("[PhishingShield] ADD_XP handler triggered, amount:", amount);
         updateXP(amount);
-        if (sendResponse) sendResponse({ success: true });
-        return true;
+        sendResponse({ success: true });
+        return false; // Synchronous response
     }
 
-    // 4. REPORT SITE (Async Fetch)
-    else if (request.type === "REPORT_SITE") {
-
-        // Fetch User Info first
+    // 4. REPORT SITE (Async using Helper)
+    if (request.type === "REPORT_SITE") {
         chrome.storage.local.get(['currentUser'], (data) => {
             const user = data.currentUser || {};
             const reporterDisplay = (user.name || 'Anonymous') + (user.email ? ` (${user.email})` : '');
@@ -343,94 +424,84 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 status: 'pending'
             };
 
-            // Send to Backend
-            fetch('http://localhost:3000/api/reports', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(reportPayload)
-            })
-                .then(res => res.json())
-                .then(data => {
-                    console.log("[PhishingShield] Report Sent:", data);
-                    sendResponse({ success: true, data: data });
-                })
-                .catch(err => {
-                    console.error("[PhishingShield] Report Failed:", err);
-                    sendResponse({ success: false, error: err.toString() });
-                });
-
-            // Local Backup
-            chrome.storage.local.get(['reportedSites'], (res) => {
-                const logs = res.reportedSites || [];
-                logs.push(reportPayload);
-                chrome.storage.local.set({ reportedSites: logs });
-            });
+            submitReport(reportPayload, sendResponse);
         });
-
-        return true; // Keep channel open for async fetch
+        return true; // Keep channel open
     }
 
     // 5. UPDATE BLOCKLIST
-    else if (request.type === "UPDATE_BLOCKLIST") {
+    if (request.type === "UPDATE_BLOCKLIST") {
         const bypassUrl = request.bypassUrl || null;
-        // Clear cache to force fresh fetch
         blocklistCache.data = null;
         blocklistCache.timestamp = 0;
         updateBlocklistFromStorage(bypassUrl, function () {
-            // Callback when blocklist update is complete
-            if (sendResponse) sendResponse({ success: true, blocklistUpdated: true });
-        }, true); // Force refresh
-        return true; // Keep channel open for async response
+            sendResponse({ success: true, blocklistUpdated: true });
+        }, true);
+        return true; // Keep channel open
     }
 
-    // 7. FORCE BLOCKLIST SYNC (Immediate sync for ban/unban actions)
-    else if (request.type === "FORCE_BLOCKLIST_SYNC") {
-        console.log("[PhishingShield] Force blocklist sync requested");
-        // Clear cache and force refresh
+    // 6. FORCE BLOCKLIST SYNC
+    if (request.type === "FORCE_BLOCKLIST_SYNC") {
         blocklistCache.data = null;
         blocklistCache.timestamp = 0;
         updateBlocklistFromStorage(null, function () {
-            if (sendResponse) sendResponse({ success: true, synced: true });
-        }, true); // Force refresh
-        return true;
+            sendResponse({ success: true, synced: true });
+        }, true);
+        return true; // Keep channel open
     }
 
-    // 6. SYNC XP (Force Sync from Frontend)
-    else if (request.type === "SYNC_XP") {
-        console.log("[PhishingShield] Forced XP Sync requested via message");
+    // 7. SYNC XP
+    if (request.type === "SYNC_XP") {
         syncXPToServer();
-        if (sendResponse) sendResponse({ success: true });
-        return true;
+        sendResponse({ success: true });
+        return false; // Synchronous
     }
 
-    // 7. SCAN CONTENT WITH AI (Real-time)
-    else if (request.type === "SCAN_CONTENT") {
-        console.log("[PhishingShield] AI Scan Requested for:", request.url);
+    // 8. SCAN CONTENT (Async Dual-Fetch: Local > Global)
+    if (request.type === "SCAN_CONTENT") {
+        const payload = {
+            url: request.url,
+            content: request.content
+        };
 
-        // Fetch from Backend (Use LOCALHOST for testing)
+        const tryGlobalScan = () => {
+            fetch('https://phishingshield.onrender.com/api/ai/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+                .then(res => res.json())
+                .then(data => sendResponse(data))
+                .catch(err => {
+                    console.error("[PhishingShield] Global AI Scan Failed:", err);
+                    sendResponse({ success: false, error: err.message });
+                });
+        };
+
+        // Try Local First
+        console.log(`[PhishingShield] 🤖 Initiating AI Scan for ${payload.url.substring(0, 50)}...`);
         fetch('http://localhost:3000/api/ai/scan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                url: request.url,
-                content: request.content
-            })
+            body: JSON.stringify(payload)
         })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error(`Local HTTP ${res.status}`);
+                return res.json();
+            })
             .then(data => {
-                console.log("[PhishingShield] AI Scan Result:", data);
-                // Send result back to the tab that requested it (or generic callback)
-                if (sendResponse) sendResponse(data);
+                console.log("[PhishingShield] ✅ Local AI Scan Success:", data);
+                sendResponse(data);
             })
             .catch(err => {
-                console.error("[PhishingShield] AI Scan Failed:", err);
-                if (sendResponse) sendResponse({ success: false, error: err.message });
+                console.log("[PhishingShield] ⚠️ Local AI Scan failed, failing over to Global...", err);
+                tryGlobalScan();
             });
 
         return true; // Keep channel open
     }
 
-    return true; // Default keep-open to be safe
+    return false;
 });
 
 /**
@@ -597,23 +668,22 @@ console.log("PhishingShield Service Worker Loaded - " + new Date().toISOString()
 
 // Create context menu - this is critical for MV3
 // Try to create immediately (for cases where extension was already installed)
-// Wrap in try-catch to prevent service worker from crashing
 try {
     createContextMenu();
 } catch (e) {
     console.error("[PhishingShield] Error creating context menu on startup:", e);
 }
 
-// Create context menu on install/update - this is the primary way in MV3
+// Create context menu on install/update
 chrome.runtime.onInstalled.addListener((details) => {
     console.log("[PhishingShield] Extension installed/updated:", details.reason);
-    createContextMenu(); // Create context menu on install/update
+    createContextMenu();
 });
 
 // Also create on browser startup
 chrome.runtime.onStartup.addListener(() => {
     console.log("[PhishingShield] Browser startup");
-    createContextMenu(); // Recreate context menu on browser startup
+    createContextMenu();
 });
 
 // Initialize XP system on startup
@@ -710,10 +780,10 @@ function updateBlocklistFromStorage(bypassUrl = null, callback = null, forceRefr
 
         // Also fetch banned sites from server for global protection
         const API_BASE = 'https://phishingshield.onrender.com/api';
-        const now = Date.now();
+        const nowServer = Date.now();
 
         // Use cache if available and not expired, unless force refresh
-        if (!forceRefresh && blocklistCache.data && (now - blocklistCache.timestamp) < blocklistCache.TTL) {
+        if (!forceRefresh && blocklistCache.data && (nowServer - blocklistCache.timestamp) < blocklistCache.TTL) {
             console.log("[PhishingShield] Using cached blocklist data");
             processBlocklist(blocklistCache.data, banned, bypassTokens, callback);
             return;
@@ -725,7 +795,7 @@ function updateBlocklistFromStorage(bypassUrl = null, callback = null, forceRefr
             .then(serverReports => {
                 // Update cache
                 blocklistCache.data = serverReports;
-                blocklistCache.timestamp = now;
+                blocklistCache.timestamp = nowServer;
 
                 processBlocklist(serverReports, banned, bypassTokens, callback);
             })
@@ -822,7 +892,7 @@ chrome.runtime.onInstalled.addListener(updateBlocklistFromStorage);
 
 // UPDATE_BLOCKLIST is handled in the main message listener above
 
-// --- FAST BLOCKLIST SYNC (Every 3 seconds for near real-time updates) ---
+// --- FAST BLOCKLIST SYNC (DISABLED BY USER REQUEST) ---
 // Note: Chrome alarms minimum is 1 minute, so we use setInterval for faster sync
 let blocklistSyncInterval = null;
 
@@ -831,24 +901,29 @@ function startBlocklistSync() {
     if (blocklistSyncInterval) {
         clearInterval(blocklistSyncInterval);
     }
+    console.log("[PhishingShield] Periodic sync disabled. Use 'Force Sync' in Admin Panel.");
 
-    // Sync every 3 seconds
+    // Sync every 3 seconds - DISABLED
+    /*
     blocklistSyncInterval = setInterval(() => {
         updateBlocklistFromStorage(null, () => {
             console.log("[PhishingShield] Blocklist synced (periodic - 3s)");
         });
     }, 3000); // 3 seconds
+    */
 }
 
-// Start the sync interval
+// Start the sync interval (Effectively does nothing now)
 startBlocklistSync();
 
-// Also sync on tab activation to catch updates quickly
+// Also sync on tab activation to catch updates quickly - DISABLED BY USER REQUEST
+/*
 chrome.tabs.onActivated.addListener(() => {
     updateBlocklistFromStorage(null, () => {
         console.log("[PhishingShield] Blocklist synced (tab activated)");
     });
 });
+*/
 
 // -----------------------------------------------------------------------------
 // BYPASS TOKEN MANAGEMENT - One-time bypass for banned sites

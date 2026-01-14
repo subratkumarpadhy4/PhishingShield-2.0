@@ -433,5 +433,18 @@
       "reason": "rate_limit_exceeded"
     },
     "timestamp": "2026-01-14T07:39:03.619Z"
+  },
+  {
+    "id": "log_1768385198282_sekq21heo",
+    "userId": "rajkumarpadhy2006@gmail.com",
+    "action": "admin_login_success",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": true,
+    "details": {
+      "sessionId": "admin_sess_1768385198267_czfng0b3n",
+      "method": "password_only"
+    },
+    "timestamp": "2026-01-14T10:06:38.282Z"
   }
 ]
