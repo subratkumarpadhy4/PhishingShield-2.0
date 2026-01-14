@@ -1,0 +1,58 @@
+[
+  {
+    "name": "System Admin",
+    "email": "rajkumarpadhy2006@gmail.com",
+    "password": "rajkumarpadhy2006@gmail.com",
+    "joined": 1703800000000,
+    "xp": 29845,
+    "level": 18,
+    "history": [],
+    "lastCriticalTime": 1703800000000,
+    "isPenalty": true,
+    "settings": {
+      "enableDownloads": true
+    },
+    "lastUpdated": 1768422959820
+  },
+  {
+    "name": "subrat kumar padhy",
+    "email": "padhysubratkumar7@gmail.com",
+    "password": "padhysubratkumar7@gmail.com",
+    "xp": 885,
+    "level": 3,
+    "joined": 1766952392006,
+    "rank": "Novice",
+    "isPenalty": false,
+    "lastUpdated": 1768417037630
+  },
+  {
+    "email": "jenapriyanshu2006@gmail.com",
+    "isPenalty": false,
+    "joined": 1768240676930,
+    "level": 100,
+    "name": "PRIYANSHU JENA",
+    "password": "jenapriyanshu2006@gmail.com",
+    "rank": "Novice",
+    "xp": 999991,
+    "lastUpdated": 1768421795510
+  },
+  {
+    "email": "gopakishor007@gmail.com",
+    "joined": 1768151047531,
+    "level": 7,
+    "name": "kishor",
+    "password": "gopakishor007@gmail.com",
+    "rank": "Novice",
+    "xp": 4000
+  },
+  {
+    "email": "subratkumar_padhy@srmap.edu.in",
+    "joined": 1766993673694,
+    "lastUpdated": 1768411018443,
+    "level": 3,
+    "name": "subrat clg id",
+    "password": "subratkumar_padhy@srmap.edu.in",
+    "rank": "Novice",
+    "xp": 790
+  }
+]

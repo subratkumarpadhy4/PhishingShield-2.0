@@ -1,4 +1,4 @@
-const fetch = require('node-fetch'); // Needs node-fetch v2 or native in Node 18+
+// Native fetch is used (Node 18+)
 
 const GLOBAL_URL = 'https://phishingshield.onrender.com/api/reports';
 const INTERVAL_MS = 14 * 60 * 1000; // 14 minutes (Render sleeps after 15)

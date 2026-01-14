@@ -12,6 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const REPORTS_FILE = path.join(__dirname, 'reports.json');
 const USERS_FILE = path.join(__dirname, 'users.json');
+const DELETED_USERS_FILE = path.join(__dirname, 'data', 'deleted_users.json'); // Persistent deletion list
 const AUDIT_LOG_FILE = path.join(__dirname, 'data', 'audit_logs.json');
 const TRUST_FILE = path.join(__dirname, 'data', 'trust_scores.json');
 
@@ -57,6 +58,7 @@ if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, JSON.stringify([], 
 if (!fs.existsSync(path.dirname(AUDIT_LOG_FILE))) fs.mkdirSync(path.dirname(AUDIT_LOG_FILE), { recursive: true });
 if (!fs.existsSync(AUDIT_LOG_FILE)) fs.writeFileSync(AUDIT_LOG_FILE, JSON.stringify([], null, 2));
 if (!fs.existsSync(TRUST_FILE)) fs.writeFileSync(TRUST_FILE, JSON.stringify([], null, 2));
+if (!fs.existsSync(DELETED_USERS_FILE)) fs.writeFileSync(DELETED_USERS_FILE, JSON.stringify([], null, 2));
 
 // --- Helpers ---
 const readData = (file) => {
@@ -232,6 +234,7 @@ app.get("/api/users", (req, res) => {
     res.json(users);
 });
 
+<<<<<<< HEAD
 // GET /api/users/global-sync (Proxy + Cache Merge)
 app.get("/api/users/global-sync", async (req, res) => {
     let localUsers = readData(USERS_FILE);
@@ -277,6 +280,26 @@ app.get("/api/users/global-sync", async (req, res) => {
     }
 
     res.json(localUsers);
+=======
+// GET /api/users/global-sync (Proxy for Client Auth)
+app.get("/api/users/global-sync", async (req, res) => {
+    try {
+        const r = await fetch('https://phishingshield.onrender.com/api/users');
+        if (!r.ok) return res.json([]); // Fail silently to empty list
+
+        const globalUsers = await r.json();
+        const deletedUsers = readData(DELETED_USERS_FILE) || [];
+
+        // STRICT FILTER: Do not allow deleted users to pass through sync
+        const cleanUsers = globalUsers.filter(u => !deletedUsers.includes(u.email));
+
+        console.log(`[Global-Sync-Proxy] Fetched ${globalUsers.length}, Filtered to ${cleanUsers.length}`);
+        res.json(cleanUsers);
+    } catch (e) {
+        console.warn(`[Global-Sync-Proxy] Failed: ${e.message}`);
+        res.json([]);
+    }
+>>>>>>> PJ123
 });
 
 // GET /test-phish (Simulation Page)
@@ -639,72 +662,67 @@ app.post("/api/users/sync", (req, res) => {
     let finalUser;
 
     if (idx !== -1) {
-        // TIMESTAMP AUTHORITY STRATEGY:
-        // We prioritize the most recent update. This allows penalties (XP drops) to persist.
+        // UPDATE EXISTING USER
         const serverXP = Number(users[idx].xp) || 0;
         const serverLevel = Number(users[idx].level) || 1;
+
+        const clientUpdated = userData.lastUpdated || 0;
         const serverUpdated = users[idx].lastUpdated || 0;
 
-        const incomingXP = userData.xp !== undefined ? Number(userData.xp) : 0;
-        const incomingLevel = userData.level !== undefined ? Number(userData.level) : 1;
-        const incomingUpdated = userData.lastUpdated || 0;
-
-        const isPenalty = userData.isPenalty === true;
-
-        let finalXP = serverXP;
-        let finalLevel = serverLevel;
-        let finalUpdated = serverUpdated;
-
-        // Logic: 
-        // 1. If explicit Penalty flag, trust incoming (Visual feedback immediate).
-        // 2. If Incoming is NEWER, trust incoming (General sync).
-        // 3. If Incoming is OLDER, keep Server (prevent replay attacks/stale attributes).
-
-        if (isPenalty || incomingUpdated > serverUpdated) {
-            finalXP = incomingXP;
-            finalLevel = incomingLevel;
-            finalUpdated = incomingUpdated || Date.now();
-        } else if (incomingXP > serverXP) {
-            // Fallback: If no timestamp but strictly higher XP (progress), take it.
-            finalXP = incomingXP;
-            finalLevel = incomingLevel;
-            finalUpdated = Date.now();
+        // Simple Max Logic for XP
+        if (userData.xp > serverXP) {
+            users[idx].xp = userData.xp;
+            users[idx].level = userData.level;
+            users[idx].lastUpdated = Date.now();
         }
 
-        finalUser = {
-            ...users[idx],
-            ...userData,
-            xp: finalXP,
-            level: finalLevel,
-            lastUpdated: finalUpdated
-        };
+        // Always update meta
+        users[idx].name = userData.name || users[idx].name;
+        users[idx].settings = userData.settings || users[idx].settings;
 
-        // If simple overwrite is preferred for Admin demotions, we need a flag.
-        // But assuming "Promotion" is the goal:
+        finalUser = users[idx];
+        writeData(USERS_FILE, users);
+        console.log(`[Sync] Updated user: ${userData.email}`);
 
-        users[idx] = finalUser;
-        console.log(`[User] Synced ${userData.email} - Merged XP: ${finalUser.xp}`);
+        res.json({ success: true, user: finalUser });
+
     } else {
-        // Create new
-        finalUser = userData;
-        users.push(finalUser);
-        console.log(`[User] New user registered: ${userData.email}`);
+        // ZOMBIE KILLER: User does not exist locally.
+        console.warn(`[Sync] Rejected non-existent user: ${userData.email}`);
+        res.status(404).json({ success: false, error: "USER_VIOLATION", message: "User does not exist. Please register." });
+    }
+});
+
+// POST /api/users/create (NEW: Explicit Registration)
+app.post("/api/users/create", (req, res) => {
+    const userData = req.body;
+    if (!userData.email) return res.status(400).json({ error: "Email required" });
+
+    let users = readData(USERS_FILE);
+    const idx = users.findIndex((u) => u.email === userData.email);
+
+    if (idx !== -1) {
+        return res.status(400).json({ success: false, message: "User already exists" });
     }
 
+    // Create New
+    const finalUser = { ...userData, xp: 0, level: 1, joined: Date.now() };
+    users.push(finalUser);
     writeData(USERS_FILE, users);
+    console.log(`[User] New user registered: ${userData.email}`);
 
-    // --- GLOBAL SYNC (FORWARD WRITE) ---
-    // Fire and forget - don't block local success
-    fetch('https://phishingshield.onrender.com/api/users/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData)
-    })
-        .then(r => console.log(`[Global-Forward] User sync sent to cloud. Status: ${r.status}`))
-        .catch(e => console.warn(`[Global-Forward] Failed to sync user with cloud: ${e.message}`));
+    // Global Sync (Forward)
+    try {
+        fetch('https://phishingshield.onrender.com/api/users/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(userData)
+        }).catch(() => { });
+    } catch (e) { }
 
     res.json({ success: true, user: finalUser });
 });
+
 
 // POST /api/users/delete
 app.post("/api/users/delete", (req, res) => {
@@ -715,6 +733,19 @@ app.post("/api/users/delete", (req, res) => {
 
     if (users.length !== initialLen) {
         writeData(USERS_FILE, users);
+
+        // ADD TO DELETED LIST (Persistent Ban)
+        const deletedUsers = readData(DELETED_USERS_FILE);
+        console.log(`[DEBUG] Current Deleted Users: ${JSON.stringify(deletedUsers)}`);
+
+        if (!deletedUsers.includes(email)) {
+            deletedUsers.push(email);
+            writeData(DELETED_USERS_FILE, deletedUsers);
+            console.log(`[DEBUG] Wrote ${email} to ${DELETED_USERS_FILE}`);
+        } else {
+            console.log(`[DEBUG] ${email} already in deleted list`);
+        }
+
         console.log(`[User] Deleted: ${email}`);
 
         // --- GLOBAL SYNC ---
@@ -747,6 +778,30 @@ app.post("/api/users/reset-password", (req, res) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
         }).catch(e => console.warn(`[Pass-Reset-Sync] Failed: ${e.message}`));
+
+        res.json({ success: true });
+    } else {
+        res.status(404).json({ success: false, message: "User not found" });
+    }
+});
+
+// POST /api/users/delete
+app.post("/api/users/delete", (req, res) => {
+    const { email } = req.body;
+    let users = readData(USERS_FILE);
+    const initialLen = users.length;
+    users = users.filter((u) => u.email !== email);
+
+    if (users.length !== initialLen) {
+        writeData(USERS_FILE, users);
+        console.log(`[User] Deleted: ${email}`);
+
+        // --- GLOBAL SYNC ---
+        fetch('https://phishingshield.onrender.com/api/users/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        }).catch(e => console.warn(`[User-Del-Sync] Failed: ${e.message}`));
 
         res.json({ success: true });
     } else {

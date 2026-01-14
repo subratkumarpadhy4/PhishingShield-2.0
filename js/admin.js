@@ -470,15 +470,8 @@ function loadDashboardData() {
             const totalThreats = logs.filter(l => l.score > 20).length;
             document.getElementById('stats-threats').textContent = totalThreats;
 
-            // 3. Active Sessions (Recently Active < 5 min)
-            // Estimation based on last Critical Interaction or Join time
-            const fiveMinAgo = Date.now() - (5 * 60 * 1000);
-            const activeUsers = users.filter(u => (u.lastCriticalTime > fiveMinAgo) || (u.joined > fiveMinAgo)).length + (data.currentUser ? 1 : 0);
-
-            // Stats Card 3 (Active Sessions)
-            // Finding by DOM context since ID is missing on Value
-            const activeCard = document.querySelectorAll('.card')[2];
-            if (activeCard) activeCard.querySelector('.card-value').textContent = activeUsers > 0 ? activeUsers : 1;
+            // 3. System Sync & Server Status Logic
+            checkServerStatus();
 
             // --- Populate Users Table ---
 
@@ -924,6 +917,57 @@ function renderReports(reports) {
         }
 
         const date = r.timestamp ? new Date(r.timestamp).toLocaleDateString() : 'Unknown';
+
+        // --- SYSTEM SYNC LOGIC ---
+        function checkServerStatus() {
+            console.log("[System Sync] Checking connectivity...");
+
+            // UI Elements
+            const syncValue = document.getElementById('stats-sync-value');
+            const syncStatus = document.getElementById('stats-sync-status');
+
+            if (!syncValue || !syncStatus) return;
+
+            let localOnline = false;
+            let globalOnline = false;
+
+            // 1. Check Local Server
+            const checkLocal = fetch('http://localhost:3000/api/reports', { method: 'HEAD' })
+                .then(res => { localOnline = res.ok; })
+                .catch(() => { localOnline = false; });
+
+            // 2. Check Global Server
+            const checkGlobal = fetch('https://phishingshield.onrender.com/api/reports', { method: 'HEAD' })
+                .then(res => { globalOnline = res.ok; })
+                .catch(() => { globalOnline = false; });
+
+            // Execute Both
+            Promise.allSettled([checkLocal, checkGlobal]).then(() => {
+                console.log(`[System Sync] Local: ${localOnline}, Global: ${globalOnline}`);
+
+                if (localOnline && globalOnline) {
+                    // 100%
+                    syncValue.textContent = "100%";
+                    syncValue.style.color = "#166534"; // green
+                    syncStatus.innerHTML = `✅ <strong>All Systems Online</strong>`;
+                } else if (!localOnline && !globalOnline) {
+                    // 0%
+                    syncValue.textContent = "0%";
+                    syncValue.style.color = "#dc3545"; // red
+                    syncStatus.innerHTML = `❌ <strong>System Blackout</strong>`;
+                } else {
+                    // 50%
+                    syncValue.textContent = "50%";
+                    syncValue.style.color = "#d97706"; // orange
+
+                    if (localOnline) {
+                        syncStatus.innerHTML = `⚠️ <strong>Local Only</strong> (Global Offline)`;
+                    } else {
+                        syncStatus.innerHTML = `⚠️ <strong>Global Only</strong> (Local Offline)`;
+                    }
+                }
+            });
+        }
         const status = r.status || 'pending';
 
         // Escape HTML to prevent XSS
@@ -1492,16 +1536,39 @@ function renderUsers(users, allLogs) {
                 deleteUserBtn.style.color = '#dc3545';
                 deleteUserBtn.style.borderColor = '#dc3545';
                 deleteUserBtn.onclick = () => {
-                    if (confirm(`Delete ${name}? This cannot be undone.`)) {
+                    if (confirm(`⚠️ DELETE USER: ${name}?\n\nThis will permanently remove:\n- Account Access\n- XP & Rank History\n- Trust Score Votes\n\nThis action will typically propagate to the Global Server as well.\n\nAre you sure?`)) {
+
+                        // Disable button to prevent double-click
+                        deleteUserBtn.disabled = true;
+                        deleteUserBtn.innerText = "Deleting...";
+
                         fetch('http://localhost:3000/api/users/delete', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ email: email })
-                        }).then(() => {
-                            alert("User deleted.");
-                            document.getElementById('user-modal').classList.add('hidden');
-                            loadDashboardData();
-                        }).catch(e => alert("Delete failed: " + e));
+                        })
+                            .then(async (res) => {
+                                const data = await res.json();
+                                if (data.success) {
+                                    // 1. Remove from Local Cache Immediately (Optimistic UI)
+                                    chrome.storage.local.get(['cachedUsers'], (storage) => {
+                                        const cached = storage.cachedUsers || [];
+                                        const updated = cached.filter(u => u.email !== email);
+                                        chrome.storage.local.set({ cachedUsers: updated }, () => {
+                                            alert("✅ User deleted successfully.");
+                                            document.getElementById('user-modal').classList.add('hidden');
+                                            loadDashboardData(); // Refresh UI
+                                        });
+                                    });
+                                } else {
+                                    throw new Error(data.message || "Unknown server error");
+                                }
+                            })
+                            .catch(e => {
+                                alert("❌ Delete failed: " + e.message);
+                                deleteUserBtn.disabled = false;
+                                deleteUserBtn.innerText = "Delete User";
+                            });
                     }
                 };
 
@@ -1985,5 +2052,56 @@ function handleClearTrust() {
             console.error(err);
             alert("Failed to clear history.");
         });
+}
+
+// --- SYSTEM SYNC LOGIC ---
+function checkServerStatus() {
+    console.log("[System Sync] Checking connectivity...");
+
+    // UI Elements
+    const syncValue = document.getElementById('stats-sync-value');
+    const syncStatus = document.getElementById('stats-sync-status');
+
+    if (!syncValue || !syncStatus) return;
+
+    let localOnline = false;
+    let globalOnline = false;
+
+    // 1. Check Local Server
+    const checkLocal = fetch('http://localhost:3000/api/reports', { method: 'HEAD' })
+        .then(res => { localOnline = res.ok; })
+        .catch(() => { localOnline = false; });
+
+    // 2. Check Global Server
+    const checkGlobal = fetch('https://phishingshield.onrender.com/api/reports', { method: 'HEAD' })
+        .then(res => { globalOnline = res.ok; })
+        .catch(() => { globalOnline = false; });
+
+    // Execute Both
+    Promise.allSettled([checkLocal, checkGlobal]).then(() => {
+        console.log(`[System Sync] Local: ${localOnline}, Global: ${globalOnline}`);
+
+        if (localOnline && globalOnline) {
+            // 100%
+            syncValue.textContent = "100%";
+            syncValue.style.color = "#166534"; // green
+            syncStatus.innerHTML = `✅ <strong>All Systems Online</strong>`;
+        } else if (!localOnline && !globalOnline) {
+            // 0%
+            syncValue.textContent = "0%";
+            syncValue.style.color = "#dc3545"; // red
+            syncStatus.innerHTML = `❌ <strong>System Blackout</strong>`;
+        } else {
+            // 50%
+            syncValue.textContent = "50%";
+            syncValue.style.color = "#d97706"; // orange
+
+            if (localOnline) {
+                syncStatus.innerHTML = `⚠️ <strong>Local Only</strong> (Global Offline)`;
+            } else {
+                syncStatus.innerHTML = `⚠️ <strong>Global Only</strong> (Local Offline)`;
+            }
+        }
+    });
 }
 
