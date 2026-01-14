@@ -121,13 +121,22 @@
                                             console.log('[PhishingShield] Blocklist updated, navigating to:', blockedUrl);
                                             // Use a small delay to ensure rules are applied
                                             setTimeout(function () {
-                                                window.location.href = blockedUrl;
+                                                // Ensure URL has protocol to avoid relative path (file not found) errors
+                                                let target = blockedUrl;
+                                                if (!target.startsWith('http') && !target.startsWith('file')) {
+                                                    target = 'https://' + target;
+                                                }
+                                                window.location.href = target;
                                             }, 200);
                                         } else {
-                                            // Fallback: try navigation anyway after a delay
+                                            // Fallback: try navigation anyway
                                             console.warn('[PhishingShield] Blocklist update response unclear, attempting navigation');
                                             setTimeout(function () {
-                                                window.location.href = blockedUrl;
+                                                let target = blockedUrl;
+                                                if (!target.startsWith('http') && !target.startsWith('file')) {
+                                                    target = 'https://' + target;
+                                                }
+                                                window.location.href = target;
                                             }, 300);
                                         }
                                     });
