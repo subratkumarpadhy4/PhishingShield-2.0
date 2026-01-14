@@ -46,9 +46,19 @@ const SimpleCharts = {
 
         // Clone for event listener clean-swap
         const newCanvas = canvas.cloneNode(true);
+
+        // CRITICAL FIX: Explicitly re-apply the High-DPI buffer size to the clone
+        // cloneNode copies attributes, but we need ensuring the JS-set buffer size matches
+        newCanvas.width = logicalWidth * dpr;
+        newCanvas.height = logicalHeight * dpr;
+
+        // Ensure CSS is locked (Redundant but safe)
+        newCanvas.style.setProperty('width', logicalWidth + "px", 'important');
+        newCanvas.style.setProperty('height', logicalHeight + "px", 'important');
+
         canvas.parentNode.replaceChild(newCanvas, canvas);
 
-        // Re-contextualize the clone (since we replaced the element)
+        // Re-contextualize the clone
         const ctx2 = newCanvas.getContext('2d');
         ctx2.scale(dpr, dpr);
 
