@@ -16,171 +16,151 @@ const SimpleCharts = {
         const canvas = document.getElementById(canvasId);
         if (!canvas) return;
 
-        // 1. FREEZE DIMENSIONS
-        // Read explicitly from HTML attributes (e.g. width="160")
-        const logicalWidth = parseInt(canvas.getAttribute("width")) || 200;
-        const logicalHeight = parseInt(canvas.getAttribute("height")) || 200;
-        const dpr = window.devicePixelRatio || 1;
+        // 1. INITIAL SETUP (Only once)
+        if (!canvas.isInitialized) {
+            // Freeze Dimensions
+            const logicalWidth = parseInt(canvas.getAttribute("width")) || 200;
+            const logicalHeight = parseInt(canvas.getAttribute("height")) || 200;
+            const dpr = window.devicePixelRatio || 1;
 
-        // Force CSS to match logical size exactly (prevents layout stretching)
-        canvas.style.setProperty('width', logicalWidth + "px", 'important');
-        canvas.style.setProperty('height', logicalHeight + "px", 'important');
-        // Prevent max-width: 100% issues common in frameworks
-        canvas.style.setProperty('max-width', logicalWidth + "px", 'important');
-        canvas.style.setProperty('max-height', logicalHeight + "px", 'important');
+            // CSS Lock
+            canvas.style.setProperty('width', logicalWidth + "px", 'important');
+            canvas.style.setProperty('height', logicalHeight + "px", 'important');
+            canvas.style.setProperty('max-width', logicalWidth + "px", 'important');
+            canvas.style.setProperty('max-height', logicalHeight + "px", 'important');
 
-        // Set high-res buffer
-        canvas.width = logicalWidth * dpr;
-        canvas.height = logicalHeight * dpr;
+            // Buffer Size
+            canvas.width = logicalWidth * dpr;
+            canvas.height = logicalHeight * dpr;
 
-        // Get Context and Scale ONCE
-        const ctx = canvas.getContext('2d');
-        ctx.scale(dpr, dpr);
+            // Context
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
 
-        // Pre-calculate geometry (Static) - Pie Chart Style
-        const centerX = logicalWidth / 2;
-        const centerY = logicalHeight / 2;
-        const radius = (Math.min(logicalWidth, logicalHeight) / 2) * 0.80; // 80% of canvas for clean spacing
-        const innerRadius = radius * 0.65; // 65% ensures a "Rigid Ring" look
-        const total = data.reduce((a, b) => a + b, 0);
+            // Geometry
+            const centerX = logicalWidth / 2;
+            const centerY = logicalHeight / 2;
+            const radius = (Math.min(logicalWidth, logicalHeight) / 2) * 0.80;
+            const innerRadius = radius * 0.65;
 
-        // Clone for event listener clean-swap
-        const newCanvas = canvas.cloneNode(true);
+            // State Storage
+            canvas.chartState = {
+                data: [], colors: [], labels: [], centerVal: 0, centerLabel: '',
+                segments: [], hoverIndex: -1
+            };
 
-        // CRITICAL FIX: Explicitly re-apply the High-DPI buffer size to the clone
-        // cloneNode copies attributes, but we need ensuring the JS-set buffer size matches
-        newCanvas.width = logicalWidth * dpr;
-        newCanvas.height = logicalHeight * dpr;
+            // --- DRAW FUNCTION ---
+            canvas.redraw = () => {
+                const state = canvas.chartState;
+                const total = state.data.reduce((a, b) => a + b, 0);
 
-        // Ensure CSS is locked (Redundant but safe)
-        newCanvas.style.setProperty('width', logicalWidth + "px", 'important');
-        newCanvas.style.setProperty('height', logicalHeight + "px", 'important');
+                ctx.clearRect(0, 0, logicalWidth, logicalHeight);
 
-        canvas.parentNode.replaceChild(newCanvas, canvas);
+                let startAngle = -0.5 * Math.PI;
+                state.segments = []; // Reset segments
 
-        // Re-contextualize the clone
-        const ctx2 = newCanvas.getContext('2d');
-        ctx2.scale(dpr, dpr);
-
-        // --- DRAWING FUNCTION ---
-        // Absolutely no logic that changes size/radius
-        const draw = (hoverIndex = -1) => {
-            ctx2.clearRect(0, 0, logicalWidth, logicalHeight);
-
-            let startAngle = -0.5 * Math.PI;
-
-            // BACKGROUND CIRCLE (Empty State) - Now a Ring
-            if (total === 0) {
-                ctx2.beginPath();
-                ctx2.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-                ctx2.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI, true); // Cutout
-                ctx2.fillStyle = '#f1f5f9';
-                ctx2.fill();
-
-                // Static Text
-                drawCenterText("No Data", "Scanned");
-                return [];
-            }
-
-            // PIE CHART SEGMENTS - Filled slices (Ring)
-            const segments = [];
-            data.forEach((value, i) => {
-                if (value === 0) {
-                    startAngle += (value / total) * 2 * Math.PI;
+                // EMPTY STATE
+                if (total === 0) {
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+                    ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI, true);
+                    ctx.fillStyle = '#f1f5f9';
+                    ctx.fill();
+                    drawCenterText("No Data", "Scanned");
                     return;
                 }
 
-                const sliceAngle = (value / total) * 2 * Math.PI;
-                const endAngle = startAngle + sliceAngle;
+                // SEGMENTS
+                state.data.forEach((value, i) => {
+                    if (value === 0) return;
 
-                segments.push({
-                    start: startAngle,
-                    end: endAngle,
-                    color: colors[i],
-                    val: value,
-                    label: labels ? labels[i] : ''
+                    const sliceAngle = (value / total) * 2 * Math.PI;
+                    const endAngle = startAngle + sliceAngle;
+
+                    state.segments.push({
+                        start: startAngle, end: endAngle,
+                        val: value, label: state.labels ? state.labels[i] : ''
+                    });
+
+                    // Draw Segment
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                    ctx.arc(centerX, centerY, innerRadius, endAngle, startAngle, true);
+                    ctx.closePath();
+                    ctx.fillStyle = state.colors[i % state.colors.length];
+                    ctx.fill();
+
+                    // Border
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    startAngle = endAngle;
                 });
 
-                // Draw filled ring segment
-                ctx2.beginPath();
-                ctx2.arc(centerX, centerY, radius, startAngle, endAngle); // Outer Arc
-                ctx2.arc(centerX, centerY, innerRadius, endAngle, startAngle, true); // Inner Arc (Reverse)
-                ctx2.closePath();
-                ctx2.fillStyle = colors[i % colors.length];
-                ctx2.fill();
+                // CENTER TEXT
+                if (state.hoverIndex !== -1 && state.segments[state.hoverIndex]) {
+                    const seg = state.segments[state.hoverIndex];
+                    const pct = Math.round((seg.val / total) * 100) + "%";
+                    drawCenterText(pct, seg.label);
+                } else {
+                    drawCenterText(state.centerVal || total, state.centerLabel || "Threats");
+                }
+            };
 
-                // Add subtle border between segments
-                ctx2.strokeStyle = '#ffffff';
-                ctx2.lineWidth = 2;
-                ctx2.stroke();
+            const drawCenterText = (main, sub) => {
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#1e293b';
+                ctx.font = 'bold 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.fillText(String(main), centerX, centerY - 6);
+                ctx.fillStyle = '#64748b';
+                ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.fillText(sub.toUpperCase(), centerX, centerY + 14);
+            };
 
-                startAngle = endAngle;
+            // --- LISTENERS ---
+            canvas.addEventListener('mousemove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.clientX - rect.left) * (logicalWidth / rect.width);
+                const y = (e.clientY - rect.top) * (logicalHeight / rect.height);
+                const dist = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+
+                let found = -1;
+                // Hitbox check
+                if (dist <= radius && dist >= innerRadius) {
+                    let angle = Math.atan2(y - centerY, x - centerX);
+                    if (angle < -0.5 * Math.PI) angle += 2 * Math.PI;
+
+                    canvas.chartState.segments.forEach((seg, i) => {
+                        if (angle >= seg.start && angle < seg.end) found = i;
+                    });
+                }
+
+                if (canvas.chartState.hoverIndex !== found) {
+                    canvas.chartState.hoverIndex = found;
+                    canvas.style.cursor = found !== -1 ? 'pointer' : 'default';
+                    canvas.redraw();
+                }
             });
 
-            // CENTER TEXT
-            if (hoverIndex !== -1) {
-                const seg = segments[hoverIndex];
-                const pct = Math.round((seg.val / total) * 100) + "%";
-                drawCenterText(pct, seg.label);
-            } else {
-                drawCenterText(centerVal || total, centerLabel || "Threats");
-            }
+            canvas.addEventListener('mouseleave', () => {
+                if (canvas.chartState.hoverIndex !== -1) {
+                    canvas.chartState.hoverIndex = -1;
+                    canvas.redraw();
+                }
+            });
 
-            return segments;
-        };
+            canvas.isInitialized = true;
+        }
 
-        const drawCenterText = (mainText, subText) => {
-            ctx2.textAlign = 'center';
-            ctx2.textBaseline = 'middle';
-
-            // Clean, simple text
-            ctx2.fillStyle = '#1e293b';
-            ctx2.font = 'bold 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-            ctx2.fillText(String(mainText), centerX, centerY - 6);
-
-            ctx2.fillStyle = '#64748b';
-            ctx2.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-            ctx2.fillText(subText.toUpperCase(), centerX, centerY + 14);
-        };
-
-        // --- EVENTS ---
-        let segments = draw(); // Initial Draw
-
-        newCanvas.addEventListener('mousemove', (e) => {
-            const rect = newCanvas.getBoundingClientRect();
-            // Map mouse coordinates to Canvas Logical Space
-            const x = (e.clientX - rect.left) * (logicalWidth / rect.width);
-            const y = (e.clientY - rect.top) * (logicalHeight / rect.height);
-
-            // Distance for pie slice detection
-            const dist = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-
-            let found = -1;
-            // Hitbox - check if inside pie circle (and outside hole)
-            if (dist <= radius && dist >= innerRadius) {
-                let angle = Math.atan2(y - centerY, x - centerX);
-                if (angle < -0.5 * Math.PI) angle += 2 * Math.PI;
-
-                segments.forEach((seg, i) => {
-                    if (angle >= seg.start && angle < seg.end) {
-                        found = i;
-                    }
-                });
-            }
-
-            // Update Interface (Cursor & Text ONLY)
-            newCanvas.style.cursor = found !== -1 ? 'pointer' : 'default';
-            const lastHover = parseInt(newCanvas.dataset.hover || "-1");
-            if (lastHover !== found) {
-                newCanvas.dataset.hover = found;
-                draw(found); // Redraw with new text
-            }
-        });
-
-        newCanvas.addEventListener('mouseleave', () => {
-            newCanvas.dataset.hover = "-1";
-            draw(-1);
-        });
+        // 2. UPDATE STATE & DRAW
+        canvas.chartState.data = data;
+        canvas.chartState.colors = colors;
+        canvas.chartState.labels = labels;
+        canvas.chartState.centerVal = centerVal;
+        canvas.chartState.centerLabel = centerLabel;
+        canvas.redraw();
     },
 
     /**

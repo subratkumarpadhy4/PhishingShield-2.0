@@ -610,7 +610,7 @@
             <div class="table-container">
                 <div class="section-header">
                     <h3>Registered System Users</h3>
-                    <button class="btn" onclick="alert('Exporting CSV...')">Export CSV</button>
+                    <button class="btn" id="btn-export-csv">Export CSV</button>
                 </div>
                 <table id="all-users-table">
                     <thead>
@@ -719,7 +719,11 @@
         <!-- LOGS TAB -->
         <div id="logs" class="tab-content">
             <div class="table-container">
-                <h3>Global Threat Activity Log</h3>
+                <div class="section-header">
+                    <h3>Global Threat Activity Log</h3>
+                    <button class="btn btn-outline" id="btn-delete-logs"
+                        style="color: #dc3545; border-color: #dc3545;">🗑️ Delete All Logs</button>
+                </div>
                 <p style="color: #6c757d; margin-bottom: 20px;">Real-time feed of blocked phishing attempts across the
                     network.</p>
                 <table id="logs-table">
@@ -743,15 +747,37 @@
         <!-- SETTINGS TAB -->
         <div id="settings" class="tab-content">
             <div class="table-container">
-                <h3>System Configuration</h3>
-                <div style="margin-top: 20px;">
-                    <p><strong>Admin Mode:</strong> Enabled</p>
-                    <p><strong>Database:</strong> chrome.storage.local</p>
-                    <p><strong>Version:</strong> 1.0.0</p>
-                    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
-                    <button class="btn" style="background: var(--danger);"
-                        onclick="alert('Cannot purge system database in simulation mode.')">Purge All Data</button>
+                <h3>⚙️ System Configuration</h3>
+                <p style="color: #6c757d; margin-bottom: 24px;">Manage global settings and view system health status.
+                </p>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                    <!-- System Status Card -->
+                    <div
+                        style="background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); padding: 25px; border-radius: 12px; border: 1px solid #cbd5e1;">
+                        <h4 style="margin-bottom: 15px; color: #334155; display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 20px;">🖥️</span> System Status
+                        </h4>
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-weight: 500; color: #64748b;">Admin Mode</span>
+                                <span class="badge badge-active">Active</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-weight: 500; color: #64748b;">Database</span>
+                                <span
+                                    style="font-family: monospace; font-size: 13px; color: #475569;">chrome.storage.local</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-weight: 500; color: #64748b;">Version</span>
+                                <span class="badge badge-admin">v1.2.0 (Stable)</span>
+                            </div>
+                        </div>
+                    </div>
+
+
                 </div>
+
             </div>
         </div>
 

@@ -27,11 +27,8 @@
         if (goBackBtn) {
             goBackBtn.addEventListener('click', function () {
                 console.log('[PhishingShield] Go Back clicked');
-                if (window.history.length > 1) {
-                    window.history.back();
-                } else {
-                    window.location.href = 'about:blank';
-                }
+                // Redirect to dashboard as requested
+                window.location.href = chrome.runtime.getURL('dashboard.html');
             });
             console.log('[PhishingShield] ✅ Go Back button handler attached');
         } else {

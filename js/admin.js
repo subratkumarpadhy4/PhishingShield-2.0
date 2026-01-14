@@ -607,6 +607,82 @@ function loadDashboardData() {
         loadTrustData();
     });
 
+    // DELETE LOGS
+    const btnDeleteLogs = document.getElementById('btn-delete-logs');
+    if (btnDeleteLogs) {
+        btnDeleteLogs.onclick = async () => {
+            if (confirm("⚠️ Are you sure you want to clear ALL threat logs?\n\nThis action cannot be undone.")) {
+                // Clear Local Logs
+                chrome.storage.local.set({ visitLog: [] }, () => {
+                    console.log('[Admin] Local visit logs cleared');
+                });
+
+                // Clear Server Logs (if API exists)
+                try {
+                    await fetch('http://localhost:3000/api/logs/clear', { method: 'POST' });
+                } catch (e) {
+                    console.warn('[Admin] Failed to clear server logs or API not supported', e);
+                }
+
+                // Refresh UI
+                document.getElementById('logs-table').querySelector('tbody').innerHTML = '';
+                alert("✅ Threat logs have been cleared.");
+                loadDashboardData();
+            }
+        };
+    }
+
+    // EXPORT CSV functionality
+    const btnExportCsv = document.getElementById('btn-export-csv');
+    if (btnExportCsv) {
+        btnExportCsv.onclick = () => {
+            console.log('[Admin] Exporting CSV...');
+            // Fetch users from storage
+            chrome.storage.local.get(['cachedUsers'], (data) => {
+                const users = data.cachedUsers || [];
+
+                if (users.length === 0) {
+                    alert('No user data available to export.');
+                    return;
+                }
+
+                // Define CSV Headers
+                const headers = ['Name', 'Email', 'Role', 'XP', 'Level', 'Status', 'Joined Date'];
+
+                // Map user data to rows
+                const rows = users.map(user => {
+                    const joinedDate = user.joined ? new Date(user.joined).toLocaleDateString() : 'N/A';
+                    // Escape quotes and commas for CSV format
+                    const clean = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
+
+                    return [
+                        clean(user.name || 'Unknown'),
+                        clean(user.email || ''),
+                        clean(user.role || 'user'),
+                        clean(user.xp || 0),
+                        clean(user.level || 1),
+                        clean(user.status || 'active'),
+                        clean(joinedDate)
+                    ].join(',');
+                });
+
+                // Combine headers and rows
+                const csvContent = [headers.join(','), ...rows].join('\n');
+
+                // Create and trigger download
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `PhishingShield_Users_${new Date().toISOString().split('T')[0]}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+        };
+    }
+
     // DELETE ALL REPORTS BUTTON (Fixed: Uses onclick to prevent duplicates)
     const btnDeleteAll = document.getElementById('btn-delete-all-reports');
     if (btnDeleteAll) {
@@ -1380,7 +1456,13 @@ function renderUsers(users, allLogs) {
                     }
 
                     // Sync Logic
-                    const updatedUser = { ...user, xp: newXP, level: Math.floor(Math.sqrt(newXP / 100)) + 1 };
+                    const updatedUser = {
+                        ...user,
+                        xp: newXP,
+                        level: Math.floor(Math.sqrt(newXP / 100)) + 1,
+                        lastUpdated: Date.now(), // Force server to accept update (even if lower)
+                        isPenalty: true // Explicit override for cloud server
+                    };
 
                     fetch('http://localhost:3000/api/users/sync', {
                         method: 'POST',

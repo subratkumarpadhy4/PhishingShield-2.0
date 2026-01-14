@@ -232,6 +232,53 @@ app.get("/api/users", (req, res) => {
     res.json(users);
 });
 
+// GET /api/users/global-sync (Proxy + Cache Merge)
+app.get("/api/users/global-sync", async (req, res) => {
+    let localUsers = readData(USERS_FILE);
+
+    // Try to fetch from Global Server to ensure we have the absolute latest
+    try {
+        const globalRes = await axios.get('https://phishingshield.onrender.com/api/users', { timeout: 2000 });
+        const globalUsers = globalRes.data;
+
+        if (Array.isArray(globalUsers) && globalUsers.length > 0) {
+            let updated = false;
+
+            // Simple Merge Strategy: Trust the one with the later 'lastUpdated' timestamp or higher XP if no timestamp
+            globalUsers.forEach(gUser => {
+                const localIdx = localUsers.findIndex(u => u.email === gUser.email);
+                if (localIdx === -1) {
+                    localUsers.push(gUser);
+                    updated = true;
+                } else {
+                    const lUser = localUsers[localIdx];
+                    // Logic: If global is newer, take it.
+                    const lTime = lUser.lastUpdated || 0;
+                    const gTime = gUser.lastUpdated || 0;
+
+                    if (gTime > lTime) {
+                        localUsers[localIdx] = gUser;
+                        updated = true;
+                    } else if (lTime === 0 && gTime === 0 && gUser.xp > lUser.xp) {
+                        // Legacy fallback: Higher XP wins
+                        localUsers[localIdx] = gUser;
+                        updated = true;
+                    }
+                }
+            });
+
+            if (updated) {
+                writeData(USERS_FILE, localUsers);
+                console.log("[Global-Sync] Merged users from Cloud.");
+            }
+        }
+    } catch (e) {
+        console.warn("[Global-Sync] Cloud fetch failed, serving local:", e.message);
+    }
+
+    res.json(localUsers);
+});
+
 // GET /test-phish (Simulation Page)
 app.get("/test-phish", (req, res) => {
     res.send(`
