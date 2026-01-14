@@ -41,5 +41,39 @@
       "reason": "The provided URL, https://www.instagram.com/, is a legitimate and well-known website belonging to Instagram, a popular social media platform. The page title and meta description match the expected content of the official Instagram website, indicating no signs of phishing or malicious intent. The domain 'instagram.com' has a high reputation and is owned by Meta Platforms, Inc., a reputable company. The URL pattern follows the standard HTTPS protocol and does not contain any suspicious characters or redirects. The page context, including the page title and meta description, aligns with the expected content of the official Instagram website, further supporting its legitimacy. There are no apparent security concerns or red flags associated with this URL.\n\n🎯 Confidence: HIGH",
       "timestamp": 1768394372308
     }
+  },
+  {
+    "id": "17683962797095bayrkn8u",
+    "url": "file:///Users/subratkumarpadhy/PhishingShield/tests/critical_threat.html?fake_host_for_testing=xn--paypal-bad.com",
+    "hostname": "",
+    "reporter": "System Admin (rajkumarpadhy2006@gmail.com)",
+    "timestamp": 1768396279709,
+    "status": "pending",
+    "aiAnalysis": {
+      "score": 95,
+      "suggestion": "BAN",
+      "reason": "The URL pattern exhibits several red flags indicative of a phishing attempt. The use of 'file://' protocol suggests this is a local file, potentially used for testing or simulation of a phishing attack. The presence of 'xn--paypal-bad.com' as a parameter value is particularly concerning, as it appears to be an attempt at IDN homograph attack or typosquatting, mimicking the legitimate PayPal domain but with a potentially malicious intent. The fact that the page context could not be fetched due to the host being unreachable or blocking bots further raises suspicions, as legitimate sites are less likely to be inaccessible in such a manner. Given these indicators, it's reasonable to classify this URL as malicious, especially considering the context of 'critical_threat.html' which implies an awareness of potential threats.\n\n🚨 Threat Indicators:\n• IDN homograph attack or typosquatting attempt with 'xn--paypal-bad.com'\n• Use of 'file://' protocol which could be used to simulate phishing scenarios locally\n• Inaccessibility of the page context, potentially indicating evasion techniques\n\n🎯 Confidence: HIGH",
+      "timestamp": 1768396554709
+    },
+    "bannedAt": 1768396629491
+  },
+  {
+    "id": "17683966949961lizhz30c",
+    "url": "https://netmirror.gg/1/en",
+    "hostname": "netmirror.gg",
+    "reporter": "System Admin",
+    "timestamp": 1768396694996,
+    "status": "pending",
+    "aiAnalysis": null
+  },
+  {
+    "id": "1768396705779limx1v36d",
+    "url": "https://www.bput.ac.in/",
+    "hostname": "www.bput.ac.in",
+    "reporter": "System Admin",
+    "timestamp": 1768396705779,
+    "status": "pending",
+    "aiAnalysis": null,
+    "bannedAt": 1768396767241
   }
 ]

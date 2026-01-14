@@ -337,11 +337,11 @@ function initRiskAnalysis(isFortressMode) {
                     // Re-render HUD
                     showRiskHUD(analysis);
 
-                    // AUTO-EXPAND DETAILS to show the user the AI result immediately
-                    setTimeout(() => {
-                        const panel = document.getElementById('hud-details-panel');
-                        if (panel) panel.style.display = 'block';
-                    }, 500);
+                    // AUTO-EXPAND DETAILS disabled - user must click info button
+                    // setTimeout(() => {
+                    //     const panel = document.getElementById('hud-details-panel');
+                    //     if (panel) panel.style.display = 'block';
+                    // }, 500);
                 }
             });
         }
@@ -590,6 +590,7 @@ function showRiskHUD(analysis) {
         opacity: 0;
         animation: ps-pop-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         max-width: 400px;
+        overflow: visible !important;
     `;
 
     // Keyframes & Classes
@@ -625,58 +626,100 @@ function showRiskHUD(analysis) {
         .ps-action-btn.danger { color: #ff6b6b; }
         .ps-action-btn.danger:hover { background: rgba(220, 53, 69, 0.2); }
         
-        /* DETAILS PANEL */
+        /* DETAILS PANEL - Enhanced Visibility */
         #hud-details-panel {
-            position: absolute;
-            bottom: 70px;
-            right: 0;
-            width: 300px;
-            background: rgba(20, 20, 20, 0.98);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
-            padding: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+            position: fixed;
+            bottom: 130px;
+            right: 30px;
+            width: 320px;
+            max-height: 400px;
+            overflow-y: auto;
+            background: linear-gradient(135deg, rgba(20, 20, 20, 0.98), rgba(30, 30, 30, 0.98));
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 2px solid rgba(96, 165, 250, 0.3);
+            border-radius: 16px;
+            padding: 18px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.7), 
+                        0 0 20px rgba(96, 165, 250, 0.2),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.1);
             display: none;
             color: #eee;
             font-size: 13px;
-            line-height: 1.4;
+            line-height: 1.5;
+            animation: slideUp 0.3s ease-out;
+            z-index: 2147483646;
         }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
         #hud-details-panel h4 {
-            margin: 0 0 10px 0;
+            margin: 0 0 12px 0;
             color: #fff;
-            font-size: 14px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            padding-bottom: 5px;
+            font-size: 15px;
+            font-weight: 700;
+            border-bottom: 2px solid rgba(96, 165, 250, 0.3);
+            padding-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
+        
+        #hud-details-panel h4::before {
+            content: '🔍';
+            font-size: 16px;
+        }
+        
         #hud-details-panel ul {
-            padding-left: 20px;
+            padding-left: 0;
             margin: 0;
+            list-style: none;
         }
         #hud-details-panel li {
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-            padding-bottom: 5px;
+            background: rgba(255, 255, 255, 0.03);
+            border-left: 3px solid rgba(96, 165, 250, 0.4);
+            padding: 10px 12px;
+            border-radius: 6px;
+            transition: all 0.2s;
         }
+        
+        #hud-details-panel li:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-left-color: rgba(96, 165, 250, 0.8);
+            transform: translateX(3px);
+        }
+        
         #hud-details-panel li:last-child {
-            border-bottom: none;
+            margin-bottom: 0;
         }
         .ps-score-badge {
-            background: rgba(255, 71, 87, 0.2);
+            background: rgba(255, 71, 87, 0.25);
             color: #ff6b6b;
             font-size: 11px;
-            padding: 2px 6px;
-            border-radius: 4px;
+            padding: 4px 8px;
+            border-radius: 6px;
             font-weight: bold;
             margin-left: 10px;
             white-space: nowrap;
+            border: 1px solid rgba(255, 71, 87, 0.3);
         }
         .ps-score-badge.bonus {
-            background: rgba(46, 213, 115, 0.2);
+            background: rgba(46, 213, 115, 0.25);
             color: #2ed573;
+            border-color: rgba(46, 213, 115, 0.3);
         }
     `;
     document.head.appendChild(styleSheet);
@@ -767,19 +810,29 @@ function showRiskHUD(analysis) {
 
     // Toggle Details
     const infoBtn = document.getElementById('hud-info');
+    const panel = document.getElementById('hud-details-panel');
+
+    // Log for debugging
+    console.log('[HUD] Info button initialized. Panel element:', panel);
+    console.log('[HUD] Analysis data:', analysis);
+    console.log('[HUD] Reasons count:', analysis.reasons?.length || 0);
+
     infoBtn.addEventListener('click', (e) => {
-        const panel = document.getElementById('hud-details-panel');
         // Prevent event bubbling issues
         e.stopPropagation();
+
+        console.log('[HUD] Info button clicked. Current panel display:', panel.style.display);
 
         if (panel.style.display === 'block') {
             panel.style.display = 'none';
             infoBtn.style.color = '#aaa';
             infoBtn.style.background = 'none';
+            console.log('[HUD] Panel hidden');
         } else {
             panel.style.display = 'block';
             infoBtn.style.color = '#fff'; // Active state
             infoBtn.style.background = 'rgba(255,255,255,0.2)';
+            console.log('[HUD] Panel shown. Content:', panel.innerHTML);
         }
     });
 
