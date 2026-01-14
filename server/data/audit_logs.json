@@ -84,5 +84,18 @@
       "mfaMethod": "email"
     },
     "timestamp": "2026-01-03T17:42:57.798Z"
+  },
+  {
+    "id": "log_1768253009723_haldh0nr3",
+    "userId": "rajkumarpadhy2006@gmail.com",
+    "action": "admin_login_success",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": true,
+    "details": {
+      "sessionId": "admin_sess_1768253009715_2xwa92kbh",
+      "method": "password_only"
+    },
+    "timestamp": "2026-01-12T21:23:29.723Z"
   }
 ]

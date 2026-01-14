@@ -4,17 +4,18 @@
     "email": "rajkumarpadhy2006@gmail.com",
     "password": "rajkumarpadhy2006@gmail.com",
     "joined": 1703800000000,
-    "xp": 37920,
+    "xp": 37950,
     "level": 20,
     "history": [],
-    "lastCriticalTime": 1703800000000
+    "lastCriticalTime": 1703800000000,
+    "isPenalty": true
   },
   {
     "name": "subrat kumar padhy",
     "email": "padhysubratkumar7@gmail.com",
     "password": "padhysubratkumar7@gmail.com",
-    "xp": 0,
-    "level": 1,
+    "xp": 150,
+    "level": 2,
     "joined": 1766952392006,
     "rank": "Novice"
   },
@@ -22,8 +23,8 @@
     "name": "subrat.g",
     "email": "subratkumarpadhy.g.new@gmail.com",
     "password": "subratkumarpadhy.g.new@gmail.com",
-    "xp": 90,
-    "level": 1,
+    "xp": 3395,
+    "level": 6,
     "joined": 1766954223620,
     "rank": "Novice"
   },
@@ -35,5 +36,23 @@
     "level": 3,
     "joined": 1766993673694,
     "rank": "Novice"
+  },
+  {
+    "email": "gopakishor007@gmail.com",
+    "joined": 1768151047531,
+    "level": 2,
+    "name": "kishor",
+    "password": "gopakishor007@gmail.com",
+    "rank": "Novice",
+    "xp": 160
+  },
+  {
+    "email": "jenapriyanshu2006@gmail.com",
+    "joined": 1768240676930,
+    "level": 1,
+    "name": "PRIYANSHU JENA",
+    "password": "jenapriyanshu2006@gmail.com",
+    "rank": "Novice",
+    "xp": 60
   }
 ]
