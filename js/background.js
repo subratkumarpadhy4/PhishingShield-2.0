@@ -172,7 +172,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
                     } : null
                 };
 
-                // Send to Backend (Localhost during Dev)
+                // Send to Backend
                 fetch('http://localhost:3000/api/reports', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -304,7 +304,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Save visit to log (async)
         chrome.storage.local.get(['visitLog'], (res) => {
             const logs = Array.isArray(res.visitLog) ? res.visitLog : [];
-            if (logs.length > 20) logs.shift();
+            // Keep last 200 entries for better history tracking
+            if (logs.length > 200) logs.shift();
             if (request.data) {
                 logs.push(request.data);
             }
@@ -343,7 +344,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             };
 
             // Send to Backend
-            fetch('https://phishingshield.onrender.com/api/reports', {
+            fetch('http://localhost:3000/api/reports', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(reportPayload)
@@ -372,11 +373,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // 5. UPDATE BLOCKLIST
     else if (request.type === "UPDATE_BLOCKLIST") {
         const bypassUrl = request.bypassUrl || null;
+        // Clear cache to force fresh fetch
+        blocklistCache.data = null;
+        blocklistCache.timestamp = 0;
         updateBlocklistFromStorage(bypassUrl, function () {
             // Callback when blocklist update is complete
             if (sendResponse) sendResponse({ success: true, blocklistUpdated: true });
-        });
+        }, true); // Force refresh
         return true; // Keep channel open for async response
+    }
+
+    // 7. FORCE BLOCKLIST SYNC (Immediate sync for ban/unban actions)
+    else if (request.type === "FORCE_BLOCKLIST_SYNC") {
+        console.log("[PhishingShield] Force blocklist sync requested");
+        // Clear cache and force refresh
+        blocklistCache.data = null;
+        blocklistCache.timestamp = 0;
+        updateBlocklistFromStorage(null, function () {
+            if (sendResponse) sendResponse({ success: true, synced: true });
+        }, true); // Force refresh
+        return true;
     }
 
     // 6. SYNC XP (Force Sync from Frontend)
@@ -633,7 +649,14 @@ self.testServiceWorker = function () {
  * Converts 'banned' reports into active blocking rules.
  * Syncs with server to get global banned sites.
  */
-function updateBlocklistFromStorage(bypassUrl = null, callback = null) {
+// Cache for blocklist to reduce server calls
+let blocklistCache = {
+    data: null,
+    timestamp: 0,
+    TTL: 2000 // 2 seconds cache
+};
+
+function updateBlocklistFromStorage(bypassUrl = null, callback = null, forceRefresh = false) {
     // First get local banned sites and blacklist, and bypass tokens
     chrome.storage.local.get(['reportedSites', 'blacklist', 'bypassTokens'], (result) => {
         const reports = result.reportedSites || [];
@@ -686,121 +709,110 @@ function updateBlocklistFromStorage(bypassUrl = null, callback = null) {
         });
 
         // Also fetch banned sites from server for global protection
-        fetch('https://phishingshield.onrender.com/api/reports')
+        const API_BASE = 'https://phishingshield.onrender.com/api';
+        const now = Date.now();
+
+        // Use cache if available and not expired, unless force refresh
+        if (!forceRefresh && blocklistCache.data && (now - blocklistCache.timestamp) < blocklistCache.TTL) {
+            console.log("[PhishingShield] Using cached blocklist data");
+            processBlocklist(blocklistCache.data, banned, bypassTokens, callback);
+            return;
+        }
+
+        // Fetch fresh data from server
+        fetch(`${API_BASE}/reports`)
             .then(res => res.json())
             .then(serverReports => {
-                const serverBanned = serverReports.filter(r => r.status === 'banned');
+                // Update cache
+                blocklistCache.data = serverReports;
+                blocklistCache.timestamp = now;
 
-                // Merge local and server banned sites (deduplicate by URL)
-                const bannedMap = new Map();
-                banned.forEach(r => bannedMap.set(r.url, r));
-                serverBanned.forEach(r => {
-                    if (!bannedMap.has(r.url)) {
-                        bannedMap.set(r.url, r);
-                    }
-                });
-                banned = Array.from(bannedMap.values());
-
-                // Filter out URLs that have active bypass tokens
-                // Match by both full URL and hostname for flexibility
-                const activeBypassUrls = new Set();
-                const activeBypassHostnames = new Set();
-                bypassTokens.forEach(token => {
-                    activeBypassUrls.add(token.url);
-                    try {
-                        const urlObj = new URL(token.url);
-                        activeBypassHostnames.add(urlObj.hostname);
-                    } catch (e) {
-                        // If URL parsing fails, skip hostname
-                    }
-                });
-
-                banned = banned.filter(r => {
-                    // Check if URL matches
-                    if (activeBypassUrls.has(r.url)) return false;
-                    // Check if hostname matches
-                    try {
-                        const rHostname = r.hostname || new URL(r.url).hostname;
-                        if (activeBypassHostnames.has(rHostname)) return false;
-                    } catch (e) {
-                        // If parsing fails, continue
-                    }
-                    return true;
-                });
-
-                console.log(`[PhishingShield] Blocklist: ${banned.length} sites (${bypassTokens.length} bypassed)`);
-
-                // Convert to Rules
-                const newRules = banned.map((r, index) => {
-                    let hostname;
-                    try {
-                        hostname = r.hostname || new URL(r.url).hostname;
-                    } catch (e) {
-                        hostname = r.url;
-                    }
-
-                    return {
-                        "id": 2000 + index, // IDs 2000+ for Community Blocklist
-                        "priority": 1,
-                        "action": {
-                            "type": "redirect",
-                            "redirect": { "extensionPath": "/banned.html?url=" + encodeURIComponent(r.url) }
-                        },
-                        "condition": {
-                            "urlFilter": "||" + hostname,
-                            "resourceTypes": ["main_frame"]
-                        }
-                    };
-                }).filter(rule => rule && rule.condition.urlFilter !== "||undefined"); // Filter invalid rules
-
-                // Clear old 2000+ rules and add new ones
-                chrome.declarativeNetRequest.getDynamicRules((currentRules) => {
-                    const removeIds = currentRules.filter(r => r.id >= 2000).map(r => r.id);
-                    chrome.declarativeNetRequest.updateDynamicRules({
-                        removeRuleIds: removeIds,
-                        addRules: newRules
-                    }, () => {
-                        console.log(`[PhishingShield] Blocklist Updated: ${newRules.length} sites blocked globally.`);
-                        if (callback) callback();
-                    });
-                });
+                processBlocklist(serverReports, banned, bypassTokens, callback);
             })
             .catch(err => {
                 console.warn("[PhishingShield] Failed to fetch server blocklist, using local only:", err);
                 // Fallback to local only
-                const newRules = banned.map((r, index) => {
-                    let hostname;
-                    try {
-                        hostname = r.hostname || new URL(r.url).hostname;
-                    } catch (e) {
-                        hostname = r.url;
-                    }
-
-                    return {
-                        "id": 2000 + index,
-                        "priority": 1,
-                        "action": {
-                            "type": "redirect",
-                            "redirect": { "extensionPath": "/banned.html?url=" + encodeURIComponent(r.url) }
-                        },
-                        "condition": {
-                            "urlFilter": "||" + hostname,
-                            "resourceTypes": ["main_frame"]
-                        }
-                    };
-                }).filter(rule => rule && rule.condition.urlFilter !== "||undefined");
-
-                chrome.declarativeNetRequest.getDynamicRules((currentRules) => {
-                    const removeIds = currentRules.filter(r => r.id >= 2000).map(r => r.id);
-                    chrome.declarativeNetRequest.updateDynamicRules({
-                        removeRuleIds: removeIds,
-                        addRules: newRules
-                    }, () => {
-                        console.log(`[PhishingShield] Blocklist Updated (local only): ${newRules.length} sites blocked.`);
-                        if (callback) callback();
-                    });
-                });
+                processBlocklist([], banned, bypassTokens, callback);
             });
+    });
+}
+
+// Helper function to process blocklist data
+function processBlocklist(serverReports, banned, bypassTokens, callback) {
+    const serverBanned = serverReports.filter(r => r.status === 'banned');
+
+    // Merge local and server banned sites (deduplicate by URL)
+    const bannedMap = new Map();
+    banned.forEach(r => bannedMap.set(r.url, r));
+    serverBanned.forEach(r => {
+        if (!bannedMap.has(r.url)) {
+            bannedMap.set(r.url, r);
+        }
+    });
+    banned = Array.from(bannedMap.values());
+
+    // Filter out URLs that have active bypass tokens
+    // Match by both full URL and hostname for flexibility
+    const activeBypassUrls = new Set();
+    const activeBypassHostnames = new Set();
+    bypassTokens.forEach(token => {
+        activeBypassUrls.add(token.url);
+        try {
+            const urlObj = new URL(token.url);
+            activeBypassHostnames.add(urlObj.hostname);
+        } catch (e) {
+            // If URL parsing fails, skip hostname
+        }
+    });
+
+    banned = banned.filter(r => {
+        // Check if URL matches
+        if (activeBypassUrls.has(r.url)) return false;
+        // Check if hostname matches
+        try {
+            const rHostname = r.hostname || new URL(r.url).hostname;
+            if (activeBypassHostnames.has(rHostname)) return false;
+        } catch (e) {
+            // If parsing fails, continue
+        }
+        return true;
+    });
+
+    console.log(`[PhishingShield] Blocklist: ${banned.length} sites (${bypassTokens.length} bypassed)`);
+
+    // Convert to Rules
+    const newRules = banned.map((r, index) => {
+        let hostname;
+        try {
+            hostname = r.hostname || new URL(r.url).hostname;
+        } catch (e) {
+            hostname = r.url;
+        }
+
+        return {
+            "id": 2000 + index, // IDs 2000+ for Community Blocklist
+            "priority": 1,
+            "action": {
+                "type": "redirect",
+                "redirect": { "extensionPath": "/banned.html?url=" + encodeURIComponent(r.url) }
+            },
+            "condition": {
+                "urlFilter": "||" + hostname,
+                "resourceTypes": ["main_frame"]
+            }
+        };
+    }).filter(rule => rule && rule.condition.urlFilter !== "||undefined"); // Filter invalid rules
+
+    // Clear old 2000+ rules and add new ones
+    chrome.declarativeNetRequest.getDynamicRules((currentRules) => {
+        const removeIds = currentRules.filter(r => r.id >= 2000).map(r => r.id);
+        chrome.declarativeNetRequest.updateDynamicRules({
+            removeRuleIds: removeIds,
+            addRules: newRules
+        }, () => {
+            console.log(`[PhishingShield] Blocklist Updated: ${newRules.length} sites blocked globally.`);
+            if (callback) callback();
+        });
     });
 }
 
@@ -809,6 +821,34 @@ chrome.runtime.onStartup.addListener(updateBlocklistFromStorage);
 chrome.runtime.onInstalled.addListener(updateBlocklistFromStorage);
 
 // UPDATE_BLOCKLIST is handled in the main message listener above
+
+// --- FAST BLOCKLIST SYNC (Every 3 seconds for near real-time updates) ---
+// Note: Chrome alarms minimum is 1 minute, so we use setInterval for faster sync
+let blocklistSyncInterval = null;
+
+function startBlocklistSync() {
+    // Clear any existing interval
+    if (blocklistSyncInterval) {
+        clearInterval(blocklistSyncInterval);
+    }
+
+    // Sync every 3 seconds
+    blocklistSyncInterval = setInterval(() => {
+        updateBlocklistFromStorage(null, () => {
+            console.log("[PhishingShield] Blocklist synced (periodic - 3s)");
+        });
+    }, 3000); // 3 seconds
+}
+
+// Start the sync interval
+startBlocklistSync();
+
+// Also sync on tab activation to catch updates quickly
+chrome.tabs.onActivated.addListener(() => {
+    updateBlocklistFromStorage(null, () => {
+        console.log("[PhishingShield] Blocklist synced (tab activated)");
+    });
+});
 
 // -----------------------------------------------------------------------------
 // BYPASS TOKEN MANAGEMENT - One-time bypass for banned sites
@@ -881,7 +921,7 @@ function syncXPToServer(customData = {}) {
             };
 
             // Sync to server
-            fetch("https://phishingshield.onrender.com/api/users/sync", {
+            fetch("http://localhost:3000/api/users/sync", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(userData)
@@ -927,7 +967,7 @@ function syncReportsHeal() {
         const myReports = res.reportedSites || [];
         if (myReports.length === 0) return;
 
-        fetch('https://phishingshield.onrender.com/api/reports')
+        fetch('http://localhost:3000/api/reports')
             .then(r => r.json())
             .then(serverReports => {
                 const serverUrls = new Set(serverReports.map(r => r.url));
@@ -935,7 +975,7 @@ function syncReportsHeal() {
                 myReports.forEach(localR => {
                     if (!serverUrls.has(localR.url)) {
                         console.warn(`[PhishingShield] Report missing on server (Wipe?): ${localR.url}. Re-uploading...`);
-                        fetch('https://phishingshield.onrender.com/api/reports', {
+                        fetch('http://localhost:3000/api/reports', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(localR)

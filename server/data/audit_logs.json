@@ -86,16 +86,352 @@
     "timestamp": "2026-01-03T17:42:57.798Z"
   },
   {
-    "id": "log_1768253009723_haldh0nr3",
+    "id": "log_1768329451721_ivij6c3gq",
     "userId": "rajkumarpadhy2006@gmail.com",
     "action": "admin_login_success",
     "ipAddress": "127.0.0.1",
     "userAgent": "Unknown",
     "success": true,
     "details": {
-      "sessionId": "admin_sess_1768253009715_2xwa92kbh",
+      "sessionId": "admin_sess_1768329451718_zzgflsvng",
       "method": "password_only"
     },
-    "timestamp": "2026-01-12T21:23:29.723Z"
+    "timestamp": "2026-01-13T18:37:31.721Z"
+  },
+  {
+    "id": "log_1768375442228_k2xdr7t8i",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:24:02.228Z"
+  },
+  {
+    "id": "log_1768375442238_vs954lo9z",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:24:02.238Z"
+  },
+  {
+    "id": "log_1768375442241_jytvicxql",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:24:02.241Z"
+  },
+  {
+    "id": "log_1768375442243_gmqs7yp01",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:24:02.243Z"
+  },
+  {
+    "id": "log_1768375442246_oiud577l9",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:24:02.246Z"
+  },
+  {
+    "id": "log_1768375442249_su2bs9i05",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "rate_limit_exceeded"
+    },
+    "timestamp": "2026-01-14T07:24:02.249Z"
+  },
+  {
+    "id": "log_1768375527778_2f170awql",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:25:27.778Z"
+  },
+  {
+    "id": "log_1768375527792_utkbkvb14",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:25:27.792Z"
+  },
+  {
+    "id": "log_1768375527795_eykirnzdx",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:25:27.795Z"
+  },
+  {
+    "id": "log_1768375527797_dsaaeejgm",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:25:27.797Z"
+  },
+  {
+    "id": "log_1768375527799_xcjy9ha93",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:25:27.799Z"
+  },
+  {
+    "id": "log_1768375527802_l3env7hhd",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "rate_limit_exceeded"
+    },
+    "timestamp": "2026-01-14T07:25:27.802Z"
+  },
+  {
+    "id": "log_1768376343536_xris04e1k",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:39:03.536Z"
+  },
+  {
+    "id": "log_1768376343552_58pi99wzn",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:39:03.552Z"
+  },
+  {
+    "id": "log_1768376343557_g33l7tf1y",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:39:03.557Z"
+  },
+  {
+    "id": "log_1768376343562_cztg8cf0a",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:39:03.562Z"
+  },
+  {
+    "id": "log_1768376343566_o4odh2pkp",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:39:03.566Z"
+  },
+  {
+    "id": "log_1768376343572_jefa7e9ko",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:39:03.572Z"
+  },
+  {
+    "id": "log_1768376343578_mp26f83nx",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:39:03.578Z"
+  },
+  {
+    "id": "log_1768376343582_us4rz82e0",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:39:03.582Z"
+  },
+  {
+    "id": "log_1768376343589_rw7n17ull",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:39:03.589Z"
+  },
+  {
+    "id": "log_1768376343595_79mduuel5",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:39:03.595Z"
+  },
+  {
+    "id": "log_1768376343599_w7zk77jfo",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:39:03.599Z"
+  },
+  {
+    "id": "log_1768376343603_qipflre79",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:39:03.603Z"
+  },
+  {
+    "id": "log_1768376343607_eq63egrux",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:39:03.607Z"
+  },
+  {
+    "id": "log_1768376343611_tm60uokmk",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:39:03.611Z"
+  },
+  {
+    "id": "log_1768376343615_k7f44r7ei",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "not_admin_email"
+    },
+    "timestamp": "2026-01-14T07:39:03.615Z"
+  },
+  {
+    "id": "log_1768376343619_bnkap82jo",
+    "userId": "admin@example.com",
+    "action": "admin_login_attempt",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": false,
+    "details": {
+      "reason": "rate_limit_exceeded"
+    },
+    "timestamp": "2026-01-14T07:39:03.619Z"
   }
 ]

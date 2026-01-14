@@ -10,12 +10,12 @@ const jwt = require("jsonwebtoken");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const REPORTS_FILE = path.join(__dirname, "reports.json");
-const USERS_FILE = path.join(__dirname, "users.json");
-const AUDIT_LOG_FILE = path.join(__dirname, "data", "audit_logs.json");
+const REPORTS_FILE = path.join(__dirname, 'reports.json');
+const USERS_FILE = path.join(__dirname, 'users.json');
+const AUDIT_LOG_FILE = path.join(__dirname, 'data', 'audit_logs.json');
+const TRUST_FILE = path.join(__dirname, 'data', 'trust_scores.json');
 
 console.log("Gemini Key Status:", process.env.GEMINI_API_KEY ? "Found" : "Not Found");
-
 
 // Admin Configuration (Server-Side Only)
 const ADMIN_EMAILS = ["rajkumarpadhy2006@gmail.com"]; // Add more admin emails here
@@ -52,14 +52,11 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 
 // Initialize Data Files
-if (!fs.existsSync(REPORTS_FILE))
-    fs.writeFileSync(REPORTS_FILE, JSON.stringify([], null, 2));
-if (!fs.existsSync(USERS_FILE))
-    fs.writeFileSync(USERS_FILE, JSON.stringify([], null, 2));
-if (!fs.existsSync(path.dirname(AUDIT_LOG_FILE)))
-    fs.mkdirSync(path.dirname(AUDIT_LOG_FILE), { recursive: true });
-if (!fs.existsSync(AUDIT_LOG_FILE))
-    fs.writeFileSync(AUDIT_LOG_FILE, JSON.stringify([], null, 2));
+if (!fs.existsSync(REPORTS_FILE)) fs.writeFileSync(REPORTS_FILE, JSON.stringify([], null, 2));
+if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, JSON.stringify([], null, 2));
+if (!fs.existsSync(path.dirname(AUDIT_LOG_FILE))) fs.mkdirSync(path.dirname(AUDIT_LOG_FILE), { recursive: true });
+if (!fs.existsSync(AUDIT_LOG_FILE)) fs.writeFileSync(AUDIT_LOG_FILE, JSON.stringify([], null, 2));
+if (!fs.existsSync(TRUST_FILE)) fs.writeFileSync(TRUST_FILE, JSON.stringify([], null, 2));
 
 // --- Helpers ---
 const readData = (file) => {
@@ -72,6 +69,121 @@ const readData = (file) => {
 const writeData = (file, data) => {
     fs.writeFileSync(file, JSON.stringify(data, null, 2));
 };
+
+
+// --- TRUST SCORE SYSTEM (Community Voting) ---
+app.get('/api/trust/score', (req, res) => {
+    const { domain } = req.query;
+    if (!domain) return res.status(400).json({ error: "Domain required" });
+
+    const scores = readData(TRUST_FILE);
+    const domainData = scores.find(s => s.domain === domain);
+
+    if (!domainData) return res.json({ score: 50, votes: 0, status: 'unknown' }); // Neutral start
+
+    const total = domainData.safe + domainData.unsafe;
+    const score = total === 0 ? 50 : Math.round((domainData.safe / total) * 100);
+
+    res.json({
+        score,
+        votes: total,
+        status: score > 70 ? 'safe' : (score < 30 ? 'malicious' : 'suspect')
+    });
+});
+
+app.post('/api/trust/vote', (req, res) => {
+    // userId is recommended to limit spam
+    const { domain, vote, userId } = req.body; // vote: 'safe' or 'unsafe'
+    if (!domain || !vote) return res.status(400).json({ error: "Domain and vote required" });
+
+    let scores = readData(TRUST_FILE);
+    let entry = scores.find(s => s.domain === domain);
+
+    if (!entry) {
+        entry = { domain, safe: 0, unsafe: 0, voters: {} };
+        scores.push(entry);
+    }
+
+    // Initialize voters map if simple structure exists
+    if (!entry.voters) entry.voters = {};
+
+    // ANONYMOUS MODE FALLBACK: If no userId, allow infinite votes (legacy behavior)
+    // To enforcing limits, client MUST send userId.
+    const uid = userId || 'anonymous_' + Date.now();
+
+    if (userId && entry.voters[userId]) {
+        const previousVote = entry.voters[userId];
+
+        if (previousVote === vote) {
+            return res.json({ success: true, message: "You have already voted this way." });
+        } else {
+            // Switch vote
+            if (previousVote === 'safe') entry.safe = Math.max(0, entry.safe - 1);
+            else entry.unsafe = Math.max(0, entry.unsafe - 1);
+
+            if (vote === 'safe') entry.safe++;
+            else entry.unsafe++;
+
+            entry.voters[userId] = vote;
+            console.log(`[Trust] Vote SWITCHED for ${domain} by ${userId}: ${previousVote} -> ${vote}`);
+        }
+    } else {
+        // New Vote
+        if (vote === 'safe') entry.safe++;
+        else if (vote === 'unsafe') entry.unsafe++;
+
+        // Track it
+        if (userId) entry.voters[userId] = vote;
+    }
+
+    writeData(TRUST_FILE, scores);
+    console.log(`[Trust] New vote for ${domain}: ${vote} (User: ${userId || 'Anon'})`);
+    res.json({ success: true, message: "Vote recorded." });
+});
+
+// Admin: Clear all trust history
+app.post('/api/trust/clear', (req, res) => {
+    // In a real app, requireAdmin middleware here.
+    writeData(TRUST_FILE, []);
+    console.warn("[Admin] Trust history cleared.");
+    res.json({ success: true, message: "All trust scores cleared." });
+});
+
+// Admin: Get all trust scores
+app.get('/api/trust/all', (req, res) => {
+    const scores = readData(TRUST_FILE);
+    res.json(scores);
+});
+
+// Admin: Simulate Sync to Global Server
+app.post('/api/trust/sync', (req, res) => {
+    // 1. Read Local Trust Data
+    const localData = readData(TRUST_FILE);
+
+    // 2. Simulate Upload delay
+    setTimeout(() => {
+        // 3. Update Sync Timestamp (stored in a separate file or metadata)
+        const META_FILE = path.join(__dirname, 'data', 'server_meta.json');
+        let meta = {};
+        if (fs.existsSync(META_FILE)) meta = JSON.parse(fs.readFileSync(META_FILE));
+
+        meta.lastTrustSync = Date.now();
+        fs.writeFileSync(META_FILE, JSON.stringify(meta, null, 2));
+
+        console.log("[Sync] Trust scores synced to Global Server (Simulated).");
+        res.json({ success: true, syncedCount: localData.length, timestamp: meta.lastTrustSync });
+    }, 1500);
+});
+
+// Admin: Get Sync Status
+app.get('/api/trust/sync-status', (req, res) => {
+    const META_FILE = path.join(__dirname, 'data', 'server_meta.json');
+    if (!fs.existsSync(META_FILE)) return res.json({ lastSync: null });
+
+    const meta = JSON.parse(fs.readFileSync(META_FILE));
+    res.json({ lastSync: meta.lastTrustSync || null });
+});
+
 
 // --- ROUTES: REPORTS ---
 
@@ -245,11 +357,30 @@ async function sendEmail(to, subject, htmlContent, options = {}) {
 // In-memory OTP store (Global variable)
 const otpStore = {};
 
+// Automatic cleanup for OTPs and Rate Limits (Every 5 minutes)
+setInterval(() => {
+    const now = Date.now();
+
+    // Clean OTPs
+    Object.keys(otpStore).forEach(email => {
+        if (otpStore[email].expires < now) {
+            delete otpStore[email];
+        }
+    });
+
+    // Clean Rate Limits
+    Object.keys(adminRateLimit).forEach(key => {
+        // defined below
+        if (adminRateLimit[key].expires < now) {
+            delete adminRateLimit[key];
+        }
+    });
+}, 5 * 60 * 1000);
+
 // Admin-specific stores
 const adminPendingSessions = {}; // Stores temporary admin sessions before MFA
 const adminSessions = {}; // Stores active admin sessions
 const adminRateLimit = {}; // Rate limiting for admin endpoints
-
 // Helper: Check if email is admin
 function isAdminEmail(email) {
     if (!email) return false;
@@ -282,7 +413,30 @@ function logAdminAction(userId, action, ipAddress, success, details = {}) {
 
 // Helper: Rate limiting check for admin
 function checkAdminRateLimit(ip, endpoint) {
-    // RATE LIMIT DISABLED BY ADMIN REQUEST
+    const key = `${ip}:${endpoint}`;
+    const now = Date.now();
+    const LIMIT = 15; // 15 attempts (Updated by User)
+    const WINDOW = 15 * 60 * 1000; // 15 minutes
+
+    if (!adminRateLimit[key]) {
+        adminRateLimit[key] = { count: 1, expires: now + WINDOW };
+        return true;
+    }
+
+    const record = adminRateLimit[key];
+
+    // Check if window expired (should be handled by cleanup, but double check)
+    if (now > record.expires) {
+        record.count = 1;
+        record.expires = now + WINDOW;
+        return true;
+    }
+
+    if (record.count >= LIMIT) {
+        return false;
+    }
+
+    record.count++;
     return true;
 }
 
@@ -304,7 +458,11 @@ app.post("/api/send-otp", async (req, res) => {
 
     // Generate 4-digit code
     const code = Math.floor(1000 + Math.random() * 9000).toString();
-    otpStore[email] = code;
+    // Expires in 10 minutes
+    otpStore[email] = {
+        code: code,
+        expires: Date.now() + 10 * 60 * 1000
+    };
 
     // Log for Dev
     console.log(`[OTP] Preparing to send ${code} to ${email}...`);
@@ -387,11 +545,23 @@ app.post("/api/send-otp", async (req, res) => {
 app.post("/api/verify-otp", (req, res) => {
     const { email, otp } = req.body;
 
-    // Check against stored code (Robust string comparison)
-    const stored = otpStore[email] ? String(otpStore[email]).trim() : null;
-    const input = otp ? String(otp).trim() : "";
+    const record = otpStore[email];
 
-    if (stored && stored === input) {
+    if (!record) {
+        return res.status(400).json({ success: false, message: "OTP expired or invalid" });
+    }
+
+    // Check Expiry
+    if (Date.now() > record.expires) {
+        delete otpStore[email];
+        return res.status(400).json({ success: false, message: "OTP expired" });
+    }
+
+    // Check against stored code (Robust string comparison)
+    const stored = String(record.code).trim();
+    const input = otp ? String(otp).trim() : '';
+
+    if (stored === input) {
         console.log(`[OTP] ✅ Verified for ${email}`);
         delete otpStore[email]; // Clear after use
         res.json({ success: true });

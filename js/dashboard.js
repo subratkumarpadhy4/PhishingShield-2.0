@@ -61,7 +61,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                 chrome.storage.local.get(['visitLog', 'theme', 'users', 'suspectedExtensions', 'userXP', 'userLevel'], (result) => {
-                    const log = result.visitLog || [];
+                    let log = result.visitLog;
+                    if (!Array.isArray(log)) log = [];
+
                     const users = result.users || [];
                     const extLog = result.suspectedExtensions || [];
 
@@ -160,12 +162,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const clearBtn = document.getElementById('clear-history');
         if (clearBtn) {
-            clearBtn.addEventListener('click', () => {
-                if (confirm("Are you sure you want to clear your security history?")) {
-                    chrome.storage.local.set({ visitLog: [] }, () => {
+            document.getElementById('clear-history').addEventListener('click', () => {
+                if (confirm('Clear all history? This cannot be undone.')) {
+                    chrome.storage.local.set({ visitLog: [], siteHistory: [] }, () => {
                         location.reload();
                     });
                 }
+            });
+        }
+
+        const refreshBtn = document.getElementById('refresh-log');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => {
+                refreshBtn.textContent = 'Refreshing...';
+                // Reload storage data
+                chrome.storage.local.get(['visitLog'], (result) => {
+                    try {
+                        let log = result.visitLog;
+                        if (!Array.isArray(log)) {
+                            console.warn("Invalid visitLog format, resetting to empty array.");
+                            log = [];
+                        }
+
+                        // Update Stats & Table
+                        updateStats(log);
+                        renderTable(log);
+                    } catch (e) {
+                        console.error("Refresh failed:", e);
+                    } finally {
+                        setTimeout(() => {
+                            refreshBtn.textContent = 'Refresh';
+                        }, 500);
+                    }
+                });
             });
         }
 
@@ -319,9 +348,6 @@ function checkAdminAccess() {
 
 function updateStats(log) {
     const total = log.length;
-    let threats = 0;
-    log.forEach(e => { if (e.score > 20) threats++; });
-    const safe = total - threats;
 
     // Safety Elements
     const elTotal = document.getElementById('total-scanned');
@@ -330,13 +356,106 @@ function updateStats(log) {
     const elSummary = document.getElementById('report-summary');
     const elTime = document.getElementById('time-spent');
 
-    if (elTotal) elTotal.innerText = total;
-    if (elSafe) elSafe.innerText = safe;
-    if (elThreats) elThreats.innerText = threats;
-    if (elTime) elTime.innerText = Math.round(safe * 0.5) + ' min';
+    // --- WEEKLY FILTER LOGIC (User Request: Reset every Monday 00:00) ---
+    const now = new Date();
+    const day = now.getDay(); // 0(Sun) ... 6(Sat)
+    // Calculate days to subtract to get to last Monday
+    // Mon(1) -> 0. Tue(2) -> 1. ... Sun(0) -> 6.
+    const diffToMon = day === 0 ? 6 : day - 1;
 
-    const safePercentage = total > 0 ? Math.round((safe / total) * 100) : 100;
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - diffToMon);
+    startOfWeek.setHours(0, 0, 0, 0);
+    const startOfWeekMs = startOfWeek.getTime();
+
+    // Filter log for Weekly Chart Data
+    const weeklyLog = log.filter(e => (e.timestamp || 0) >= startOfWeekMs);
+
+    let highRisk = 0;
+    let medRisk = 0;
+    let safe = 0;
+
+    // Calculate Chart Stats based on WEEKLY data
+    weeklyLog.forEach(e => {
+        if (e.score >= 50) {
+            highRisk++;
+        } else if (e.score >= 20) {
+            medRisk++;
+        } else {
+            safe++;
+        }
+    });
+
+    // Calculate Lifetime Stats for Overview Cards (Optional: keep lifetime or switch all?)
+    // User specifically asked for "Pie Graph" to be weekly.
+    // For consistency, let's keep the Text Stats as Lifetime (Total Scanned) 
+    // but the Pie Chart as Weekly Monitoring.
+
+    // Recalculate lifetime threats for the specific text counter? 
+    // Actually, elThreats usually pairs with the chart. 
+    // Let's make the "Threats Blocked" card satisfy the "Weekly" context too?
+    // The user screenshot shows "Threats Blocked: 1" and Chart "1 Threats". They usually match.
+    // I will use WEEKLY stats for the "Threats Blocked" card to match the chart.
+
+    // However, "Total Scanned" (elTotal) usually implies lifetime usage. 
+    // I will use `log.length` for Total Scanned, but `weeklyLog` for Threats/Safe breakdown in chart.
+
+    // Update Text Elements
+    if (elTotal) elTotal.innerText = total; // Lifetime
+
+    // For Safe/Threats detail cards, let's use Weekly to match chart, or Lifetime?
+    // If chart resets to 0, and "Threats Blocked" says 500, it looks broken.
+    // I will set THREATS BLOCKED (elThreats) to match the CHART (Weekly).
+    if (elThreats) elThreats.innerText = highRisk + medRisk;
+
+    // Safe Streak/Total Safe? "Total Safe" implies lifetime. 
+    // Let's filter lifetime Safe count for that specific card if needed, 
+    // but typically `safe` var is reused. 
+    // Let's calculate lifetime safe for the card:
+    const lifetimeSafe = log.filter(e => e.score < 20).length;
+    if (elSafe) elSafe.innerText = lifetimeSafe;
+
+    if (elTime) elTime.innerText = Math.round(lifetimeSafe * 0.5) + ' min';
+
+    const safePercentage = total > 0 ? Math.round((lifetimeSafe / total) * 100) : 100;
     if (elSummary) elSummary.innerText = `Safety: ${safePercentage}%`;
+
+    // Format Date Range for Label
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+    // Format: "Jan 12 - Jan 18"
+    const options = { month: 'short', day: 'numeric' };
+    const dateRange = `${startOfWeek.toLocaleDateString('en-US', options)} - ${endOfWeek.toLocaleDateString('en-US', options)}`;
+
+    // Update the Date Range Display Below Chart
+    const rangeEl = document.getElementById('chart-date-range');
+    if (rangeEl) rangeEl.innerText = dateRange;
+
+    // --- RENDER CHARTS ---
+    if (typeof SimpleCharts !== 'undefined') {
+        // Doughnut: High, Suspicious, Safe (WEEKLY DATA)
+        SimpleCharts.doughnut(
+            'threat-pie-canvas',
+            [highRisk, medRisk, safe],
+            ['#dc3545', '#ffc107', '#0d6efd'],
+            ['Phishing', 'Suspicious', 'Safe'],
+            highRisk + medRisk, // Center Value
+            "Weekly"           // Center Label (General Context, specific dates are below)
+        );
+
+        // Line: Last 10 Visit Scores (Recent Activity)
+        // Get last 10, reverse to show chronological left-to-right
+        const recentScores = [...log]
+            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)) // Newest first
+            .slice(0, 10)
+            .reverse() // Chronological
+            .map(e => e.score || 0);
+
+        if (recentScores.length > 0) {
+            SimpleCharts.line('activity-line-canvas', recentScores, '#0d6efd');
+        }
+    }
 
     // Gamification
     chrome.storage.local.get(['userXP', 'userLevel'], (g) => {
@@ -374,6 +493,9 @@ function updateStats(log) {
     // --- NEW: Radar Stats Population ---
     const elRadarCount = document.getElementById('radar-threat-count');
     const elRadarLast = document.getElementById('radar-last-threat');
+
+    // Calculate total threats (high risk + medium risk)
+    const threats = highRisk + medRisk;
 
     // Updates
     if (elRadarCount) elRadarCount.innerText = threats.toLocaleString();
@@ -461,7 +583,9 @@ function renderTable(log) {
     }
 
     // Sort by timestamp (newest first) and show most recent 50
-    [...log].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 50).forEach(e => {
+    const visibleLogs = [...log].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 50);
+
+    visibleLogs.forEach((e, i) => {
         const tr = document.createElement('tr');
 
         let status = 'Safe';
@@ -475,14 +599,60 @@ function renderTable(log) {
             badgeClass = 'risk-med';
         }
 
+        let timeStr = '-';
+        if (e.timestamp) {
+            try {
+                timeStr = new Date(e.timestamp).toLocaleTimeString();
+            } catch (err) { timeStr = 'Invalid Date'; }
+        }
+
+        const rowId = `log-row-${i}`;
         tr.innerHTML = `
-            <td>${e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '-'}</td>
+            <td>${timeStr}</td>
             <td>${e.hostname || 'Local File / Unknown'}</td>
+            <td id="trust-${rowId}" class="trust-cell"><span style="color:#adb5bd; font-size:11px;">...</span></td>
             <td>${e.score}/100</td>
             <td><span class="risk-badge ${badgeClass}">${status}</span></td>
         `;
         tbody.appendChild(tr);
     });
+
+    // Valid Hostnames for Trust Score Fetch
+    const validEntries = visibleLogs.map((e, i) => ({
+        hostname: e.hostname,
+        elementId: `trust-log-row-${i}`
+    })).filter(e => e.hostname && e.hostname.includes('.'));
+
+    // Async Fetch Trust Scores
+    fetchLogTrustScores(validEntries);
+}
+
+async function fetchLogTrustScores(entries) {
+    if (typeof ThreatIntel === 'undefined') return;
+
+    for (const entry of entries) {
+        try {
+            // Check cache or fetch
+            // We use the same service but we need to be careful not to spam.
+            // For now, sequential is safer for the demo server.
+            const data = await ThreatIntel.getTrustScore("http://" + entry.hostname);
+            const el = document.getElementById(entry.elementId);
+
+            if (el && data) {
+                if (data.score >= 80) {
+                    el.innerHTML = `<span style="color:#198754; font-weight:bold;">${data.score}%</span>`;
+                } else if (data.score <= 40) {
+                    el.innerHTML = `<span style="color:#dc3545; font-weight:bold;">${data.score}%</span>`;
+                } else {
+                    el.innerHTML = `<span style="color:#ffc107; font-weight:bold;">${data.score}%</span>`;
+                }
+            } else if (el) {
+                el.innerHTML = `<span style="color:#adb5bd;">N/A</span>`;
+            }
+        } catch (e) {
+            // Silent fail
+        }
+    }
 }
 
 

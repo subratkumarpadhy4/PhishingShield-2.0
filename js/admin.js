@@ -102,13 +102,18 @@ function setupReportFilters() {
             refreshReportsBtn.innerText = "Refreshing...";
             refreshReportsBtn.disabled = true;
 
-            loadDashboardData(); // This is async but we don't have a promise wrapper here usually
+            // Clear cache to force fresh fetch
+            allReportsCache = [];
+            chrome.storage.local.set({ cachedGlobalReports: [] }, () => {
+                console.log('[Admin] Cache cleared, reloading reports...');
+                loadDashboardData(); // This is async but we don't have a promise wrapper here usually
 
-            // Revert UI after a delay (simulating async completion for UI feedback)
-            setTimeout(() => {
-                refreshReportsBtn.innerText = originalText;
-                refreshReportsBtn.disabled = false;
-            }, 1000);
+                // Revert UI after a delay (simulating async completion for UI feedback)
+                setTimeout(() => {
+                    refreshReportsBtn.innerText = originalText;
+                    refreshReportsBtn.disabled = false;
+                }, 2000);
+            });
         });
     }
 
@@ -497,12 +502,21 @@ function loadDashboardData() {
             renderLogs(aggregatedLogs);
 
             // --- Populate Reports Table ---
-            // Fetch from Node.js Backend
-            // Fetch from Node.js Backend 
-            fetch('http://localhost:3000/api/reports')
-                .then(res => res.json())
+            // Fetch from Node.js Backend (prefer cloud, fallback to local dev)
+            fetch('https://phishingshield.onrender.com/api/reports')
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                    }
+                    return res.json();
+                })
+                .catch(err => {
+                    console.warn('[Admin] Cloud reports fetch failed, falling back to localhost:', err);
+                    return fetch('http://localhost:3000/api/reports').then(r => r.json());
+                })
                 .then(serverReports => {
                     console.log("[Admin] Fetched Global Reports:", serverReports);
+                    console.log("[Admin] Number of reports:", Array.isArray(serverReports) ? serverReports.length : 'Not an array');
 
                     // --- SERVER RESTORATION LOGIC (Persistence Hack) ---
                     // If server returns EMPTY list (because it reset), but we have a Local Cache,
@@ -704,16 +718,23 @@ window.setReportFilter = function (status) {
 
 function renderReports(reports) {
     const tbody = document.querySelector('#reports-table tbody');
-    if (!tbody) return;
+    if (!tbody) {
+        console.error('[Admin] Reports table body not found!');
+        return;
+    }
     tbody.innerHTML = '';
 
     // Update Cache if new data provided
     if (reports) {
-        allReportsCache = reports;
+        allReportsCache = Array.isArray(reports) ? reports : [];
+        console.log('[Admin] renderReports called with', allReportsCache.length, 'reports');
     }
 
     // Use Cache
     let dataToRender = allReportsCache || [];
+
+    // Filter out invalid reports
+    dataToRender = dataToRender.filter(r => r && (r.url || r.hostname));
 
     // Apply Filter
     if (currentReportFilter !== 'all') {
@@ -724,28 +745,52 @@ function renderReports(reports) {
     }
 
     if (!dataToRender || dataToRender.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 20px; color:#6c757d;">No ${currentReportFilter !== 'all' ? currentReportFilter : ''} reports found.</td></tr>`;
+        const filterText = currentReportFilter !== 'all' ? currentReportFilter : '';
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 20px; color:#6c757d;">No ${filterText} reports found.</td></tr>`;
+        console.log('[Admin] No reports to display. Filter:', currentReportFilter, 'Total cached:', allReportsCache.length);
         return;
     }
+
+    console.log('[Admin] Rendering', dataToRender.length, 'reports');
 
     // Sort by Date (newest first)
     const sorted = [...dataToRender].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
     sorted.forEach((r, index) => {
-        const date = new Date(r.timestamp).toLocaleDateString();
+        // Validate report has required fields
+        if (!r || (!r.url && !r.hostname)) {
+            console.warn('[Admin] Skipping invalid report:', r);
+            return; // Skip invalid reports
+        }
+
+        const date = r.timestamp ? new Date(r.timestamp).toLocaleDateString() : 'Unknown';
         const status = r.status || 'pending';
 
         // Escape HTML to prevent XSS
         const escapeHtml = (text) => {
+            if (!text) return '';
             const div = document.createElement('div');
-            div.textContent = text;
+            div.textContent = String(text);
             return div.innerHTML;
         };
 
         let statusBadge = '<span class="badge" style="background:#ffc107; color:black">PENDING</span>';
-        const escapedUrl = escapeHtml(r.url);
+
+        // Safely get URL - try multiple sources
+        const reportUrl = r.url || r.hostname || 'Unknown URL';
+        const escapedUrl = escapeHtml(reportUrl);
         const escapedId = escapeHtml(r.id || '');
-        const escapedHostname = escapeHtml(r.hostname || new URL(r.url).hostname || r.url);
+
+        // Safely get hostname
+        let hostname = r.hostname;
+        if (!hostname && reportUrl !== 'Unknown URL') {
+            try {
+                hostname = new URL(reportUrl).hostname;
+            } catch (e) {
+                hostname = reportUrl; // Fallback to full URL if parsing fails
+            }
+        }
+        const escapedHostname = escapeHtml(hostname || reportUrl);
 
         // Action buttons based on status
         let actionBtn = '';
@@ -943,6 +988,12 @@ window.banSite = async function (url, reportId) {
                     if (chrome.runtime.lastError) {
                         console.error('[Admin] Error sending UPDATE_BLOCKLIST:', chrome.runtime.lastError);
                     }
+
+                    // Also trigger immediate sync for other instances
+                    chrome.runtime.sendMessage({ type: "FORCE_BLOCKLIST_SYNC" }, () => {
+                        console.log('[Admin] Force sync triggered');
+                    });
+
                     alert(`✅ Site Banned Successfully!\n\n${hostname} is now blocked globally.\n\nAll users across all devices will see a warning page when visiting this site.`);
                     loadDashboardData(); // Refresh UI
                     loadBannedSites(); // Refresh banned sites table
@@ -1060,6 +1111,12 @@ window.unbanSite = async function (url, reportId) {
                     if (chrome.runtime.lastError) {
                         console.error('[Admin] Error sending UPDATE_BLOCKLIST:', chrome.runtime.lastError);
                     }
+
+                    // Also trigger immediate sync for other instances
+                    chrome.runtime.sendMessage({ type: "FORCE_BLOCKLIST_SYNC" }, () => {
+                        console.log('[Admin] Force sync triggered');
+                    });
+
                     alert(`✅ Site Unbanned\n\nUsers can now visit this site.`);
                     loadDashboardData(); // Refresh UI
                     loadBannedSites(); // Refresh banned sites table
@@ -1551,8 +1608,10 @@ function openReportModal(report) {
     // Show
     modal.classList.remove('hidden');
 }
-// --- LOGOUT LOGIC (Moved from inline script) ---
+
+// --- LOGOUT LOGIC + COMMUNITY TRUST MANAGER LOGIC ---
 document.addEventListener('DOMContentLoaded', () => {
+    // Inject Logout button into user panel (Admin session control)
     const userPanel = document.querySelector('.user-panel');
     if (userPanel && !document.getElementById('admin-logout-btn')) {
         const logoutBtn = document.createElement('button');
@@ -1567,4 +1626,158 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         userPanel.appendChild(logoutBtn);
     }
+
+    // COMMUNITY TRUST MANAGER: bind buttons & tab hooks
+    const refreshTrustBtn = document.getElementById('btn-refresh-trust');
+    if (refreshTrustBtn) {
+        refreshTrustBtn.addEventListener('click', loadTrustData);
+    }
+
+    const syncTrustBtn = document.getElementById('btn-sync-trust');
+    if (syncTrustBtn) {
+        syncTrustBtn.addEventListener('click', handleTrustSync);
+    }
+
+    const clearTrustBtn = document.getElementById('btn-clear-trust');
+    if (clearTrustBtn) {
+        clearTrustBtn.addEventListener('click', handleClearTrust);
+    }
+
+    const trustTabLink = document.querySelector('[data-tab="trust"]');
+    if (trustTabLink) {
+        trustTabLink.addEventListener('click', () => {
+            loadTrustData();
+            checkTrustSyncStatus();
+        });
+    }
 });
+
+function loadTrustData() {
+    const tbody = document.querySelector('#trust-table tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Fetching data...</td></tr>';
+
+    fetch('http://localhost:3000/api/trust/all')
+        .then(res => res.json())
+        .then(data => {
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#6c757d;">No trust data recorded yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+
+            // Sort by Total Votes (Impact) descending
+            data.sort((a, b) => (b.safe + b.unsafe) - (a.safe + a.unsafe));
+
+            data.forEach(item => {
+                const total = item.safe + item.unsafe;
+                const score = total === 0 ? 50 : Math.round((item.safe / total) * 100);
+
+                let statusBadge = '';
+                if (score >= 70) statusBadge = '<span class="badge" style="background:#dcfce7; color:#166534">SAFE</span>';
+                else if (score <= 30) statusBadge = '<span class="badge" style="background:#fee2e2; color:#991b1b">MALICIOUS</span>';
+                else statusBadge = '<span class="badge" style="background:#fff7ed; color:#9a3412">SUSPICIOUS</span>';
+
+                // Progress Bar for visual score
+                const progressBar = `
+                    <div style="width:100px; height:6px; background:#e2e8f0; border-radius:3px; overflow:hidden; display:inline-block; vertical-align:middle; margin-right:8px;">
+                        <div style="width:${score}%; height:100%; background:${score >= 70 ? '#10b981' : (score > 30 ? '#f59e0b' : '#ef4444')}"></div>
+                    </div>
+                    <span style="font-weight:bold; font-size:12px;">${score}%</span>
+                `;
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight:600; color:#1e293b;">${item.domain}</td>
+                    <td>${progressBar}</td>
+                    <td style="color:#166534;">+${item.safe}</td>
+                    <td style="color:#dc3545;">-${item.unsafe}</td>
+                    <td>${statusBadge} <span style="font-size:11px; color:#64748b; margin-left:5px;">(${total} votes)</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        })
+        .catch(err => {
+            console.error("Failed to load trust data:", err);
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#dc3545;">Error loading data. Is server running?</td></tr>';
+        });
+}
+
+function handleTrustSync() {
+    const btn = document.getElementById('btn-sync-trust');
+    const statusEl = document.getElementById('trust-sync-status');
+
+    if (btn) btn.disabled = true;
+    if (statusEl) statusEl.innerText = "Syncing...";
+
+    fetch('http://localhost:3000/api/trust/sync', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                if (statusEl) {
+                    statusEl.innerText = "Synced";
+                    statusEl.className = "badge badge-active";
+                }
+                checkTrustSyncStatus(); // Update timestamp
+                alert(`Successfully synced ${data.syncedCount} records to Global Server.`);
+            }
+        })
+        .catch(err => {
+            if (statusEl) {
+                statusEl.innerText = "Failed";
+                statusEl.className = "badge badge-admin";
+            }
+            alert("Sync failed. Local server may be offline relative to Global.");
+        })
+        .finally(() => {
+            if (btn) btn.disabled = false;
+        });
+}
+
+function checkTrustSyncStatus() {
+    fetch('http://localhost:3000/api/trust/sync-status')
+        .then(res => res.json())
+        .then(data => {
+            const timeEl = document.getElementById('trust-last-sync');
+            const statusEl = document.getElementById('trust-sync-status');
+
+            if (data.lastSync) {
+                const date = new Date(data.lastSync).toLocaleString();
+                if (timeEl) timeEl.innerText = `Last: ${date}`;
+                if (statusEl) {
+                    statusEl.innerText = "Online";
+                    statusEl.className = "badge badge-active";
+                }
+            } else {
+                if (statusEl) statusEl.innerText = "Pending Upload";
+            }
+        })
+        .catch(() => {
+            const statusEl = document.getElementById('trust-sync-status');
+            if (statusEl) {
+                statusEl.innerText = "Offline";
+                statusEl.className = "badge";
+                statusEl.style.background = "#e2e8f0";
+            }
+        });
+}
+
+function handleClearTrust() {
+    if (!confirm("⚠️ Are you sure you want to delete ALL trust scores?\n\nThis cannot be undone.")) return;
+
+    fetch('http://localhost:3000/api/trust/clear', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert("Trust history cleared successfully.");
+                loadTrustData(); // Reload table (should be empty)
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Failed to clear history.");
+        });
+}
+

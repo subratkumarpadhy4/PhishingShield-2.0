@@ -74,6 +74,24 @@
                 </div>
             </div>
 
+            <!-- COMMUNITY TRUST SECTION -->
+            <div class="trust-card"
+                style="margin: 15px 20px; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                <div
+                    style="font-size: 12px; color: #6c757d; font-weight: 600; margin-bottom: 10px; display:flex; justify-content:space-between;">
+                    <span id="trust-domain" style="text-transform:lowercase;">...</span>
+                    <span id="trust-score-val" style="color: #0d6efd;">-</span>
+                </div>
+                <div class="vote-actions">
+                    <button id="btn-vote-safe" class="btn-vote">
+                        <span class="icon">👍</span> Safe
+                    </button>
+                    <button id="btn-vote-unsafe" class="btn-vote">
+                        <span class="icon">👎</span> Unsafe
+                    </button>
+                </div>
+            </div>
+
             <!-- Controls -->
             <div class="controls-panel">
                 <div class="control-item">
@@ -170,6 +188,7 @@
     </div>
 
     <script src="js/auth.js"></script>
+    <script src="js/threat_intel.js"></script>
     <script src="js/dojo.js"></script>
     <script src="js/popup.js"></script>
 </body>
