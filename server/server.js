@@ -240,22 +240,8 @@ app.get("/api/users", (req, res) => {
 
 
 
-// GET /api/users/global-sync (Proxy for Client Auth)
-app.get("/api/users/global-sync", async (req, res) => {
-    try {
-        const r = await fetch('https://phishingshield.onrender.com/api/users');
-        if (!r.ok) return res.json([]); // Fail silently to empty list
+// (Duplicate global-sync removed - see implementation at bottom)
 
-        const globalUsers = await r.json();
-
-        console.log(`[Global-Sync-Proxy] Fetched ${globalUsers.length}`);
-        res.json(globalUsers);
-    } catch (e) {
-        console.warn(`[Global-Sync-Proxy] Failed: ${e.message}`);
-        res.json([]);
-    }
-
-});
 
 // GET /test-phish (Simulation Page)
 app.get("/test-phish", (req, res) => {
@@ -629,6 +615,11 @@ app.post("/api/users/sync", (req, res) => {
             users[idx].xp = userData.xp;
             users[idx].level = userData.level;
             users[idx].lastUpdated = Date.now();
+        } else if (userData.isPenalty && clientUpdated > serverUpdated) {
+            // Admin Penalty Override
+            users[idx].xp = userData.xp;
+            users[idx].level = userData.level;
+            users[idx].lastUpdated = clientUpdated;
         }
 
         // Always update meta
@@ -638,6 +629,16 @@ app.post("/api/users/sync", (req, res) => {
         finalUser = users[idx];
         writeData(USERS_FILE, users);
         console.log(`[Sync] Updated user: ${userData.email}`);
+
+        // --- GLOBAL SYNC (FORWARD WRITE) ---
+        // Forward this update to the central cloud server
+        fetch('https://phishingshield.onrender.com/api/users/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(userData)
+        })
+            .then(r => console.log(`[Global-Forward] User update sent. Status: ${r.status}`))
+            .catch(e => console.warn(`[Global-Forward] Failed to sync user: ${e.message}`));
 
         res.json({ success: true, user: finalUser });
 
@@ -1138,132 +1139,113 @@ app.post("/api/reports/ai-verify", async (req, res) => {
         let aiReason = "No obvious threats detected.";
 
         if (process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY) {
-            // Use Groq if available (or fallback logic we used before)
-            // Ideally we reuse the same robust logic we just built for /scan
-            const { GoogleGenerativeAI } = require("@google/generative-ai");
-            let modelName = "llama-3.3-70b-versatile"; // Default if Groq
-            let isGroq = !!process.env.GROQ_API_KEY;
 
+            // --- FETCH PAGE CONTEXT (Shared) ---
+            let pageContext = "";
             try {
-                let textConfig = { apiKey: process.env.GROQ_API_KEY };
-                let Groq;
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+                const fetchRes = await fetch(url, { signal: controller.signal });
+                const html = await fetchRes.text();
+                clearTimeout(timeoutId);
+                const title = (html.match(/<title>(.*?)<\/title>/i) || [])[1] || "No Title";
+                const desc = (html.match(/<meta\s+name=["']description["']\s+content=["'](.*?)["']/i) || [])[1] || "No Description";
+                pageContext = `Page Title: "${title}"\nMeta Description: "${desc}"`;
+                console.log(`[AI-Verify] Fetched Context: ${pageContext}`);
+            } catch (e) {
+                pageContext = "Could not fetch page content. Analyze URL pattern only.";
+                console.warn(`[AI-Verify] Fetch failed: ${e.message}`);
+            }
 
-                if (isGroq) {
-                    Groq = require("groq-sdk");
-                } else {
-                    // Fallback to Gemini if no Groq key
-                    isGroq = false;
-                }
-
-                // FETCH PAGE CONTEXT
-                let pageContext = "";
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
-
-                    const fetchRes = await fetch(url, { signal: controller.signal });
-                    const html = await fetchRes.text();
-                    clearTimeout(timeoutId);
-
-                    // Extract Title
-                    const titleMatch = html.match(/<title>(.*?)<\/title>/i);
-                    const title = titleMatch ? titleMatch[1] : "No Title";
-
-                    // Extract Meta Description
-                    const metaMatch = html.match(/<meta\s+name=["']description["']\s+content=["'](.*?)["']/i);
-                    const description = metaMatch ? metaMatch[1] : "No Description";
-
-                    pageContext = `Page Title: "${title}"\nMeta Description: "${description}"`;
-                    console.log(`[AI-Verify] Fetched Context: ${pageContext}`);
-                } catch (e) {
-                    pageContext = "Could not fetch page content (Host unreachable or blocking bots). Analyze URL pattern only.";
-                    console.warn(`[AI-Verify] Fetch failed: ${e.message}`);
-                }
-
-                if (isGroq) {
-                    const groq = new Groq(textConfig);
-                    const completion = await groq.chat.completions.create({
-                        messages: [
-                            {
-                                role: "system",
-                                content: `You are PhishingShield AI, an expert cybersecurity analyst specializing in phishing detection.
-
-Your task is to analyze URLs and page context to identify potential threats.
+            // --- SHARED PROMPT ---
+            const SYSTEM_PROMPT = `You are PhishingShield AI, an expert cybersecurity analyst.
+Your task is to analyze URLs and page context to identify phishing threats.
 
 Classify the site into one of 3 categories:
-1. 'SAFE' - Legitimate, well-known sites (e.g., Instagram, Google, GitHub, universities, established companies)
-2. 'SUSPICIOUS' - Unknown domains, URL shorteners, typosquatting, or unclear intent
-3. 'MALICIOUS' - Clear phishing attempts, scams, fake login pages, credential harvesting
-
-Provide a DETAILED analysis including:
-- Overall classification
-- Specific threat indicators found (if any)
-- Domain reputation assessment
-- URL pattern analysis
-- Security concerns or red flags
-- Recommended action for users
+1. 'SAFE' - Legitimate, well-known sites (e.g., Google, GitHub, Universities)
+2. 'SUSPICIOUS' - Unknown domains, URL shorteners, typosquatting
+3. 'MALICIOUS' - Clear phishing, scams, fake logins
 
 Return JSON format:
 {
   "classification": "SAFE|SUSPICIOUS|MALICIOUS",
-  "reason": "Detailed multi-sentence explanation covering all findings",
-  "threatIndicators": ["list", "of", "specific", "threats", "found"],
+  "reason": "Detailed explanation covering findings",
+  "threatIndicators": ["list", "of", "threats"],
   "confidence": "high|medium|low"
-}`
-                            },
-                            {
-                                role: "user",
-                                content: `Analyze this URL for phishing threats:
+}`;
 
+            const USER_PROMPT = `Analyze this URL for phishing threats:
 URL: ${url}
 Page Context: ${pageContext}
+Provide comprehensive analysis.`;
 
-Provide comprehensive analysis with specific details.`
-                            }
+            let rawResult = null;
+            let provider = "NONE";
+
+            // 1. TRY GROQ
+            if (process.env.GROQ_API_KEY) {
+                try {
+                    const Groq = require("groq-sdk");
+                    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+                    const completion = await groq.chat.completions.create({
+                        messages: [
+                            { role: "system", content: SYSTEM_PROMPT },
+                            { role: "user", content: USER_PROMPT }
                         ],
-                        model: modelName,
+                        model: "llama-3.3-70b-versatile",
                         temperature: 0.1,
                         response_format: { type: "json_object" }
                     });
-                    const result = JSON.parse(completion.choices[0]?.message?.content || "{}");
-
-                    // Manual Mapping to Risk Score to prevent Hallucinations
-                    const cls = (result.classification || "SUSPICIOUS").toUpperCase();
-                    if (cls === "SAFE") aiScore = 0;
-                    else if (cls === "MALICIOUS") aiScore = 95;
-                    else aiScore = 45; // SUSPICIOUS
-
-                    aiSuggestion = (aiScore > 70) ? "BAN" : (aiScore > 30 ? "CAUTION" : "IGNORE");
-
-                    // Enhanced reason with threat indicators
-                    aiReason = result.reason || "No detailed analysis available";
-
-                    // Add threat indicators if present
-                    if (result.threatIndicators && result.threatIndicators.length > 0) {
-                        aiReason += "\n\n🚨 Threat Indicators:\n" + result.threatIndicators.map(t => `• ${t}`).join("\n");
-                    }
-
-                    // Add confidence level
-                    if (result.confidence) {
-                        aiReason += `\n\n🎯 Confidence: ${result.confidence.toUpperCase()}`;
-                    }
-
-                    console.log("[AI-Verify] Groq Success:", result, "mapped to", aiScore);
-                } else {
-                    // GEMINI LEGACY LOGIC
-                    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-                    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-                    const prompt = `Analyze URL ${url} for phishing. Return JSON {score, suggestion, reason}`;
-                    const result = await model.generateContent(prompt);
-                    const json = JSON.parse(result.response.text().replace(/```json/g, '').replace(/```/g, ''));
-                    aiScore = json.score;
-                    aiSuggestion = json.suggestion;
-                    aiReason = json.reason;
-                    console.log("[AI-Verify] Gemini Success:", json);
+                    rawResult = JSON.parse(completion.choices[0]?.message?.content || "{}");
+                    provider = "GROQ";
+                    console.log("[AI-Verify] Groq Analysis Success");
+                } catch (e) {
+                    console.error("[AI-Verify] Groq Error (Falling back to Gemini):", e.message);
                 }
-            } catch (err) {
-                console.error("[AI-Verify] AI Failed:", err.message);
-                aiReason = "AI Service Unavailable";
+            }
+
+            // 2. TRY GEMINI (Fallback)
+            if (!rawResult && process.env.GEMINI_API_KEY) {
+                try {
+                    const { GoogleGenerativeAI } = require("@google/generative-ai");
+                    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+                    // Use 'gemini-1.5-flash-latest' as it is more reliable for this key type
+                    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+
+                    // Gemini Text Prompt (Combine System + User)
+                    const fullPrompt = `${SYSTEM_PROMPT}\n\nTask:\n${USER_PROMPT}`;
+                    const result = await model.generateContent(fullPrompt);
+                    const text = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+                    rawResult = JSON.parse(text);
+                    provider = "GEMINI";
+                    console.log("[AI-Verify] Gemini Analysis Success");
+                } catch (e) {
+                    console.error("[AI-Verify] Gemini Error:", e.message);
+                }
+            }
+
+            // 3. PROCESS RESULT
+            if (rawResult) {
+                const cls = (rawResult.classification || "SUSPICIOUS").toUpperCase();
+                if (cls === "SAFE") aiScore = 0;
+                else if (cls === "MALICIOUS") aiScore = 95;
+                else aiScore = 45;
+
+                aiSuggestion = (aiScore > 70) ? "BAN" : (aiScore > 30 ? "CAUTION" : "IGNORE");
+
+                aiReason = rawResult.reason || "Analysis completed.";
+                if (rawResult.threatIndicators?.length > 0) {
+                    aiReason += "\n\n🚨 Indicators:\n" + rawResult.threatIndicators.map(t => `• ${t}`).join("\n");
+                }
+
+                // Add Provider Tag for Frontend Label Logic
+                if (provider === "GEMINI") {
+                    aiReason += "\n\n[Heuristic] Fallback: Analysis provided by Gemini (Groq Unavailable).";
+                }
+
+                console.log(`[AI-Verify] Final Result (${provider}): Score ${aiScore}`);
+            } else {
+                aiReason = "AI Service Unavailable (Both Providers Failed)";
             }
         } else {
             // NO API KEY - Use Heuristics
@@ -1522,6 +1504,7 @@ app.get("/api/users/global-sync", async (req, res) => {
 
         // Merge Logic: By Email. Maximize XP.
         const mergedUsers = [...localUsers];
+        let dataChanged = false;
 
         if (Array.isArray(globalUsers)) {
             globalUsers.forEach(gUser => {
@@ -1529,6 +1512,7 @@ app.get("/api/users/global-sync", async (req, res) => {
                 if (idx === -1) {
                     // New user from global
                     mergedUsers.push(gUser);
+                    dataChanged = true;
                 } else {
                     // Conflict Resolution:
                     // Prioritize specific timestamp if available. 
@@ -1538,15 +1522,25 @@ app.get("/api/users/global-sync", async (req, res) => {
 
                     if (globalTime > localTime) {
                         mergedUsers[idx] = gUser; // Global is newer
+                        dataChanged = true;
                     } else if (globalTime === 0 && localTime === 0) {
                         // Fallback: Max XP (Legacy behavior)
                         if ((gUser.xp || 0) > (mergedUsers[idx].xp || 0)) {
                             mergedUsers[idx] = gUser;
+                            dataChanged = true;
                         }
                     }
                 }
             });
         }
+
+        // --- PERSISTENCE FIX ---
+        // Save the merged list back to local file so it sticks
+        if (dataChanged) {
+            console.log(`[User-Sync] Data difference detected. updating local storage.`);
+            writeData(USERS_FILE, mergedUsers);
+        }
+
 
         console.log(`[User-Sync] Returning ${mergedUsers.length} merged users for leaderboard.`);
         res.json(mergedUsers);
