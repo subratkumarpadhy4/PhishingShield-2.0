@@ -1199,8 +1199,11 @@ Provide comprehensive analysis.`;
             let rawResult = null;
             let provider = "NONE";
 
-            // 1. TRY GROQ
-            if (process.env.GROQ_API_KEY) {
+            // Get user's provider choice from request (if specified)
+            const requestedProvider = req.body.provider ? req.body.provider.toUpperCase() : null;
+
+            // 1. TRY GROQ (if requested or as fallback)
+            if ((requestedProvider === 'GROQ' || !requestedProvider) && process.env.GROQ_API_KEY) {
                 try {
                     const Groq = require("groq-sdk");
                     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -1217,17 +1220,21 @@ Provide comprehensive analysis.`;
                     provider = "GROQ";
                     console.log("[AI-Verify] Groq Analysis Success");
                 } catch (e) {
-                    console.error("[AI-Verify] Groq Error (Falling back to Gemini):", e.message);
+                    console.error(`[AI-Verify] Groq Error${requestedProvider === 'GROQ' ? '' : ' (Falling back to Gemini)'}:`, e.message);
+                    // If user specifically requested Groq, don't fallback
+                    if (requestedProvider === 'GROQ') {
+                        throw new Error(`Groq Analysis Failed: ${e.message}`);
+                    }
                 }
             }
 
-            // 2. TRY GEMINI (Fallback)
-            if (!rawResult && process.env.GEMINI_API_KEY) {
+            // 2. TRY GEMINI (if requested or as fallback)
+            if (!rawResult && ((requestedProvider === 'GEMINI') || !requestedProvider) && process.env.GEMINI_API_KEY) {
                 try {
                     const { GoogleGenerativeAI } = require("@google/generative-ai");
                     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-                    // Use 'gemini-1.5-flash-latest' as it is more reliable for this key type
-                    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+                    // Using Gemini 2.5 Flash (confirmed available for this API key)
+                    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
                     // Gemini Text Prompt (Combine System + User)
                     const fullPrompt = `${SYSTEM_PROMPT}\n\nTask:\n${USER_PROMPT}`;
@@ -1237,7 +1244,8 @@ Provide comprehensive analysis.`;
                     provider = "GEMINI";
                     console.log("[AI-Verify] Gemini Analysis Success");
                 } catch (e) {
-                    console.error("[AI-Verify] Gemini Error:", e.message);
+                    console.error("[AI-Verify] Gemini Error Full Object:", e);
+                    console.error("[AI-Verify] Gemini Error Message:", e.message);
                 }
             }
 

@@ -4,26 +4,26 @@
     "email": "rajkumarpadhy2006@gmail.com",
     "password": "rajkumarpadhy2006@gmail.com",
     "joined": 1703800000000,
-    "xp": 30945,
-    "level": 18,
+    "xp": 28585,
+    "level": 17,
     "history": [],
     "lastCriticalTime": 1703800000000,
     "isPenalty": true,
     "settings": {
       "enableDownloads": true
     },
-    "lastUpdated": 1768468073416
+    "lastUpdated": 1768484013585
   },
   {
     "name": "subrat kumar padhy",
     "email": "padhysubratkumar7@gmail.com",
     "password": "padhysubratkumar7@gmail.com",
-    "xp": 1070,
+    "xp": 1130,
     "level": 4,
     "joined": 1766952392006,
     "rank": "Novice",
     "isPenalty": false,
-    "lastUpdated": 1768467763658
+    "lastUpdated": 1768483769591
   },
   {
     "email": "jenapriyanshu2006@gmail.com",
@@ -34,7 +34,7 @@
     "password": "jenapriyanshu2006@gmail.com",
     "rank": "Novice",
     "xp": 1000026,
-    "lastUpdated": 1768468632460
+    "lastUpdated": 1768479401253
   },
   {
     "email": "gopakishor007@gmail.com",
@@ -48,22 +48,22 @@
   {
     "email": "subratkumar_padhy@srmap.edu.in",
     "joined": 1766993673694,
+    "lastUpdated": 1768483792458,
     "level": 3,
     "name": "subrat clg id",
     "password": "subratkumar_padhy@srmap.edu.in",
     "rank": "Novice",
-    "xp": 790,
-    "lastUpdated": 1768467711799
+    "xp": 790
   },
   {
-    "name": "PJ",
     "email": "priyanshu_jena@srmap.edu.in",
-    "password": "priyanshu_jena@srmap.edu.in",
-    "xp": 0,
-    "level": 1,
     "joined": 1768421981201,
+    "lastUpdated": 1768470740287,
+    "level": 1,
+    "name": "PJ",
+    "password": "priyanshu_jena@srmap.edu.in",
     "rank": "Novice",
-    "lastUpdated": 1768422000398
+    "xp": 0
   },
   {
     "email": "phishingshield@gmail.com",
@@ -77,13 +77,53 @@
   },
   {
     "email": "subratkumarpadhy.g.new@gmail.com",
+    "isPenalty": false,
     "joined": 1766954223620,
-    "lastUpdated": 1768467764883,
+    "lastUpdated": 1768483770230,
     "level": 6,
     "name": "subrat.g",
     "password": "subratkumarpadhy.g.new@gmail.com",
     "rank": "Novice",
-    "xp": 3555,
-    "isPenalty": false
+    "xp": 3555
+  },
+  {
+    "name": "Delete Me Native",
+    "email": "deleteme_native@example.com",
+    "password": "pw",
+    "xp": 10,
+    "level": 1,
+    "lastUpdated": 1768477424843
+  },
+  {
+    "name": "Deletion Test User",
+    "email": "deletion_test@example.com",
+    "password": "password123",
+    "role": "admin",
+    "xp": 0,
+    "level": 1,
+    "lastUpdated": 0
+  },
+  {
+    "email": "deletion_test_user@example.com",
+    "name": "Deletion Test User",
+    "password": "password123"
+  },
+  {
+    "email": "zombie_leaderboard_test@example.com",
+    "name": "Zombie User",
+    "password": "password",
+    "xp": 999999,
+    "level": 1,
+    "lastUpdated": 0
+  },
+  {
+    "name": "james",
+    "email": "james71739@gmail.com",
+    "password": "james71739@gmail.com",
+    "xp": 0,
+    "level": 1,
+    "joined": 1768483358680,
+    "rank": "Novice",
+    "lastUpdated": 0
   }
 ]

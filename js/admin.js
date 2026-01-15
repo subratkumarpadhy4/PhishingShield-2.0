@@ -1767,36 +1767,79 @@ function openReportModal(report) {
     }
 
     btnRunAI.onclick = () => {
+        // Show provider selection instead of immediately running
         aiAction.style.display = 'none';
-        aiLoading.style.display = 'block';
 
-        // Force server request
-        fetch('http://localhost:3000/api/reports/ai-verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: report.id })
-        })
-            .then(res => res.json())
-            .then(data => {
-                aiLoading.style.display = 'none';
-                aiAction.style.display = 'block'; // Show button again for re-scan
+        // Create provider selection UI
+        const providerSelection = document.createElement('div');
+        providerSelection.id = 'provider-selection';
+        providerSelection.style.cssText = 'display: flex; gap: 10px; justify-content: center; margin: 20px 0;';
 
-                if (data.success && data.aiAnalysis) {
-                    report.aiAnalysis = data.aiAnalysis;
-                    renderAIResult(report.aiAnalysis);
-                    btnRunAI.innerHTML = '<i class="fas fa-check"></i> Analysis Updated';
-                    setTimeout(() => {
-                        btnRunAI.innerHTML = '<i class="fas fa-sync"></i> Re-Analyze (AI)';
-                    }, 2000);
-                } else {
-                    alert("AI Analysis Failed: " + (data.error || 'Unknown Error'));
-                }
+        const groqBtn = document.createElement('button');
+        groqBtn.className = 'btn';
+        groqBtn.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; transition: transform 0.2s;';
+        groqBtn.innerHTML = '🚀 Analyze with Groq<br><small style="opacity:0.8; font-size:11px;">Llama 3.3 70B</small>';
+        groqBtn.onmouseover = () => groqBtn.style.transform = 'scale(1.05)';
+        groqBtn.onmouseout = () => groqBtn.style.transform = 'scale(1)';
+
+        const geminiBtn = document.createElement('button');
+        geminiBtn.className = 'btn';
+        geminiBtn.style.cssText = 'background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; transition: transform 0.2s;';
+        geminiBtn.innerHTML = '✨ Analyze with Gemini<br><small style="opacity:0.8; font-size:11px;">Gemini 2.5 Flash</small>';
+        geminiBtn.onmouseover = () => geminiBtn.style.transform = 'scale(1.05)';
+        geminiBtn.onmouseout = () => geminiBtn.style.transform = 'scale(1)';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn btn-outline';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.style.cssText = 'padding: 12px 24px;';
+
+        providerSelection.appendChild(groqBtn);
+        providerSelection.appendChild(geminiBtn);
+        providerSelection.appendChild(cancelBtn);
+
+        // Insert after aiAction container
+        aiAction.parentNode.insertBefore(providerSelection, aiAction.nextSibling);
+
+        // Handler function for running analysis with selected provider
+        const runAnalysis = (provider) => {
+            providerSelection.remove();
+            aiLoading.style.display = 'block';
+
+            fetch('http://localhost:3000/api/reports/ai-verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: report.id, provider: provider })
             })
-            .catch(err => {
-                aiLoading.style.display = 'none';
-                aiAction.style.display = 'block';
-                alert("Network Error during AI Scan.");
-            });
+                .then(res => res.json())
+                .then(data => {
+                    aiLoading.style.display = 'none';
+                    aiAction.style.display = 'block';
+
+                    if (data.success && data.aiAnalysis) {
+                        report.aiAnalysis = data.aiAnalysis;
+                        renderAIResult(report.aiAnalysis);
+                        btnRunAI.innerHTML = '<i class="fas fa-check"></i> Analysis Updated';
+                        setTimeout(() => {
+                            btnRunAI.innerHTML = '<i class="fas fa-sync"></i> Re-Analyze (AI)';
+                        }, 2000);
+                    } else {
+                        alert("AI Analysis Failed: " + (data.error || 'Unknown Error'));
+                    }
+                })
+                .catch(err => {
+                    aiLoading.style.display = 'none';
+                    aiAction.style.display = 'block';
+                    alert("Network Error during AI Scan.");
+                });
+        };
+
+        groqBtn.onclick = () => runAnalysis('groq');
+        geminiBtn.onclick = () => runAnalysis('gemini');
+        cancelBtn.onclick = () => {
+            providerSelection.remove();
+            aiAction.style.display = 'block';
+        };
     };
 
     function renderAIResult(analysis) {
@@ -1824,9 +1867,16 @@ function openReportModal(report) {
         const providerLabel = document.querySelector('.ai-provider-label');
         if (providerLabel) {
             if ((reasonText || "").includes("[Heuristic]")) {
-                providerLabel.innerText = "LOCAL SYSTEM CHECK";
-                providerLabel.style.opacity = "0.7";
-                providerLabel.title = "No AI key provided. Using local pattern matching.";
+                // Check if it's Gemini fallback or pure heuristic
+                if (reasonText.includes("Gemini")) {
+                    providerLabel.innerText = "POWERED BY GEMINI";
+                    providerLabel.style.opacity = "1";
+                    providerLabel.title = "Verified by Gemini 2.5 Flash (Groq Unavailable)";
+                } else {
+                    providerLabel.innerText = "LOCAL SYSTEM CHECK";
+                    providerLabel.style.opacity = "0.7";
+                    providerLabel.title = "No AI key provided. Using local pattern matching.";
+                }
             } else {
                 providerLabel.innerText = "POWERED BY GROQ";
                 providerLabel.style.opacity = "1";
