@@ -19,9 +19,80 @@
             console.log('[PhishingShield] Blocked URL displayed:', blockedUrl);
         }
 
-        // Penalty logic moved to Proceed Anyway button click as per user request
+        // Check if site is still banned (allows auto-redirect on unban)
+        checkIfStillBanned(blockedUrl);
 
+        // Setup all button event listeners
+        setupEventListeners(blockedUrl);
+    }
 
+    // Check if the site is still banned
+    async function checkIfStillBanned(url) {
+        if (!url || url === 'Unknown URL') return;
+
+        try {
+            console.log('[PhishingShield] Checking if site is still banned:', url);
+
+            // Query local server for current ban status
+            const response = await fetch('http://localhost:3000/api/reports');
+            if (!response.ok) {
+                console.warn('[PhishingShield] Could not check ban status (server offline?)');
+                return;
+            }
+
+            const reports = await response.json();
+
+            // Normalize URL for comparison
+            let normalizedUrl = url.toLowerCase();
+            try {
+                const urlObj = new URL(url);
+                normalizedUrl = urlObj.hostname.replace(/^www\./, '');
+            } catch (e) {
+                // Use as-is if parsing fails
+            }
+
+            // Check if any report for this URL is still banned
+            const isBanned = reports.some(report => {
+                if (report.status !== 'banned') return false;
+
+                try {
+                    const reportUrl = new URL(report.url);
+                    const reportHostname = reportUrl.hostname.replace(/^www\./, '').toLowerCase();
+                    return reportHostname === normalizedUrl || report.url.toLowerCase().includes(normalizedUrl);
+                } catch (e) {
+                    return report.url.toLowerCase().includes(normalizedUrl);
+                }
+            });
+
+            if (!isBanned) {
+                console.log('[PhishingShield] ✅ Site has been unbanned! Redirecting...');
+
+                // Show notification
+                const container = document.querySelector('.container');
+                if (container) {
+                    const notice = document.createElement('div');
+                    notice.style.cssText = 'position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #10b981; color: white; padding: 15px 30px; border-radius: 8px; font-weight: bold; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.2);';
+                    notice.textContent = '✅ Site Unbanned! Redirecting...';
+                    document.body.appendChild(notice);
+                }
+
+                // Redirect after brief delay
+                setTimeout(() => {
+                    let target = url;
+                    if (!target.startsWith('http') && !target.startsWith('file')) {
+                        target = 'https://' + target;
+                    }
+                    window.location.href = target;
+                }, 1500);
+            } else {
+                console.log('[PhishingShield] Site is still banned');
+            }
+        } catch (error) {
+            console.error('[PhishingShield] Error checking ban status:', error);
+        }
+    }
+
+    function setupEventListeners(blockedUrl) {
         // Go Back button
         const goBackBtn = document.getElementById('go-back-btn');
         if (goBackBtn) {
