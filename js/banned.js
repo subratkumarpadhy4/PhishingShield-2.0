@@ -101,6 +101,19 @@
 
                         // Store in chrome.storage.local (if available) or sessionStorage
                         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                            // Ensure protocol exists for the token to be valid in background.js
+                            if (!normalizedUrl.startsWith('http') && !normalizedUrl.startsWith('file')) {
+                                normalizedUrl = 'https://' + normalizedUrl;
+                            }
+
+                            // Update UI to show processing
+                            const proceedBtn = document.getElementById('proceed-anyway-btn');
+                            if (proceedBtn) {
+                                proceedBtn.textContent = 'Unlocking... 🔓';
+                                proceedBtn.disabled = true;
+                                proceedBtn.style.opacity = '0.7';
+                            }
+
                             chrome.storage.local.get(['bypassTokens'], function (data) {
                                 const tokens = data.bypassTokens || [];
                                 // Remove any existing token for this URL (prevent duplicates)
@@ -116,7 +129,7 @@
                                         // Wait for blocklist to be updated before navigating
                                         if (response && response.success) {
                                             console.log('[PhishingShield] Blocklist updated, navigating to:', blockedUrl);
-                                            // Use a small delay to ensure rules are applied
+                                            // Increase delay to 1000ms to ensure Chrome applies the rule change
                                             setTimeout(function () {
                                                 // Ensure URL has protocol to avoid relative path (file not found) errors
                                                 let target = blockedUrl;
@@ -124,7 +137,7 @@
                                                     target = 'https://' + target;
                                                 }
                                                 window.location.href = target;
-                                            }, 200);
+                                            }, 1000);
                                         } else {
                                             // Fallback: try navigation anyway
                                             console.warn('[PhishingShield] Blocklist update response unclear, attempting navigation');
@@ -134,7 +147,7 @@
                                                     target = 'https://' + target;
                                                 }
                                                 window.location.href = target;
-                                            }, 300);
+                                            }, 1000);
                                         }
                                     });
                                 });

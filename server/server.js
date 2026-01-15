@@ -755,19 +755,25 @@ app.post("/api/users/sync", (req, res) => {
         const serverXP = Number(users[idx].xp) || 0;
         const serverLevel = Number(users[idx].level) || 1;
 
-        const clientUpdated = userData.lastUpdated || 0;
-        const serverUpdated = users[idx].lastUpdated || 0;
+        const clientUpdated = Number(userData.lastUpdated) || 0;
+        const serverUpdated = Number(users[idx].lastUpdated) || 0;
+
+        console.log(`[Sync] Check for ${userData.email}: Client(${userData.xp}xp @ ${clientUpdated}) vs Server(${serverXP}xp @ ${serverUpdated}). Force: ${userData.forceUpdate}, Penalty: ${userData.isPenalty}`);
 
         // Simple Max Logic for XP
+        // 1. Progress: New XP is higher (Standard gameplay)
+        // 2. Override: forceUpdate is true (Admin Edit)
+        // 3. Penalty: isPenalty is true AND it's a new event
         if (userData.xp > serverXP) {
             users[idx].xp = userData.xp;
             users[idx].level = userData.level;
             users[idx].lastUpdated = Date.now();
-        } else if (userData.isPenalty && clientUpdated > serverUpdated) {
-            // Admin Penalty Override
+        } else if (userData.forceUpdate || (userData.isPenalty && clientUpdated > serverUpdated)) {
+            // Admin Penalty/Force Override
+            console.log(`[Sync] Overwriting XP for ${userData.email} (Force/Penalty)`);
             users[idx].xp = userData.xp;
             users[idx].level = userData.level;
-            users[idx].lastUpdated = clientUpdated;
+            users[idx].lastUpdated = clientUpdated || Date.now();
         }
 
         // Always update meta
@@ -857,23 +863,42 @@ app.post("/api/users/reset-password", (req, res) => {
 // POST /api/users/delete
 app.post("/api/users/delete", (req, res) => {
     const { email } = req.body;
-    let users = readData(USERS_FILE);
+
+    if (!email) {
+        return res.status(400).json({ success: false, message: "Email is required" });
+    }
+
+    const targetEmail = email.trim().toLowerCase();
+
+    let users = readData(USERS_FILE) || [];
     const initialLen = users.length;
-    users = users.filter((u) => u.email !== email);
+
+    // Case-insensitive filtering
+    users = users.filter((u) => u.email.trim().toLowerCase() !== targetEmail);
 
     if (users.length !== initialLen) {
         writeData(USERS_FILE, users);
-        console.log(`[User] Deleted: ${email}`);
+
+        // --- ADD TO DELETED LIST (Tombstone Record) ---
+        // This stops 'Global Sync' from re-importing this user if the global delete fails
+        const deletedList = readData(DELETED_USERS_FILE) || [];
+        if (!deletedList.some(u => u.email === targetEmail)) {
+            deletedList.push({ email: targetEmail, deletedAt: Date.now() });
+            writeData(DELETED_USERS_FILE, deletedList);
+        }
+
+        console.log(`[User] Deleted user: ${targetEmail} (Original: ${email})`);
 
         // --- GLOBAL SYNC ---
         fetch('https://phishingshield.onrender.com/api/users/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
+            body: JSON.stringify({ email: targetEmail })
         }).catch(e => console.warn(`[User-Del-Sync] Failed: ${e.message}`));
 
         res.json({ success: true });
     } else {
+        console.warn(`[User] Delete failed - User not found: ${targetEmail}`);
         res.status(404).json({ success: false, message: "User not found" });
     }
 });
@@ -1248,22 +1273,45 @@ app.post("/api/reports/ai-verify", async (req, res) => {
 
         // FALLBACK: If not found locally, check Global Server (Lazy Import)
         if (reportIndex === -1) {
-            console.log("[AI-Verify] Report not found locally. Checking Global Server...");
-            try {
-                // Use the same global URL as the sync process
-                const response = await fetch('https://phishingshield.onrender.com/api/reports');
-                if (response.ok) {
-                    const globalReports = await response.json();
-                    const globalReport = globalReports.find(r => r.id === id);
-                    if (globalReport) {
-                        console.log("[AI-Verify] Found report remotely. Importing to local DB for analysis...");
-                        reports.push(globalReport);
-                        writeData(REPORTS_FILE, reports);
-                        reportIndex = reports.length - 1;
+            console.log("[AI-Verify] Report not found via ID. checking by URL...");
+
+            // Try finding by URL (Fallback for client-side ephemeral IDs)
+            // Find any pending report with same URL to latch onto
+            const targetUrl = req.body.url ? req.body.url.toLowerCase() : null;
+            if (targetUrl) {
+                reportIndex = reports.findIndex(r => r.url.toLowerCase() === targetUrl);
+            }
+
+            if (reportIndex === -1) {
+                console.log("[AI-Verify] Not found via URL either. Checking Global Server...");
+                try {
+                    // Use the same global URL as the sync process
+                    const response = await fetch('https://phishingshield.onrender.com/api/reports');
+                    if (response.ok) {
+                        const globalReports = await response.json();
+                        let globalReport = globalReports.find(r => r.id === id);
+
+                        // Fallback: Find by URL in global reports
+                        if (!globalReport && targetUrl) {
+                            globalReport = globalReports.find(r => r.url.toLowerCase() === targetUrl);
+                        }
+
+                        if (globalReport) {
+                            console.log("[AI-Verify] Found report remotely. Importing to local DB for analysis...");
+                            // Check if we already have it (dual check)
+                            const exists = reports.findIndex(r => r.id === globalReport.id);
+                            if (exists === -1) {
+                                reports.push(globalReport);
+                                writeData(REPORTS_FILE, reports);
+                                reportIndex = reports.length - 1;
+                            } else {
+                                reportIndex = exists;
+                            }
+                        }
                     }
+                } catch (e) {
+                    console.warn("[AI-Verify] Global fetch failed:", e.message);
                 }
-            } catch (e) {
-                console.warn("[AI-Verify] Global fetch failed:", e.message);
             }
         }
 
@@ -1351,32 +1399,63 @@ Provide comprehensive analysis.`;
                     provider = "GROQ";
                     console.log("[AI-Verify] Groq Analysis Success");
                 } catch (e) {
-                    console.error(`[AI-Verify] Groq Error${requestedProvider === 'GROQ' ? '' : ' (Falling back to Gemini)'}:`, e.message);
-                    // If user specifically requested Groq, don't fallback
-                    if (requestedProvider === 'GROQ') {
-                        throw new Error(`Groq Analysis Failed: ${e.message}`);
-                    }
+                    console.error(`[AI-Verify] Groq Error (Falling back to Gemini):`, e.message);
+                    // Continue to Gemini fallback even if Groq was requested
                 }
             }
 
             // 2. TRY GEMINI (if requested or as fallback)
+            console.log(`[AI-Verify] Checking Gemini... RawResult: ${!!rawResult}, Provider: ${requestedProvider}`);
+
             if (!rawResult && ((requestedProvider === 'GEMINI') || !requestedProvider) && process.env.GEMINI_API_KEY) {
                 try {
+                    console.log("[AI-Verify] Initializing Gemini Client...");
                     const { GoogleGenerativeAI } = require("@google/generative-ai");
                     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-                    // Using Gemini 2.5 Flash (confirmed available for this API key)
-                    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-                    // Gemini Text Prompt (Combine System + User)
-                    const fullPrompt = `${SYSTEM_PROMPT}\n\nTask:\n${USER_PROMPT}`;
-                    const result = await model.generateContent(fullPrompt);
-                    const text = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
-                    rawResult = JSON.parse(text);
-                    provider = "GEMINI";
-                    console.log("[AI-Verify] Gemini Analysis Success");
+                    const generateWithModel = async (modelName) => {
+                        console.log(`[AI-Verify] Attempting Gemini Model: ${modelName}`);
+                        const model = genAI.getGenerativeModel({ model: modelName });
+                        const fullPrompt = `${SYSTEM_PROMPT}\n\nTask:\n${USER_PROMPT}`;
+
+                        try {
+                            const result = await model.generateContent(fullPrompt);
+                            const response = await result.response;
+                            const text = response.text();
+                            console.log(`[AI-Verify] Gemini Raw Response (${modelName}):`, text.substring(0, 500) + "..."); // Start of response
+
+                            // Robust JSON Extraction
+                            const jsonMatch = text.match(/\{[\s\S]*\}/);
+                            if (jsonMatch) {
+                                return JSON.parse(jsonMatch[0]);
+                            }
+                            console.warn(`[AI-Verify] JSON parse failed for ${modelName}. Raw text logged above.`);
+                            throw new Error("No JSON found in response");
+                        } catch (genErr) {
+                            console.error(`[AI-Verify] Generation Error (${modelName}):`, genErr.message);
+                            throw genErr;
+                        }
+                    };
+
+                    try {
+                        // Primary: Gemini 2.5 Flash (Available for this API key)
+                        rawResult = await generateWithModel("gemini-2.5-flash");
+                        console.log("[AI-Verify] Gemini (2.5 Flash) Analysis Success");
+                    } catch (err) {
+                        console.warn("[AI-Verify] Gemini 2.5 Flash failed, trying 2.0 Flash:", err.message);
+                        // Fallback: Gemini 2.0 Flash
+                        try {
+                            rawResult = await generateWithModel("gemini-2.0-flash");
+                            console.log("[AI-Verify] Gemini (2.0 Flash) Analysis Success");
+                        } catch (proErr) {
+                            console.error("[AI-Verify] Gemini Pro also failed.");
+                        }
+                    }
+
+                    if (rawResult) provider = "GEMINI";
+
                 } catch (e) {
-                    console.error("[AI-Verify] Gemini Error Full Object:", e);
-                    console.error("[AI-Verify] Gemini Error Message:", e.message);
+                    console.error("[AI-Verify] Gemini Fatal Error:", e);
                 }
             }
 
@@ -1395,9 +1474,8 @@ Provide comprehensive analysis.`;
                 }
 
                 // Add Provider Tag for Frontend Label Logic
-                if (provider === "GEMINI") {
-                    aiReason += "\n\n[Heuristic] Fallback: Analysis provided by Gemini (Groq Unavailable).";
-                }
+                // Add Provider Tag text (Optional, user requested removal)
+                // if (provider === "GEMINI") { ... }
 
                 console.log(`[AI-Verify] Final Result (${provider}): Score ${aiScore}`);
             } else {
@@ -1645,6 +1723,10 @@ app.get("/api/reports/global-sync", async (req, res) => {
 app.get("/api/users/global-sync", async (req, res) => {
     try {
         const localUsers = readData(USERS_FILE) || [];
+        // Ensure Deleted Users file exists
+        if (!fs.existsSync(DELETED_USERS_FILE)) writeData(DELETED_USERS_FILE, []);
+        const deletedUsers = readData(DELETED_USERS_FILE) || [];
+
         console.log(`[User-Sync] Loaded ${localUsers.length} local users.`);
 
         let globalUsers = [];
@@ -1656,6 +1738,18 @@ app.get("/api/users/global-sync", async (req, res) => {
             }
         } catch (e) {
             console.warn(`[User-Sync] Global fetch error: ${e.message}`);
+        }
+
+        // FILTER: Remove any Global User that is in our Local 'Deleted' list
+        // This prevents Zombie Users from reappearing if global delete failed/lagged.
+        if (Array.isArray(globalUsers)) {
+            const deletedEmails = new Set(deletedUsers.map(u => u.email));
+            const initialGlobalCount = globalUsers.length;
+            globalUsers = globalUsers.filter(gUser => !deletedEmails.has(gUser.email));
+
+            if (globalUsers.length !== initialGlobalCount) {
+                console.log(`[User-Sync] Filtered out ${initialGlobalCount - globalUsers.length} zombie users (locally deleted).`);
+            }
         }
 
         // Merge Logic: By Email. Maximize XP.

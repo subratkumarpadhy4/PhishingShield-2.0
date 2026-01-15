@@ -277,8 +277,7 @@ function renderUserReportsTable(reports) {
         if (r.aiAnalysis) {
             const score = r.aiAnalysis.score || 0;
             const suggestion = r.aiAnalysis.suggestion || 'N/A';
-            // Escape backticks in reason to prevents JS errors in onclick
-            const reason = (r.aiAnalysis.reason || '').replace(/`/g, "'");
+            const reason = r.aiAnalysis.reason || '';
 
             let color = '#64748b';
             if (suggestion === 'BAN') color = '#dc3545';
@@ -292,7 +291,7 @@ function renderUserReportsTable(reports) {
                 <div style="font-size:12px;">
                     <div style="margin-bottom:4px;"><strong>Verfication:</strong> <span style="color:${color}; font-weight:bold;">${suggestion}</span> (${score}/100)</div>
                     <div style="color:#475569; font-style:italic; line-height:1.4;">"${shortReason}"</div>
-                    ${reason.length > 80 ? `<div style="color:${color}; cursor:pointer; font-size:11px; margin-top:2px; text-decoration:underline;" onclick="alert(\`${reason.replace(/"/g, '&quot;')}\`)">View Full Analysis</div>` : ''}
+                    ${reason.length > 80 ? `<div class="view-analysis-btn" style="color:${color}; cursor:pointer; font-size:11px; margin-top:2px; text-decoration:underline;">View Full Analysis</div>` : ''}
                 </div>
              `;
         }
@@ -305,8 +304,128 @@ function renderUserReportsTable(reports) {
             <td>${statusBadge}</td>
             <td>${analysisHtml}</td>
         `;
+
+        // Attach Listener Programmatically (CSP Safe)
+        const viewBtn = tr.querySelector('.view-analysis-btn');
+        if (viewBtn && r.aiAnalysis && r.aiAnalysis.reason) {
+            viewBtn.addEventListener('click', () => {
+                showAnalysisModal(r.aiAnalysis);
+            });
+        }
+
         tbody.appendChild(tr);
     });
+}
+
+// --- NEW: Custom Modal for Analysis (Rich Design) ---
+function showAnalysisModal(analysisData) {
+    let modal = document.getElementById('analysis-modal');
+
+    // Determine Risk Theme
+    const score = analysisData.score || 0;
+    const suggestion = analysisData.suggestion || 'UNKNOWN';
+
+    let themeColor = '#10b981'; // Green (Safe)
+    let bgLight = '#ecfdf5';
+    let icon = '🛡️';
+
+    if (suggestion === 'BAN' || score > 70) {
+        themeColor = '#ef4444'; // Red
+        bgLight = '#fef2f2';
+        icon = '🚫';
+    } else if (suggestion === 'CAUTION' || score > 30) {
+        themeColor = '#f59e0b'; // Amber
+        bgLight = '#fffbeb';
+        icon = '⚠️';
+    }
+
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'analysis-modal';
+        modal.className = 'modal-overlay';
+        // Base structure
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 600px; text-align: left; padding:0; border:none;  overflow:hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+                <div id="analysis-header" style="padding: 24px; background: ${bgLight}; border-bottom: 2px solid ${themeColor};">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                         <div>
+                            <h3 id="analysis-title" style="margin:0; color:${themeColor}; font-size: 22px; display:flex; align-items:center; gap:10px;">
+                                ${icon} Analysis Report
+                            </h3>
+                            <p style="margin:5px 0 0 0; color:#64748b; font-size:12px; font-weight:600;">POWERED BY AI THREAT INTELLIGENCE</p>
+                         </div>
+                         <div style="text-align:right;">
+                            <div style="font-size:32px; font-weight:800; color:${themeColor}; line-height:1;">${score}</div>
+                            <div style="font-size:11px; font-weight:700; color:${themeColor}; opacity:0.8;">RISK SCORE</div>
+                         </div>
+                    </div>
+                </div>
+                
+                <div style="padding: 24px;">
+                    <div id="analysis-body" style="background:white; border-radius:0; line-height:1.7; color:#334155; font-size:15px; max-height:400px; overflow-y:auto;"></div>
+                    
+                    <button id="close-analysis-btn" class="btn-modal btn-primary" style="margin-top:20px; background:${themeColor}; border:none; padding:14px; font-size:14px; letter-spacing:0.5px;">ACKNOWLEDGE & CLOSE</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        // CSP-Safe Listener for Close Button
+        const closeBtn = document.getElementById('close-analysis-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                const m = document.getElementById('analysis-modal');
+                if (m) {
+                    m.classList.remove('active');
+                    setTimeout(() => m.style.display = 'none', 300);
+                }
+            });
+        }
+    } else {
+        // Update Dynamic Colors for Existing Modal
+        const header = document.getElementById('analysis-header');
+        const title = document.getElementById('analysis-title');
+        const closeBtn = document.getElementById('close-analysis-btn');
+
+        if (header) {
+            header.style.background = bgLight;
+            header.style.borderBottomColor = themeColor;
+            header.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                     <div>
+                        <h3 style="margin:0; color:${themeColor}; font-size: 22px; display:flex; align-items:center; gap:10px;">
+                            ${icon} Analysis Report
+                        </h3>
+                        <p style="margin:5px 0 0 0; color:#64748b; font-size:12px; font-weight:600;">POWERED BY AI THREAT INTELLIGENCE</p>
+                     </div>
+                     <div style="text-align:right;">
+                        <div style="font-size:32px; font-weight:800; color:${themeColor}; line-height:1;">${score}</div>
+                        <div style="font-size:11px; font-weight:700; color:${themeColor}; opacity:0.8;">RISK SCORE</div>
+                     </div>
+                </div>
+            `;
+        }
+
+        if (closeBtn) {
+            closeBtn.textContent = "ACKNOWLEDGE & CLOSE";
+            closeBtn.style.background = themeColor;
+        }
+    }
+
+    // Format Body Text
+    let content = analysisData.reason || "No detail provided.";
+
+    // Convert markers to HTML for richness
+    content = content
+        .replace(/🚨/g, '<br><br><span style="background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; font-weight:bold;">🚨 THREAT</span>')
+        .replace(/•/g, '<br>•')
+        .replace(/Page Context:/g, '<br><br><strong style="color:#0f172a;">📄 Page Context:</strong>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); // Simple Markdown Bold Support
+
+    document.getElementById('analysis-body').innerHTML = content;
+
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => modal.classList.add('active'));
 }
 
 function initDashboardAuth() {

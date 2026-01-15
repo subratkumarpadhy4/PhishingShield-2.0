@@ -563,5 +563,31 @@
       "method": "password_only"
     },
     "timestamp": "2026-01-15T17:07:34.511Z"
+  },
+  {
+    "id": "log_1768509692513_07j0uivsu",
+    "userId": "rajkumarpadhy2006@gmail.com",
+    "action": "admin_login_success",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": true,
+    "details": {
+      "sessionId": "admin_sess_1768509692507_o4lcggu2q",
+      "method": "password_only"
+    },
+    "timestamp": "2026-01-15T20:41:32.513Z"
+  },
+  {
+    "id": "log_1768510209620_wn36crm38",
+    "userId": "rajkumarpadhy2006@gmail.com",
+    "action": "admin_login_success",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Unknown",
+    "success": true,
+    "details": {
+      "sessionId": "admin_sess_1768510209614_4ur3xjxnk",
+      "method": "password_only"
+    },
+    "timestamp": "2026-01-15T20:50:09.620Z"
   }
 ]

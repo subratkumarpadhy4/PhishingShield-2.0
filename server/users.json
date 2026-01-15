@@ -1,40 +1,40 @@
 [
   {
-    "name": "System Admin",
+    "name": "raj",
     "email": "rajkumarpadhy2006@gmail.com",
     "password": "rajkumarpadhy2006@gmail.com",
     "joined": 1703800000000,
-    "xp": 28675,
-    "level": 17,
+    "xp": 49060,
+    "level": 23,
     "history": [],
     "lastCriticalTime": 1703800000000,
     "isPenalty": false,
     "settings": {
       "enableDownloads": true
     },
-    "lastUpdated": 1768500521150
+    "lastUpdated": 1768510716957
   },
   {
     "name": "subrat kumar padhy",
     "email": "padhysubratkumar7@gmail.com",
     "password": "padhysubratkumar7@gmail.com",
-    "xp": 1130,
+    "xp": 1230,
     "level": 4,
     "joined": 1766952392006,
     "rank": "Novice",
     "isPenalty": false,
-    "lastUpdated": 1768495550047
+    "lastUpdated": 1768510620558
   },
   {
     "email": "jenapriyanshu2006@gmail.com",
     "isPenalty": false,
     "joined": 1768240676930,
-    "level": 101,
+    "level": 2,
     "name": "PRIYANSHU JENA",
     "password": "jenapriyanshu2006@gmail.com",
     "rank": "Novice",
-    "xp": 1000036,
-    "lastUpdated": 1768498741958
+    "xp": 120,
+    "lastUpdated": 1768510799440
   },
   {
     "email": "gopakishor007@gmail.com",
@@ -68,12 +68,12 @@
   {
     "email": "phishingshield@gmail.com",
     "joined": 1767516357310,
-    "level": 4,
+    "level": 2,
     "name": "phishingshield",
     "password": "phishingshield@gmail.com",
     "rank": "Novice",
-    "xp": 1190,
-    "lastUpdated": 0
+    "xp": 280,
+    "lastUpdated": 1768514724660
   },
   {
     "email": "subratkumarpadhy.g.new@gmail.com",
@@ -85,36 +85,6 @@
     "password": "subratkumarpadhy.g.new@gmail.com",
     "rank": "Novice",
     "xp": 3555
-  },
-  {
-    "name": "Delete Me Native",
-    "email": "deleteme_native@example.com",
-    "password": "pw",
-    "xp": 10,
-    "level": 1,
-    "lastUpdated": 1768477424843
-  },
-  {
-    "name": "Deletion Test User",
-    "email": "deletion_test@example.com",
-    "password": "password123",
-    "role": "admin",
-    "xp": 0,
-    "level": 1,
-    "lastUpdated": 0
-  },
-  {
-    "email": "deletion_test_user@example.com",
-    "name": "Deletion Test User",
-    "password": "password123"
-  },
-  {
-    "email": "zombie_leaderboard_test@example.com",
-    "name": "Zombie User",
-    "password": "password",
-    "xp": 999999,
-    "level": 1,
-    "lastUpdated": 0
   },
   {
     "name": "james",

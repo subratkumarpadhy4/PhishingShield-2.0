@@ -1,3 +1,19 @@
 [
-  "priyanshu_jena@srmap.edu.in"
+  "priyanshu_jena@srmap.edu.in",
+  {
+    "email": "zombie_leaderboard_test@example.com",
+    "deletedAt": 1768511037928
+  },
+  {
+    "email": "deletion_test_user@example.com",
+    "deletedAt": 1768511075128
+  },
+  {
+    "email": "deletion_test@example.com",
+    "deletedAt": 1768511080161
+  },
+  {
+    "email": "deleteme_native@example.com",
+    "deletedAt": 1768511085583
+  }
 ]

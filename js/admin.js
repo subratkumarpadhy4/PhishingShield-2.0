@@ -1537,7 +1537,8 @@ function renderUsers(users, allLogs) {
                         xp: newXP,
                         level: Math.floor(Math.sqrt(newXP / 100)) + 1,
                         lastUpdated: Date.now(), // Force server to accept update (even if lower)
-                        isPenalty: true // Explicit override for cloud server
+                        isPenalty: true, // Explicit override for cloud server
+                        forceUpdate: true // Admin Override to ensure decrease works
                     };
 
                     fetch('http://localhost:3000/api/users/sync', {
