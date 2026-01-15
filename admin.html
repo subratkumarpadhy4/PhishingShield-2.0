@@ -600,8 +600,12 @@
             <div class="table-container">
                 <div class="section-header">
                     <h3>Registered System Users</h3>
-                    <button class="btn" id="btn-export-csv">Export CSV</button>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn btn-outline" id="btn-refresh-users">Refresh List</button>
+                        <button class="btn" id="btn-export-csv">Export CSV</button>
+                    </div>
                 </div>
+
                 <table id="all-users-table">
                     <thead>
                         <tr>
@@ -753,6 +757,7 @@
                                 <span style="font-weight: 500; color: #64748b;">Admin Mode</span>
                                 <span class="badge badge-active">Active</span>
                             </div>
+
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <span style="font-weight: 500; color: #64748b;">Database</span>
                                 <span
@@ -959,7 +964,7 @@
                                     padding: 2px 8px;
                                     border-radius: 4px;
                                     border: 1px solid rgba(59, 130, 246, 0.3);
-                                ">POWERED BY GROQ</span>
+                                " class="ai-provider-label">POWERED BY GROQ</span>
                             </h5>
 
                             <!-- Loading State -->

@@ -18,12 +18,12 @@
     "name": "subrat kumar padhy",
     "email": "padhysubratkumar7@gmail.com",
     "password": "padhysubratkumar7@gmail.com",
-    "xp": 885,
-    "level": 3,
+    "xp": 1070,
+    "level": 4,
     "joined": 1766952392006,
     "rank": "Novice",
     "isPenalty": false,
-    "lastUpdated": 1768417037630
+    "lastUpdated": 1768467763658
   },
   {
     "email": "jenapriyanshu2006@gmail.com",
@@ -44,5 +44,46 @@
     "password": "gopakishor007@gmail.com",
     "rank": "Novice",
     "xp": 4000
+  },
+  {
+    "email": "subratkumar_padhy@srmap.edu.in",
+    "joined": 1766993673694,
+    "level": 3,
+    "name": "subrat clg id",
+    "password": "subratkumar_padhy@srmap.edu.in",
+    "rank": "Novice",
+    "xp": 790,
+    "lastUpdated": 1768467711799
+  },
+  {
+    "name": "PJ",
+    "email": "priyanshu_jena@srmap.edu.in",
+    "password": "priyanshu_jena@srmap.edu.in",
+    "xp": 0,
+    "level": 1,
+    "joined": 1768421981201,
+    "rank": "Novice",
+    "lastUpdated": 1768422000398
+  },
+  {
+    "email": "phishingshield@gmail.com",
+    "joined": 1767516357310,
+    "level": 4,
+    "name": "phishingshield",
+    "password": "phishingshield@gmail.com",
+    "rank": "Novice",
+    "xp": 1190,
+    "lastUpdated": 0
+  },
+  {
+    "email": "subratkumarpadhy.g.new@gmail.com",
+    "joined": 1766954223620,
+    "lastUpdated": 1768467764883,
+    "level": 6,
+    "name": "subrat.g",
+    "password": "subratkumarpadhy.g.new@gmail.com",
+    "rank": "Novice",
+    "xp": 3555,
+    "isPenalty": false
   }
 ]

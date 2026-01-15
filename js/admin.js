@@ -625,6 +625,37 @@ function loadDashboardData() {
         };
     }
 
+    // REFRESH USERS functionality
+    const btnRefreshUsers = document.getElementById('btn-refresh-users');
+    if (btnRefreshUsers) {
+        // Use .onclick to prevent duplicate listeners if this function re-runs
+        btnRefreshUsers.onclick = () => {
+            const originalText = "↻ Refresh List";
+            btnRefreshUsers.innerText = 'Refreshing...';
+            btnRefreshUsers.disabled = true;
+
+            const resetBtn = () => {
+                setTimeout(() => {
+                    btnRefreshUsers.innerText = originalText;
+                    btnRefreshUsers.disabled = false;
+                }, 1000);
+            };
+
+            // Safe Storage Clear with Fallback
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.remove(['cachedUsers'], () => {
+                    if (chrome.runtime.lastError) console.warn("Storage warning:", chrome.runtime.lastError);
+                    loadDashboardData();
+                    resetBtn();
+                });
+            } else {
+                console.warn("[Admin] Chrome Storage not available. Skipping cache clear.");
+                loadDashboardData();
+                resetBtn();
+            }
+        };
+    }
+
     // EXPORT CSV functionality
     const btnExportCsv = document.getElementById('btn-export-csv');
     if (btnExportCsv) {
@@ -766,7 +797,8 @@ function loadDashboardData() {
 
     // 1. Fetch Users logic with Auto-Restore
     const fetchUsers = () => {
-        return fetch('http://localhost:3000/api/users')
+        // Use Global Sync to ensure we get latest data including XP changes
+        return fetch(`http://localhost:3000/api/users/global-sync?t=${Date.now()}`)
             .then(res => res.json())
             .then(serverUsers => {
                 console.log("[Admin] Fetched Global Users:", serverUsers.length);
@@ -1787,6 +1819,20 @@ function openReportModal(report) {
         // Apply better styling for readability
         reasonElement.style.whiteSpace = 'pre-wrap';
         reasonElement.style.lineHeight = '1.6';
+
+        // --- Dynamic Powered By Label ---
+        const providerLabel = document.querySelector('.ai-provider-label');
+        if (providerLabel) {
+            if ((reasonText || "").includes("[Heuristic]")) {
+                providerLabel.innerText = "LOCAL SYSTEM CHECK";
+                providerLabel.style.opacity = "0.7";
+                providerLabel.title = "No AI key provided. Using local pattern matching.";
+            } else {
+                providerLabel.innerText = "POWERED BY GROQ";
+                providerLabel.style.opacity = "1";
+                providerLabel.title = "Verified by Llama-3.3-70b via Groq";
+            }
+        }
 
         const badge = document.getElementById('ai-badge');
         badge.textContent = `AI: ${suggestion}`;
