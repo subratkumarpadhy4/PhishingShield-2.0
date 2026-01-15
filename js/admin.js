@@ -1987,9 +1987,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // COMMUNITY TRUST MANAGER: bind buttons & tab hooks
+    let trustDataLoaded = false; // Flag to track if data has been loaded
+
     const refreshTrustBtn = document.getElementById('btn-refresh-trust');
     if (refreshTrustBtn) {
-        refreshTrustBtn.addEventListener('click', loadTrustData);
+        refreshTrustBtn.addEventListener('click', () => {
+            loadTrustData();
+            checkTrustSyncStatus();
+        });
     }
 
     const syncTrustBtn = document.getElementById('btn-sync-trust');
@@ -2003,10 +2008,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const trustTabLink = document.querySelector('[data-tab="trust"]');
+
     if (trustTabLink) {
         trustTabLink.addEventListener('click', () => {
-            loadTrustData();
-            checkTrustSyncStatus();
+            // Only load data on first visit to the tab
+            if (!trustDataLoaded) {
+                loadTrustData();
+                checkTrustSyncStatus();
+                trustDataLoaded = true;
+            }
         });
     }
 });

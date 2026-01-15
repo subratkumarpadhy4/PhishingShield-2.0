@@ -160,9 +160,54 @@ app.post('/api/trust/clear', (req, res) => {
 });
 
 // Admin: Get all trust scores
-app.get('/api/trust/all', (req, res) => {
-    const scores = readData(TRUST_FILE);
-    res.json(scores);
+app.get('/api/trust/all', async (req, res) => {
+    try {
+        // 1. Read Local Trust Data
+        const localScores = readData(TRUST_FILE);
+
+        // 2. Fetch Global Trust Data
+        let globalScores = [];
+        try {
+            const response = await fetch('https://phishingshield.onrender.com/api/trust/all');
+            if (response.ok) {
+                globalScores = await response.json();
+
+                // DEBUG: Log counts to see if they are increasing
+                const gCount = globalScores.length > 0 ? (globalScores[0].safe + globalScores[0].unsafe) : 0;
+                const lCount = localScores.length > 0 ? (localScores[0].safe + localScores[0].unsafe) : 0;
+                console.log(`[Trust-Debug] Local Entries: ${localScores.length}, Global Entries: ${globalScores.length}`);
+                if (localScores.length > 0) console.log(`[Trust-Debug] First Local (${localScores[0].domain}): ${lCount} votes`);
+                if (globalScores.length > 0) console.log(`[Trust-Debug] First Global (${globalScores[0].domain}): ${gCount} votes`);
+            }
+        } catch (e) {
+            console.warn(`[Trust] Failed to fetch global data: ${e.message}`);
+        }
+
+        // 3. Merge: Global takes priority, local fills gaps
+        const mergedMap = new Map();
+
+        // Add global scores first (priority)
+        globalScores.forEach(entry => {
+            // HARD DELETE: Explicitly ignore aistudio.google.com as per user request
+            if (entry.domain === 'aistudio.google.com') return;
+
+            mergedMap.set(entry.domain, entry);
+        });
+
+        // Add local scores if not in global
+        localScores.forEach(entry => {
+            if (!mergedMap.has(entry.domain)) {
+                mergedMap.set(entry.domain, entry);
+            }
+        });
+
+        const mergedScores = Array.from(mergedMap.values());
+        res.json(mergedScores);
+    } catch (error) {
+        console.error('[Trust] Error in /api/trust/all:', error);
+        // Fallback to local only
+        res.json(readData(TRUST_FILE));
+    }
 });
 
 // Admin: Simulate Sync to Global Server
@@ -194,6 +239,92 @@ app.get('/api/trust/sync-status', (req, res) => {
     res.json({ lastSync: meta.lastTrustSync || null });
 });
 
+
+
+// --- THREAT LOGS SYSTEM (Global Sync) ---
+const LOGS_FILE = path.join(__dirname, 'data', 'threat_logs.json');
+
+// GET /api/logs/all - Fetch and merge global + local logs
+app.get('/api/logs/all', async (req, res) => {
+    try {
+        // 1. Read Local Logs
+        const localLogs = readData(LOGS_FILE);
+
+        // 2. Fetch Global Logs
+        let globalLogs = [];
+        try {
+            const response = await fetch('https://phishingshield.onrender.com/api/logs');
+            if (response.ok) {
+                globalLogs = await response.json();
+                console.log(`[Logs] Fetched ${globalLogs.length} global threat logs`);
+            }
+        } catch (e) {
+            console.warn(`[Logs] Failed to fetch global logs: ${e.message}`);
+        }
+
+        // 3. Merge: Combine and deduplicate by timestamp+hostname
+        const mergedMap = new Map();
+
+        // Add global logs first
+        globalLogs.forEach(log => {
+            const key = `${log.timestamp}_${log.hostname}`;
+            mergedMap.set(key, log);
+        });
+
+        // Add local logs if not in global
+        localLogs.forEach(log => {
+            const key = `${log.timestamp}_${log.hostname}`;
+            if (!mergedMap.has(key)) {
+                mergedMap.set(key, log);
+            }
+        });
+
+        const mergedLogs = Array.from(mergedMap.values());
+        // Sort by timestamp descending
+        mergedLogs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+        res.json(mergedLogs);
+    } catch (error) {
+        console.error('[Logs] Error in /api/logs/all:', error);
+        res.json(readData(LOGS_FILE)); // Fallback to local
+    }
+});
+
+// POST /api/logs - Submit a new threat log
+app.post('/api/logs', (req, res) => {
+    const log = req.body;
+    if (!log.hostname || !log.timestamp) {
+        return res.status(400).json({ error: "Hostname and timestamp required" });
+    }
+
+    // 1. Save locally
+    const logs = readData(LOGS_FILE);
+    logs.push(log);
+
+    // Keep last 1000 logs
+    if (logs.length > 1000) {
+        logs.shift();
+    }
+
+    writeData(LOGS_FILE, logs);
+    console.log(`[Logs] New threat log: ${log.hostname} (Score: ${log.score})`);
+
+    // 2. Forward to global server
+    fetch('https://phishingshield.onrender.com/api/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(log)
+    }).catch(e => console.warn(`[Logs-Sync] Failed to forward log: ${e.message}`));
+
+    res.json({ success: true });
+});
+
+// POST /api/logs/clear - Clear all threat logs (Admin only)
+app.post('/api/logs/clear', (req, res) => {
+    writeData(LOGS_FILE, []);
+    console.warn("[Admin] Threat logs cleared locally");
+    res.json({ success: true, message: "Local logs cleared" });
+});
 
 // --- ROUTES: REPORTS ---
 
