@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateStats(log);
                     renderTable(log);
                     renderExtensionTable(extLog); // New Function
+                    renderUserThreatsTable(log);  // NEW: Weekly Threats
                     renderLeaderboard(users);
 
                     if (result.theme === 'dark') {
@@ -670,6 +671,82 @@ function renderExtensionTable(log) {
             <td><strong>${e.name}</strong> <small style="color:#6c757d">(${e.id.substring(0, 8)}...)</small></td>
             <td><span class="risk-badge ${badgeClass}">${e.tier}</span></td>
             <td>${e.installType}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+/**
+ * NEW: Render "Threats Encountered" Table (User Dashboard)
+ * - Shows only threats (score > 20)
+ * - Filters by Current Week (Starts Monday 00:00)
+ * - Updates Date Range Display
+ */
+function renderUserThreatsTable(fullLog) {
+    const tbody = document.getElementById('user-threat-table').querySelector('tbody');
+    const countEl = document.getElementById('weekly-threat-count');
+    const dateRangeEl = document.getElementById('threat-date-range');
+
+    if (!tbody) return;
+
+    // 1. Calculate DATE RANGE (Monday - Sunday)
+    const now = new Date();
+    const day = now.getDay(); // 0(Sun) is last day of week for us?
+    // Let's assume standard ISO: Monday(1) is start.
+    // If today is Sunday(0), diff=6. Mon(1) diff=0.
+    const diffToMon = day === 0 ? 6 : day - 1;
+
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - diffToMon);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    // Format for Display: "Jan 13 - Jan 19"
+    const opts = { month: 'short', day: 'numeric' };
+    const rangeText = `${startOfWeek.toLocaleDateString('en-US', opts)} - ${endOfWeek.toLocaleDateString('en-US', opts)}`;
+    if (dateRangeEl) dateRangeEl.innerText = rangeText;
+
+    // 2. Filter Threats
+    // - Must be within startOfWeek -> endOfWeek
+    // - Must be score > 20 (Medium or High Risk)
+    // - OR if the user wants "Threats Encountered" to imply blocked attacks, use score > 50?
+    // - Let's use > 20 to be safe (Suspicious + Phishing)
+    const weeklyThreats = fullLog.filter(e => {
+        const ts = e.timestamp || 0;
+        return ts >= startOfWeek.getTime() && ts <= endOfWeek.getTime() && e.score > 20;
+    });
+
+    // 3. Update Count
+    if (countEl) countEl.innerText = weeklyThreats.length;
+
+    // 4. Populate Table
+    tbody.innerHTML = '';
+    if (weeklyThreats.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #94a3b8; padding: 30px;">No threats encountered this week. Stay safe!</td></tr>';
+        return;
+    }
+
+    // Sort newest first
+    weeklyThreats.sort((a, b) => b.timestamp - a.timestamp);
+
+    weeklyThreats.forEach(t => {
+        const tr = document.createElement('tr');
+
+        let type = 'Suspicious';
+        let color = '#ffc107'; // Yellow
+        if (t.score > 50) {
+            type = 'Phishing / Malware';
+            color = '#dc3545'; // Red
+        }
+
+        tr.innerHTML = `
+            <td>${new Date(t.timestamp).toLocaleString()}</td>
+            <td style="color: #dc3545; font-weight: bold;">${t.hostname || 'Unknown'}</td>
+            <td><span class="badge" style="background:${color}; color:#fff; padding:4px 8px; border-radius:4px;">${type}</span></td>
+            <td>${t.score}/100</td>
         `;
         tbody.appendChild(tr);
     });

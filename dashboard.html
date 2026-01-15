@@ -638,6 +638,7 @@
                 <li><a class="nav-item active" data-tab="tab-overview">📊 Overview</a></li>
                 <li><a class="nav-item" data-tab="tab-leaderboard">🏆 Leaderboard</a></li>
                 <li><a class="nav-item" data-tab="tab-logs">🛡️ Activity Log</a></li>
+                <li><a class="nav-item" data-tab="tab-threats">⚠️ Threats Encountered</a></li>
                 <li><a class="nav-item" data-tab="tab-reports">📢 My Reports</a></li>
                 <li><a class="nav-item" data-tab="tab-extensions">🧩 Extensions</a></li>
             </ul>
@@ -791,6 +792,46 @@
                     <div class="stat-value" id="total-scanned">0</div>
                 </div>
             </div>
+        </div>
+
+        <!-- TAB: THREATS ENCOUNTERED -->
+        <div id="tab-threats" class="tab-content">
+            <h2 class="section-title">🛡️ Threats Encountered</h2>
+
+            <div class="stat-card"
+                style="margin-bottom: 24px; flex-direction: row; justify-content: space-between; align-items: center;">
+                <div>
+                    <div class="stat-title">Total Weekly Threats</div>
+                    <div class="stat-value" id="weekly-threat-count" style="color: #ef4444;">0</div>
+                </div>
+                <div style="text-align: right;">
+                    <div class="stat-title" style="margin-bottom: 5px;">Current Week</div>
+                    <div style="font-weight: 700; color: #64748b; font-size: 16px;" id="threat-date-range">
+                        Calculating...
+                    </div>
+                    <div style="font-size: 11px; color: #94a3b8; margin-top: 5px;">
+                        Resets every Monday at 00:00 AM
+                    </div>
+                </div>
+            </div>
+
+            <table class="log-table" id="user-threat-table">
+                <thead>
+                    <tr>
+                        <th>Date & Time</th>
+                        <th>Malicious Site</th>
+                        <th>Threat Type</th>
+                        <th>Risk Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="4" style="text-align: center; color: #94a3b8; padding: 30px;">
+                            No threats encountered this week. Stay safe!
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
 
         <!-- TAB: LEADERBOARD -->
