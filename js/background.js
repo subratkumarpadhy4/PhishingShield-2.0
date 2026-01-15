@@ -145,7 +145,10 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
         chrome.storage.local.get(['currentUser'], (data) => {
             const reporter = data.currentUser ? data.currentUser.email : 'Anonymous';
-            const reporterDisplay = data.currentUser ? data.currentUser.name || reporter : 'Anonymous';
+            // FIX: Ensure email is included in display string for server-side filtering
+            const reporterDisplay = data.currentUser ?
+                (data.currentUser.name || 'User') + (data.currentUser.email ? ` (${data.currentUser.email})` : '')
+                : 'Anonymous';
 
             let hostname;
             try {

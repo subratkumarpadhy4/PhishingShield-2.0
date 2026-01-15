@@ -4,7 +4,7 @@
     "email": "rajkumarpadhy2006@gmail.com",
     "password": "rajkumarpadhy2006@gmail.com",
     "joined": 1703800000000,
-    "xp": 29845,
+    "xp": 30945,
     "level": 18,
     "history": [],
     "lastCriticalTime": 1703800000000,
@@ -12,7 +12,7 @@
     "settings": {
       "enableDownloads": true
     },
-    "lastUpdated": 1768422959820
+    "lastUpdated": 1768468073416
   },
   {
     "name": "subrat kumar padhy",
@@ -33,8 +33,8 @@
     "name": "PRIYANSHU JENA",
     "password": "jenapriyanshu2006@gmail.com",
     "rank": "Novice",
-    "xp": 999991,
-    "lastUpdated": 1768421795510
+    "xp": 999996,
+    "lastUpdated": 1768424646675
   },
   {
     "email": "gopakishor007@gmail.com",
@@ -44,15 +44,5 @@
     "password": "gopakishor007@gmail.com",
     "rank": "Novice",
     "xp": 4000
-  },
-  {
-    "email": "subratkumar_padhy@srmap.edu.in",
-    "joined": 1766993673694,
-    "lastUpdated": 1768411018443,
-    "level": 3,
-    "name": "subrat clg id",
-    "password": "subratkumar_padhy@srmap.edu.in",
-    "rank": "Novice",
-    "xp": 790
   }
 ]

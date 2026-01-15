@@ -199,7 +199,24 @@ app.get('/api/trust/sync-status', (req, res) => {
 
 // GET /api/reports
 app.get("/api/reports", (req, res) => {
-    res.json(readData(REPORTS_FILE));
+    const { reporter } = req.query;
+    let reports = readData(REPORTS_FILE);
+
+    if (reporter && typeof reporter === 'string') {
+        // OPTIMIZED MATCHING:
+        // 1. Check strict 'reporterEmail' field (future proof)
+        // 2. Check if 'reporter' string INCLUDES the email (legacy support for "Name (email)")
+        const searchEmail = reporter.trim().toLowerCase();
+
+        reports = reports.filter(r => {
+            const rEmail = (r.reporterEmail || "").toLowerCase();
+            const rString = (r.reporter || "").toLowerCase();
+
+            return rEmail === searchEmail || rString.includes(searchEmail);
+        });
+    }
+
+    res.json(reports);
 });
 
 // POST /api/reports

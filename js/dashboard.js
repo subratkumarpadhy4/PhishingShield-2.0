@@ -201,9 +201,112 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
         console.error("Dashboard Critical Error:", err);
     }
+
+    // LISTENER: My Reports Refresh
+    const refreshReportsBtn = document.getElementById('refresh-my-reports');
+    if (refreshReportsBtn) {
+        refreshReportsBtn.addEventListener('click', () => {
+            refreshReportsBtn.textContent = 'Refreshing...';
+            loadUserReports();
+            setTimeout(() => refreshReportsBtn.textContent = '🔄 Refresh Status', 1000);
+        });
+    }
+
+    // LISTENER: Tab Click (Specific for Reports to auto-load)
+    const reportsTabLink = document.querySelector('[data-tab="tab-reports"]');
+    if (reportsTabLink) {
+        reportsTabLink.addEventListener('click', () => {
+            loadUserReports();
+        });
+    }
+
+    // Initial Load if starting on reports tab (unlikely but good practice)
+    if (document.querySelector('#tab-reports.active')) {
+        loadUserReports();
+    }
 });
 
 // --- HELPER FUNCTIONS ---
+
+function loadUserReports() {
+    chrome.storage.local.get(['currentUser'], (data) => {
+        const user = data.currentUser;
+        if (!user || !user.email) {
+            const tbody = document.getElementById('user-reports-body');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Please log in (Guest Mode doesn\'t save reports).</td></tr>';
+            return;
+        }
+
+        // Fetch reports for this user
+        fetch(`http://localhost:3000/api/reports?reporter=${encodeURIComponent(user.email)}`)
+            .then(res => res.json())
+            .then(reports => {
+                renderUserReportsTable(reports);
+            })
+            .catch(err => {
+                console.error("Failed to fetch reports:", err);
+                const tbody = document.getElementById('user-reports-body');
+                if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: #ef4444; padding:20px;">Failed to load reports. Server may be offline.</td></tr>';
+            });
+    });
+}
+
+function renderUserReportsTable(reports) {
+    const tbody = document.getElementById('user-reports-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!reports || reports.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color: #64748b;">You haven\'t reported any sites yet.</td></tr>';
+        return;
+    }
+
+    // Sort newest first
+    reports.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    reports.forEach(r => {
+        const tr = document.createElement('tr');
+
+        let statusBadge = '<span class="badge" style="background:#ffc107; color:#000; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold;">PENDING</span>';
+        if (r.status === 'banned') statusBadge = '<span class="badge" style="background:#dc3545; color:#fff; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold;">🚫 BANNED</span>';
+        else if (r.status === 'ignored') statusBadge = '<span class="badge" style="background:#6c757d; color:#fff; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold;">IGNORED</span>';
+
+        let analysisHtml = '<span style="color:#adb5bd; font-size:12px;">No feedback yet.</span>';
+
+        if (r.aiAnalysis) {
+            const score = r.aiAnalysis.score || 0;
+            const suggestion = r.aiAnalysis.suggestion || 'N/A';
+            // Escape backticks in reason to prevents JS errors in onclick
+            const reason = (r.aiAnalysis.reason || '').replace(/`/g, "'");
+
+            let color = '#64748b';
+            if (suggestion === 'BAN') color = '#dc3545';
+            else if (suggestion === 'CAUTION') color = '#d97706';
+            else if (suggestion === 'SAFE') color = '#166534';
+
+            // Truncate long reasons
+            const shortReason = reason.length > 80 ? reason.substring(0, 80) + '...' : reason;
+
+            analysisHtml = `
+                <div style="font-size:12px;">
+                    <div style="margin-bottom:4px;"><strong>Verfication:</strong> <span style="color:${color}; font-weight:bold;">${suggestion}</span> (${score}/100)</div>
+                    <div style="color:#475569; font-style:italic; line-height:1.4;">"${shortReason}"</div>
+                    ${reason.length > 80 ? `<div style="color:${color}; cursor:pointer; font-size:11px; margin-top:2px; text-decoration:underline;" onclick="alert(\`${reason.replace(/"/g, '&quot;')}\`)">View Full Analysis</div>` : ''}
+                </div>
+             `;
+        }
+
+        tr.innerHTML = `
+            <td>${new Date(r.timestamp).toLocaleDateString()}</td>
+            <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${r.url}">
+                <a href="${r.url}" target="_blank" style="color:#2563eb; text-decoration:none;">${r.hostname || r.url}</a>
+            </td>
+            <td>${statusBadge}</td>
+            <td>${analysisHtml}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
 
 function initDashboardAuth() {
     if (typeof Auth === 'undefined') {
