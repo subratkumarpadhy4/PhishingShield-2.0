@@ -92,19 +92,27 @@ document.addEventListener('DOMContentLoaded', () => {
             Auth.getUsers((users) => {
                 console.log("[Dashboard] Global users fetched:", users.length);
 
-                // CRITICAL FIX: Sync "My Profile" with Global Data immediately
-                chrome.storage.local.get(['currentUser'], (res) => {
+                // CRITICAL FIX: Sync "My Profile" with Global Data, but respect timestamps
+                chrome.storage.local.get(['currentUser', 'userXP', 'lastXpUpdate'], (res) => {
                     if (res.currentUser && res.currentUser.email) {
                         const meInGlobal = users.find(u => u.email === res.currentUser.email);
                         if (meInGlobal) {
-                            console.log(`[Dashboard] Found self in global list. Syncing XP: ${meInGlobal.xp}`);
-
-                            // Update Local Storage (This triggers the UI re-render listener)
-                            chrome.storage.local.set({
-                                userXP: meInGlobal.xp,
-                                userLevel: meInGlobal.level || 1,
-                                currentUser: { ...res.currentUser, ...meInGlobal } // Merge Update
-                            });
+                            const globalTime = Number(meInGlobal.lastUpdated) || 0;
+                            const localTime = Number(res.lastXpUpdate) || 0;
+                            
+                            // Only update if global is NEWER (prevents reverting admin edits)
+                            if (globalTime > localTime) {
+                                console.log(`[Dashboard] Global is newer (${globalTime} > ${localTime}). Syncing XP: ${res.userXP} -> ${meInGlobal.xp}`);
+                                // Update Local Storage (This triggers the UI re-render listener)
+                                chrome.storage.local.set({
+                                    userXP: meInGlobal.xp,
+                                    userLevel: meInGlobal.level || 1,
+                                    lastXpUpdate: globalTime, // Update timestamp
+                                    currentUser: { ...res.currentUser, ...meInGlobal } // Merge Update
+                                });
+                            } else {
+                                console.log(`[Dashboard] Local is newer (${localTime} >= ${globalTime}). Keeping local XP: ${res.userXP} (preventing revert of admin edit)`);
+                            }
                         }
                     }
                 });

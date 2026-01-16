@@ -781,40 +781,100 @@ app.post("/api/users/sync", (req, res) => {
 
         console.log(`[Sync] Check for ${userData.email}: Client(${userData.xp}xp @ ${clientUpdated}) vs Server(${serverXP}xp @ ${serverUpdated}). Force: ${userData.forceUpdate}, Penalty: ${userData.isPenalty}`);
 
-        // Simple Max Logic for XP
-        // 1. Progress: New XP is higher (Standard gameplay)
-        // 2. Override: forceUpdate is true (Admin Edit)
-        // 3. Penalty: isPenalty is true AND it's a new event
-        if (userData.xp > serverXP) {
+        // XP Update Logic (Priority Order):
+        // 1. forceUpdate = true: ALWAYS override (Admin Edit - can increase or decrease)
+        // 2. isPenalty = true: Override if it's a new event (clientUpdated > serverUpdated)
+        // 3. XP increase: Standard gameplay progression (ONLY if timestamp is newer)
+        // 4. Reject: Older timestamps or decreases without flags
+        
+        if (userData.forceUpdate === true) {
+            // Admin Force Update - ALWAYS accept (can increase or decrease XP)
+            const adminEditTimestamp = clientUpdated || Date.now();
+            console.log(`[Sync] Force Update: Overwriting XP for ${userData.email} (${serverXP} -> ${userData.xp}) at ${adminEditTimestamp}`);
             users[idx].xp = userData.xp;
             users[idx].level = userData.level;
-            users[idx].lastUpdated = Date.now();
-        } else if (userData.forceUpdate || (userData.isPenalty && clientUpdated > serverUpdated)) {
-            // Admin Penalty/Force Override
-            console.log(`[Sync] Overwriting XP for ${userData.email} (Force/Penalty)`);
+            users[idx].lastUpdated = adminEditTimestamp;
+            // Mark that this was an admin edit to prevent reverting
+            users[idx]._adminEdit = true;
+            users[idx]._adminEditTime = adminEditTimestamp;
+            users[idx]._adminEditXP = userData.xp; // Store the admin-set XP value
+        } else if (userData.isPenalty === true && clientUpdated > serverUpdated) {
+            // Penalty System - Only if it's a new event (prevents replay attacks)
+            console.log(`[Sync] Penalty Applied: Overwriting XP for ${userData.email} (${serverXP} -> ${userData.xp})`);
             users[idx].xp = userData.xp;
             users[idx].level = userData.level;
             users[idx].lastUpdated = clientUpdated || Date.now();
+        } else if (userData.xp > serverXP) {
+            // Standard XP Increase (Gameplay) - Check if this would revert an admin edit
+            const adminEditTime = users[idx]._adminEditTime || 0;
+            const adminEditXP = users[idx]._adminEditXP;
+            const timeSinceAdminEdit = adminEditTime > 0 ? (clientUpdated - adminEditTime) : Infinity;
+            const minTimeAfterAdminEdit = 10 * 60 * 1000; // 10 minutes after admin edit
+            
+            // CRITICAL: If admin recently edited and new XP would be higher than admin-set XP, reject it
+            if (adminEditTime > 0 && adminEditXP !== undefined && userData.xp > adminEditXP && timeSinceAdminEdit < minTimeAfterAdminEdit) {
+                // This would revert an admin decrease - reject it
+                console.log(`[Sync] Rejected XP increase: Would revert admin edit (${adminEditXP} -> ${userData.xp}). Admin edited ${Math.round(timeSinceAdminEdit/1000)}s ago.`);
+            } else if (clientUpdated > serverUpdated) {
+                // Timestamp is newer and no admin edit conflict - accept increase
+                console.log(`[Sync] XP Increase: ${serverXP} -> ${userData.xp} (timestamp: ${clientUpdated} > ${serverUpdated})`);
+                users[idx].xp = userData.xp;
+                users[idx].level = userData.level;
+                users[idx].lastUpdated = clientUpdated || Date.now();
+                // Clear admin edit flag if XP is now higher than admin-set value
+                if (adminEditXP !== undefined && userData.xp > adminEditXP) {
+                    delete users[idx]._adminEdit;
+                    delete users[idx]._adminEditTime;
+                    delete users[idx]._adminEditXP;
+                }
+            } else {
+                // Timestamp is older - reject (prevents reverting admin edits)
+                console.log(`[Sync] Rejected XP increase: ${serverXP} -> ${userData.xp} (Older timestamp: ${clientUpdated} <= ${serverUpdated})`);
+            }
+        } else {
+            // XP decrease or same without forceUpdate/penalty - Reject (prevent accidental loss)
+            console.log(`[Sync] Rejected XP change: ${serverXP} -> ${userData.xp} (No forceUpdate/penalty). Keeping server XP: ${serverXP}`);
+            // Don't update XP, but still return current server state so client can sync
         }
 
-        // Always update meta
+        // Always update meta (name, settings) even if XP was rejected
         users[idx].name = userData.name || users[idx].name;
         users[idx].settings = userData.settings || users[idx].settings;
 
         finalUser = users[idx];
         writeData(USERS_FILE, users);
-        console.log(`[Sync] Updated user: ${userData.email}`);
+        console.log(`[Sync] Final state for ${userData.email}: XP=${finalUser.xp}, Level=${finalUser.level}, lastUpdated=${finalUser.lastUpdated}`);
 
         // --- GLOBAL SYNC (FORWARD WRITE) ---
         // Forward this update to the central cloud server
-        fetch('https://phishingshield.onrender.com/api/users/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(userData)
-        })
-            .then(r => console.log(`[Global-Forward] User update sent. Status: ${r.status}`))
-            .catch(e => console.warn(`[Global-Forward] Failed to sync user: ${e.message}`));
+        // CRITICAL: Always forward forceUpdate/admin edits to global server
+        if (userData.forceUpdate === true) {
+            fetch('https://phishingshield.onrender.com/api/users/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(userData) // Forward with forceUpdate flag
+            })
+                .then(r => {
+                    if (r.ok) {
+                        console.log(`[Global-Forward] Admin edit forwarded to global server. Status: ${r.status}`);
+                    } else {
+                        console.warn(`[Global-Forward] Global server rejected admin edit. Status: ${r.status}`);
+                    }
+                })
+                .catch(e => console.warn(`[Global-Forward] Failed to sync user: ${e.message}`));
+        } else {
+            // Regular sync - forward but don't block
+            fetch('https://phishingshield.onrender.com/api/users/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(userData)
+            })
+                .then(r => console.log(`[Global-Forward] User update sent. Status: ${r.status}`))
+                .catch(e => console.warn(`[Global-Forward] Failed to sync user: ${e.message}`));
+        }
 
+        // CRITICAL: Always return the FINAL user data (with updated XP and timestamp)
+        // This ensures client gets the correct XP even if their request was rejected
         res.json({ success: true, user: finalUser });
 
     } else {
@@ -1964,7 +2024,7 @@ app.get("/api/users/global-sync", async (req, res) => {
             }
         }
 
-        // Merge Logic: By Email. Maximize XP.
+        // Merge Logic: By Email. Prioritize timestamps (newer wins), not max XP.
         const mergedUsers = [...localUsers];
         let dataChanged = false;
 
@@ -1976,22 +2036,26 @@ app.get("/api/users/global-sync", async (req, res) => {
                     mergedUsers.push(gUser);
                     dataChanged = true;
                 } else {
-                    // Conflict Resolution:
-                    // Prioritize specific timestamp if available. 
-                    // This allows a recent penalty (XP drop) to correctly override an old high score.
-                    const localTime = mergedUsers[idx].lastUpdated || 0;
-                    const globalTime = gUser.lastUpdated || 0;
+                    // Conflict Resolution: Timestamp-based (Last Write Wins)
+                    // This allows recent admin edits (XP decrease) to override old global data
+                    const localTime = Number(mergedUsers[idx].lastUpdated) || 0;
+                    const globalTime = Number(gUser.lastUpdated) || 0;
 
                     if (globalTime > localTime) {
-                        mergedUsers[idx] = gUser; // Global is newer
+                        // Global is newer - use global data
+                        console.log(`[User-Sync] Global newer for ${gUser.email}: Local(${localTime}) < Global(${globalTime})`);
+                        mergedUsers[idx] = gUser;
                         dataChanged = true;
+                    } else if (localTime > globalTime) {
+                        // Local is newer - keep local data (admin edit or recent activity)
+                        console.log(`[User-Sync] Local newer for ${gUser.email}: Local(${localTime}) > Global(${globalTime}) - keeping local`);
+                        // Don't change - local is already correct
                     } else if (globalTime === 0 && localTime === 0) {
-                        // Fallback: Max XP (Legacy behavior)
-                        if ((gUser.xp || 0) > (mergedUsers[idx].xp || 0)) {
-                            mergedUsers[idx] = gUser;
-                            dataChanged = true;
-                        }
+                        // Both have no timestamp - Fallback: Keep local (local is source of truth for admin edits)
+                        console.log(`[User-Sync] No timestamps for ${gUser.email} - keeping local data`);
+                        // Don't change - local is already correct
                     }
+                    // If timestamps are equal, keep local (don't overwrite with potentially stale global)
                 }
             });
         }

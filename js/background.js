@@ -1137,11 +1137,16 @@ function syncXPToServer(customData = {}) {
         if (res.currentUser && res.currentUser.email) {
             console.log("[PhishingShield] Syncing XP to Global Leaderboard...");
 
+            // CRITICAL: If lastXpUpdate is missing, use a timestamp that's OLDER than current time
+            // This prevents accidental overwrites of admin edits
+            // Only use Date.now() if we're sure this is a fresh update
+            const syncTimestamp = res.lastXpUpdate || (res.pendingXPSync ? Date.now() : Date.now() - 60000); // If no timestamp, use 1 min ago
+            
             const userData = {
                 ...res.currentUser,
                 xp: res.userXP,
                 level: res.userLevel,
-                lastUpdated: res.lastXpUpdate || Date.now(), // Send timestamp
+                lastUpdated: syncTimestamp, // Send timestamp (old if not set, to prevent overwriting admin edits)
 
                 ...customData // Allow overrides like { isPenalty: true }
             };
@@ -1179,24 +1184,39 @@ function syncXPToServer(customData = {}) {
                         console.log("[PhishingShield] ✅ XP Global Sync Successful");
                         chrome.storage.local.set({ pendingXPSync: false });
 
-                        // 2-Way Sync: If Server has higher XP (e.g. Admin Promotion), update local
-                        if (data.user && data.user.xp > res.userXP) {
-                            console.log(`[PhishingShield] 📥 Server has higher XP (${data.user.xp} > ${res.userXP}). Updating local...`);
-                            chrome.storage.local.set({
-                                userXP: data.user.xp,
-                                userLevel: data.user.level || calculateLevel(data.user.xp)
-                            }, () => {
-                                // Notify tabs to update HUD
-                                chrome.tabs.query({}, (tabs) => {
-                                    tabs.forEach(tab => {
-                                        if (tab.id) chrome.tabs.sendMessage(tab.id, {
-                                            type: "XP_UPDATE",
-                                            xp: data.user.xp,
-                                            level: data.user.level
-                                        }).catch(() => { });
+                        // 2-Way Sync: Always check server response and update if server has newer data
+                        // CRITICAL: Server always returns the current server state, even if request was rejected
+                        if (data.user) {
+                            const serverTime = Number(data.user.lastUpdated) || 0;
+                            const localTime = Number(res.lastXpUpdate) || 0;
+                            
+                            // Always update if server timestamp is newer OR if server XP is different (admin edit)
+                            // This ensures admin edits propagate to client even if client sent old XP
+                            if (serverTime > localTime || data.user.xp !== res.userXP) {
+                                if (serverTime > localTime) {
+                                    console.log(`[PhishingShield] 📥 Server is newer (${serverTime} > ${localTime}). Updating local XP: ${res.userXP} -> ${data.user.xp}`);
+                                } else {
+                                    console.log(`[PhishingShield] 📥 Server XP differs (${res.userXP} -> ${data.user.xp}). Updating (likely admin edit).`);
+                                }
+                                chrome.storage.local.set({
+                                    userXP: data.user.xp,
+                                    userLevel: data.user.level || calculateLevel(data.user.xp),
+                                    lastXpUpdate: serverTime || Date.now() // Update timestamp to prevent reverting
+                                }, () => {
+                                    // Notify tabs to update HUD
+                                    chrome.tabs.query({}, (tabs) => {
+                                        tabs.forEach(tab => {
+                                            if (tab.id) chrome.tabs.sendMessage(tab.id, {
+                                                type: "XP_UPDATE",
+                                                xp: data.user.xp,
+                                                level: data.user.level
+                                            }).catch(() => { });
+                                        });
                                     });
                                 });
-                            });
+                            } else {
+                                console.log(`[PhishingShield] Local is newer (${localTime} >= ${serverTime}) and XP matches. Keeping local XP: ${res.userXP}`);
+                            }
                         }
                     } else if (r.status === 403 || r.status === 401) {
                         // Soft Logout / Auth Token Invalid?

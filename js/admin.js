@@ -1679,15 +1679,19 @@ function renderUsers(users, allLogs) {
                         return;
                     }
 
-                    // Sync Logic
+                    // Sync Logic - Admin Edit (can increase or decrease XP)
+                    // Use a timestamp that's guaranteed to be newer than any existing timestamp
+                    const adminTimestamp = Date.now() + 1000; // Add 1 second to ensure it's always newer
                     const updatedUser = {
                         ...user,
                         xp: newXP,
                         level: Math.floor(Math.sqrt(newXP / 100)) + 1,
-                        lastUpdated: Date.now(), // Force server to accept update (even if lower)
-                        isPenalty: true, // Explicit override for cloud server
-                        forceUpdate: true // Admin Override to ensure decrease works
+                        lastUpdated: adminTimestamp, // CRITICAL: Always newer timestamp to prevent reverting
+                        forceUpdate: true, // CRITICAL: Admin override - allows XP decrease
+                        isPenalty: (newXP < user.xp) // Mark as penalty if decreasing
                     };
+
+                    console.log(`[Admin] Editing XP for ${name}: ${user.xp} -> ${newXP} (forceUpdate: ${updatedUser.forceUpdate})`);
 
                     fetch('http://localhost:3000/api/users/sync', {
                         method: 'POST',
@@ -1697,17 +1701,23 @@ function renderUsers(users, allLogs) {
                         .then(res => res.json())
                         .then(data => {
                             if (data.success) {
-                                alert("XP Updated & Synced!");
+                                const change = newXP - user.xp;
+                                const changeText = change > 0 ? `+${change}` : `${change}`;
+                                alert(`✅ XP Updated & Synced!\n\n${user.xp} ${changeText} = ${newXP} XP\nLevel: ${updatedUser.level}`);
                                 // Quick UI update
                                 document.getElementById('modal-xp').textContent = newXP;
                                 document.getElementById('modal-level').textContent = updatedUser.level;
                                 // Background refresh
                                 loadDashboardData();
                             } else {
-                                alert("Sync failed: " + data.message);
+                                alert("❌ Sync failed: " + (data.message || data.error || "Unknown error"));
+                                console.error("[Admin] XP Update Failed:", data);
                             }
                         })
-                        .catch(e => alert("Server Error"));
+                        .catch(e => {
+                            alert("❌ Server Error: " + e.message);
+                            console.error("[Admin] XP Update Error:", e);
+                        });
                 };
 
                 // 2. Delete Button
