@@ -102,11 +102,12 @@ function setupReportFilters() {
             refreshReportsBtn.innerText = "Refreshing...";
             refreshReportsBtn.disabled = true;
 
-            // Clear cache to force fresh fetch
+            // Clear cache to force fresh fetch from server
             allReportsCache = [];
             chrome.storage.local.set({ cachedGlobalReports: [] }, () => {
                 console.log('[Admin] Cache cleared, reloading reports...');
-                loadDashboardData(); // This is async but we don't have a promise wrapper here usually
+                // Force reload dashboard data which will fetch fresh from server
+                loadDashboardData();
 
                 // Revert UI after a delay (simulating async completion for UI feedback)
                 setTimeout(() => {
@@ -548,13 +549,40 @@ function loadDashboardData() {
                             console.log("[Admin] Updating Local Cache with latest Server Data");
                             chrome.storage.local.set({ cachedGlobalReports: serverReports });
 
+                            // Helper to normalize URLs for comparison
+                            const normalizeUrl = (u) => {
+                                if (!u) return '';
+                                try {
+                                    let normalized = u.trim().toLowerCase();
+                                    normalized = normalized.replace(/^https?:\/\//, '');
+                                    normalized = normalized.replace(/\/+$/, '');
+                                    return normalized;
+                                } catch (e) {
+                                    return u.trim().toLowerCase();
+                                }
+                            };
+
                             // MERGE logic for UI - Server data takes precedence for status
                             const localReports = data.reportedSites || [];
                             const mergedReports = [...serverReports];
 
                             // Add local reports that don't exist on server, but prioritize server status
                             localReports.forEach(localR => {
-                                const serverReport = mergedReports.find(serverR => serverR.id === localR.id);
+                                // First try to find by ID
+                                let serverReport = mergedReports.find(serverR => serverR.id === localR.id);
+                                
+                                // If not found by ID, try to find by URL (normalized)
+                                if (!serverReport) {
+                                    const localUrlNorm = normalizeUrl(localR.url);
+                                    serverReport = mergedReports.find(serverR => {
+                                        const serverUrlNorm = normalizeUrl(serverR.url);
+                                        const serverHostnameNorm = normalizeUrl(serverR.hostname || '');
+                                        return serverUrlNorm === localUrlNorm || 
+                                               serverHostnameNorm === localUrlNorm ||
+                                               normalizeUrl(localR.hostname || '') === serverUrlNorm;
+                                    });
+                                }
+                                
                                 if (!serverReport) {
                                     // Local report not on server, add it
                                     mergedReports.push(localR);
@@ -569,9 +597,47 @@ function loadDashboardData() {
                         } else {
                             // Edge Case: Server has SOME data but less than cache? 
                             // Usually implies partial wipe or just new reports. We trust Server + Cache merge.
+                            // CRITICAL FIX: Update existing entries with server status (server is source of truth)
+                            
+                            // Helper to normalize URLs for comparison
+                            const normalizeUrl = (u) => {
+                                if (!u) return '';
+                                try {
+                                    let normalized = u.trim().toLowerCase();
+                                    normalized = normalized.replace(/^https?:\/\//, '');
+                                    normalized = normalized.replace(/\/+$/, '');
+                                    return normalized;
+                                } catch (e) {
+                                    return u.trim().toLowerCase();
+                                }
+                            };
+                            
                             const mergedCache = [...cached];
-                            serverReports.forEach(r => {
-                                if (!mergedCache.find(c => c.id === r.id)) mergedCache.push(r);
+                            serverReports.forEach(serverR => {
+                                // First try to find by ID
+                                let existingIndex = mergedCache.findIndex(c => c.id === serverR.id);
+                                
+                                // If not found by ID, try to find by URL (normalized)
+                                if (existingIndex === -1) {
+                                    const serverUrlNorm = normalizeUrl(serverR.url);
+                                    existingIndex = mergedCache.findIndex(c => {
+                                        const cacheUrlNorm = normalizeUrl(c.url);
+                                        const cacheHostnameNorm = normalizeUrl(c.hostname || '');
+                                        return cacheUrlNorm === serverUrlNorm || 
+                                               cacheHostnameNorm === serverUrlNorm ||
+                                               normalizeUrl(serverR.hostname || '') === cacheUrlNorm;
+                                    });
+                                }
+                                
+                                if (existingIndex !== -1) {
+                                    // Update existing entry with server data (server status takes precedence)
+                                    const oldStatus = mergedCache[existingIndex].status;
+                                    console.log(`[Admin] Updating cached report ${serverR.id || serverR.url}: ${oldStatus} -> ${serverR.status}`);
+                                    mergedCache[existingIndex] = serverR; // Server is source of truth
+                                } else {
+                                    // New report from server, add it
+                                    mergedCache.push(serverR);
+                                }
                             });
                             chrome.storage.local.set({ cachedGlobalReports: mergedCache });
                             renderReports(mergedCache);
