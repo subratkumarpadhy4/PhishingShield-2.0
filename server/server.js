@@ -1815,12 +1815,12 @@ app.get("/api/reports/global-sync", async (req, res) => {
                         // If Local has the SAME bannedAt time as Global, it means Local WAS banned at that time 
                         // but is now Pending (Unbanned). Local is newer.
                         if (lStatus === 'pending' && gStatus === 'banned') {
-                            // Note: strict equality might fail if one is string one is number, but usually they are both numbers from Date.now()
-                            if (globalR.bannedAt && localR.bannedAt && globalR.bannedAt == localR.bannedAt) {
-                                console.log(`[Global-Sync] Handled Zombie Ban: Local unbanned but shares bannedAt with Global. Healing Global.`);
+                            console.log(`[Global-Sync] Zombie Check: Local=Pending(t=${lTime}) vs Global=Banned(t=${gTime})`);
+                            const sameBanTime = (Number(globalR.bannedAt) === Number(localR.bannedAt));
 
-                                // Trust Local (Pending) -> Heal Global
-                                const winner = { ...globalR, status: lStatus };
+                            if (sameBanTime || (lTime > 0 && gTime === 0)) {
+                                console.log(`[Global-Sync] Handled Zombie Ban: Trusting Local Unban.`);
+                                const winner = { ...globalR, status: lStatus, lastUpdated: lTime || Date.now() };
                                 mergedReportsMap.set(globalR.id, winner);
                                 dataChanged = true;
                                 resolved = true;
