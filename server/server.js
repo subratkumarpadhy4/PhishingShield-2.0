@@ -1753,10 +1753,8 @@ app.get("/api/reports/global-sync", async (req, res) => {
                         // We keep the Global ID as canonical if possible, or just link them.
                         // For now, let's update the LOCAL record with the GLOBAL ID to converge.
                         mergedReportsMap.delete(localR.id);
-                        globalR.status = localR.status; // Preserve local status for now before check
+                        // globalR.status = localR.status; // REMOVED: Don't overwrite yet, let time decide.
                         mergedReportsMap.set(globalR.id, globalR);
-                        // Now re-evaluate localR as the new object
-                        // But wait, we need to compare statuses.
                     }
 
                     // TIME-BASED SYNCHRONIZATION (Last Write Wins)
@@ -1778,10 +1776,22 @@ app.get("/api/reports/global-sync", async (req, res) => {
                     else if (lTime > gTime) {
                         // Local is newer -> HEAL GLOBAL
                         console.log(`[Global-Sync] Local '${lStatus}' (t=${lTime}) is newer than Global '${gStatus}' (t=${gTime}). Healing...`);
+
+                        // Construct the "Winning" object using Global ID but Local Status/Time
+                        const winner = {
+                            ...globalR,
+                            status: lStatus,
+                            lastUpdated: lTime,
+                            bannedAt: (lStatus === 'banned') ? (localR.bannedAt || Date.now()) : globalR.bannedAt,
+                            ignoredAt: (lStatus === 'ignored') ? (localR.ignoredAt || Date.now()) : globalR.ignoredAt
+                        };
+                        mergedReportsMap.set(globalR.id, winner); // Update local cache with winning hybrid
+                        dataChanged = true;
+
                         fetch('https://phishingshield.onrender.com/api/reports/update', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id: localR.id, status: lStatus })
+                            body: JSON.stringify({ id: globalR.id, status: lStatus }) // Use canonical Global ID
                         }).catch(e => console.warn(`[Heal-Fail] ${e.message}`));
                     }
                     else {
