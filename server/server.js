@@ -1806,21 +1806,40 @@ app.get("/api/reports/global-sync", async (req, res) => {
                         }).catch(e => console.warn(`[Heal-Fail] ${e.message}`));
                     }
                     else {
-                        // Timestamps equal (or both 0). Fallback to old Priority Rule for safety.
-                        const statusPriority = { 'banned': 3, 'ignored': 2, 'pending': 1 };
-                        const gScore = statusPriority[gStatus] || 0;
-                        const lScore = statusPriority[lStatus] || 0;
+                        // Timestamps equal or missing (Legacy Mode).
+                        // Fallback with SMART HEURISTIC for Banned vs Pending
 
-                        if (gScore > lScore) {
-                            mergedReportsMap.set(globalR.id, globalR);
-                            dataChanged = true;
-                        } else if (lScore > gScore) {
-                            // Heal Global in tie-break case too
-                            fetch('https://phishingshield.onrender.com/api/reports/update', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ id: localR.id, status: lStatus })
-                            }).catch(() => { });
+                        let resolved = false;
+
+                        // Case: Local Banned vs Global Pending
+                        // If Global has the SAME bannedAt time, it means Global saw the ban and moved to Pending (Unban).
+                        // We should trust Global.
+                        if (lStatus === 'banned' && gStatus === 'pending') {
+                            if (globalR.bannedAt && localR.bannedAt && globalR.bannedAt === localR.bannedAt) {
+                                console.log(`[Global-Sync] Handled Legacy Unban: Global is Pending but shares bannedAt with Local. Trusting Global.`);
+                                mergedReportsMap.set(globalR.id, globalR);
+                                dataChanged = true;
+                                resolved = true;
+                            }
+                        }
+
+                        if (!resolved) {
+                            if (gScore > lScore) {
+                                // Standard Priority: Global wins
+                                mergedReportsMap.set(globalR.id, globalR);
+                                dataChanged = true;
+                            } else if (lScore > gScore) {
+                                // Standard Priority: Local wins -> Heal Global
+                                const winner = { ...globalR, status: lStatus };
+                                mergedReportsMap.set(globalR.id, winner);
+                                dataChanged = true;
+
+                                fetch('https://phishingshield.onrender.com/api/reports/update', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ id: globalR.id, status: lStatus })
+                                }).catch(() => { });
+                            }
                         }
                     }
                 }
