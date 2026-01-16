@@ -383,6 +383,14 @@ app.post("/api/reports", (req, res) => {
     writeData(REPORTS_FILE, reports);
 
     console.log(`[Report] ${report.url} by ${report.reporter}`);
+
+    // --- GLOBAL SYNC (FORWARD WRITE) ---
+    fetch('https://phishingshield.onrender.com/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(report)
+    }).catch(e => console.warn(`[Report-Sync] Failed: ${e.message}`));
+
     res.status(201).json({ message: "Report logged", report });
 });
 
