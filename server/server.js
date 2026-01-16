@@ -1703,6 +1703,7 @@ app.get("/api/reports/global-sync", async (req, res) => {
         // Merge Logic: ID Match + Status Priority
         // If Global has 'banned' or 'ignored', it overwrites 'pending' locally.
         const mergedReportsMap = new Map();
+        let dataChanged = false;
 
         // 1. Load Local Reports First
         localReports.forEach(r => mergedReportsMap.set(r.id, r));
@@ -1715,11 +1716,12 @@ app.get("/api/reports/global-sync", async (req, res) => {
                 if (!localR) {
                     // New Report from Global -> Add it
                     mergedReportsMap.set(globalR.id, globalR);
+                    dataChanged = true;
                 } else {
                     // Conflict: Report exists in both.
                     // Priority Rule: 'banned' > 'ignored' > 'pending'
                     const statusPriority = { 'banned': 3, 'ignored': 2, 'pending': 1 };
-                    
+
                     const gStatus = globalR.status || 'pending';
                     const lStatus = localR.status || 'pending';
                     const gScore = statusPriority[gStatus] || 0;
@@ -1728,18 +1730,57 @@ app.get("/api/reports/global-sync", async (req, res) => {
                     if (gScore > lScore) {
                         // Global has a more significant status (e.g. Local is pending, Global is banned)
                         mergedReportsMap.set(globalR.id, globalR);
+                        dataChanged = true;
                     } else if (gScore === lScore) {
-                         // Same status? Use newest timestamp if available (optional)
-                         // For now, trust Global as source of truth for synchronization
-                         if (globalR.timestamp > localR.timestamp) {
-                             mergedReportsMap.set(globalR.id, globalR);
-                         }
+                        // Same status? Use newest timestamp if available (optional)
+                        // For now, trust Global as source of truth for synchronization
+                        if (globalR.timestamp > localR.timestamp) {
+                            mergedReportsMap.set(globalR.id, globalR);
+                            dataChanged = true;
+                        }
                     }
                 }
             });
         }
 
         const mergedReports = Array.from(mergedReportsMap.values());
+
+        // --- PERSISTENCE: Save merged state locally ---
+        if (dataChanged) {
+            console.log(`[Global-Sync] Updates found. Saving ${mergedReports.length} reports to local DB.`);
+            writeData(REPORTS_FILE, mergedReports);
+        }
+
+        // --- AUTO-REPAIR: If Global is empty/behind but Local has data, PUSH it up ---
+        // This handles cases where the Cloud Server restarted and lost its ephemeral data.
+        if (localReports.length > 0 && (!globalReports || globalReports.length === 0)) {
+            console.warn(`[Global-Sync] ⚠️ Global Server appears empty/wiped. Attempting AUTO-REPAIR from Local Backup...`);
+
+            // Send requests in chunks to avoid overwhelming the server
+            // We fire-and-forget this background process
+            (async () => {
+                let successCount = 0;
+                for (const r of localReports) {
+                    try {
+                        await fetch('https://phishingshield.onrender.com/api/reports', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(r)
+                        });
+                        // Also sync status if it's not pending
+                        if (r.status !== 'pending') {
+                            await fetch('https://phishingshield.onrender.com/api/reports/update', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: r.id, status: r.status })
+                            });
+                        }
+                        successCount++;
+                    } catch (e) { /* ignore individual fail */ }
+                }
+                console.log(`[Global-Sync] ✅ Auto-Repair Triggered. Re-seeded ${successCount} reports to Global Server.`);
+            })();
+        }
 
         console.log(`[Global-Sync] Returning ${mergedReports.length} merged reports.`);
         res.json(mergedReports);
