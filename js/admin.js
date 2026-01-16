@@ -2193,12 +2193,50 @@ function loadTrustData() {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Fetching data...</td></tr>';
 
     // Use cache-busting only if explicitly requested, otherwise use cached response
-    const cacheParam = document.getElementById('btn-refresh-trust')?.dataset.forceRefresh === 'true' ? `&t=${Date.now()}` : '';
+    const forceRefresh = document.getElementById('btn-refresh-trust')?.dataset.forceRefresh === 'true';
+    const cacheParam = forceRefresh ? `?t=${Date.now()}` : '';
+    const url = `http://localhost:3000/api/trust/all${cacheParam}`;
     
-    fetch(`http://localhost:3000/api/trust/all${cacheParam}`)
-        .then(res => res.json())
+    console.log('[Admin] Fetching trust data from server...', url);
+    
+    fetch(url, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+        .then(res => {
+            if (!res) {
+                throw new Error('No response from server');
+            }
+            console.log('[Admin] Trust fetch response status:', res.status, res.statusText);
+            if (!res.ok) {
+                // Try to get error message from response
+                return res.text().then(text => {
+                    console.error('[Admin] Server error response:', text);
+                    throw new Error(`Server returned ${res.status}: ${res.statusText}`);
+                });
+            }
+            const contentType = res.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                return res.text().then(text => {
+                    console.error('[Admin] Non-JSON response:', text.substring(0, 200));
+                    throw new Error(`Server returned non-JSON: ${contentType}`);
+                });
+            }
+            return res.json();
+        })
         .then(data => {
-            if (!data || data.length === 0) {
+            console.log('[Admin] Trust data received:', Array.isArray(data) ? `${data.length} entries` : 'Not an array', data);
+            
+            // Ensure data is an array
+            if (!Array.isArray(data)) {
+                console.warn('[Admin] Trust data is not an array:', typeof data, data);
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#dc3545;">Invalid data format received from server.</td></tr>';
+                return;
+            }
+            
+            if (data.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#6c757d;">No trust data recorded yet.</td></tr>';
                 return;
             }
@@ -2206,10 +2244,19 @@ function loadTrustData() {
             tbody.innerHTML = '';
 
             // Sort by Total Votes (Impact) descending
-            data.sort((a, b) => (b.safe + b.unsafe) - (a.safe + a.unsafe));
+            data.sort((a, b) => {
+                const aTotal = (a.safe || 0) + (a.unsafe || 0);
+                const bTotal = (b.safe || 0) + (b.unsafe || 0);
+                return bTotal - aTotal;
+            });
 
             data.forEach(item => {
-                const total = item.safe + item.unsafe;
+                if (!item || !item.domain) {
+                    console.warn('[Admin] Skipping invalid trust item:', item);
+                    return;
+                }
+                
+                const total = (item.safe || 0) + (item.unsafe || 0);
 
                 let scoreVal = 0;
                 let scoreText = 'N/A';
@@ -2261,7 +2308,105 @@ function loadTrustData() {
         })
         .catch(err => {
             console.error("Failed to load trust data:", err);
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#dc3545;">Error loading data. Is server running?</td></tr>';
+            const errorMsg = err.message || 'Unknown error';
+            
+            // Retry once after 1 second
+            console.log('[Admin] Retrying trust data fetch...');
+            setTimeout(() => {
+                fetch(`http://localhost:3000/api/trust/all?t=${Date.now()}`)
+                    .then(res => {
+                        if (!res.ok) {
+                            throw new Error(`Server returned ${res.status}: ${res.statusText}`);
+                        }
+                        return res.json();
+                    })
+                    .then(data => {
+                        if (!Array.isArray(data)) {
+                            console.warn('[Admin] Retry: Trust data is not an array:', typeof data);
+                            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#dc3545;">Invalid data format received from server.</td></tr>';
+                            return;
+                        }
+                        
+                        if (data.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#6c757d;">No trust data recorded yet.</td></tr>';
+                            return;
+                        }
+
+                        tbody.innerHTML = '';
+                        data.sort((a, b) => {
+                            const aTotal = (a.safe || 0) + (a.unsafe || 0);
+                            const bTotal = (b.safe || 0) + (b.unsafe || 0);
+                            return bTotal - aTotal;
+                        });
+
+                        data.forEach(item => {
+                            if (!item || !item.domain) {
+                                console.warn('[Admin] Skipping invalid trust item:', item);
+                                return;
+                            }
+                            
+                            const total = (item.safe || 0) + (item.unsafe || 0);
+                            let scoreVal = 0;
+                            let scoreText = 'N/A';
+                            let barColor = '#e2e8f0';
+
+                            if (total > 0) {
+                                scoreVal = Math.round((item.safe / total) * 100);
+                                scoreText = scoreVal + '%';
+                                barColor = scoreVal >= 70 ? '#10b981' : (scoreVal > 30 ? '#f59e0b' : '#ef4444');
+                            }
+
+                            let statusBadge = '';
+                            if (total === 0) statusBadge = '<span class="badge" style="background:#f1f5f9; color:#64748b">NO DATA</span>';
+                            else if (scoreVal >= 70) statusBadge = '<span class="badge" style="background:#dcfce7; color:#166534">SAFE</span>';
+                            else if (scoreVal <= 30) statusBadge = '<span class="badge" style="background:#fee2e2; color:#991b1b">MALICIOUS</span>';
+                            else statusBadge = '<span class="badge" style="background:#fff7ed; color:#9a3412">SUSPICIOUS</span>';
+
+                            const progressBar = `
+                                <div style="width:100px; height:6px; background:#e2e8f0; border-radius:3px; overflow:hidden; display:inline-block; vertical-align:middle; margin-right:8px;">
+                                    <div style="width:${total === 0 ? 0 : scoreVal}%; height:100%; background:${barColor}"></div>
+                                </div>
+                                <span style="font-weight:bold; font-size:12px;">${scoreText}</span>
+                            `;
+
+                            const voters = item.voters || {};
+                            const voterList = Object.entries(voters).map(([email, vote]) => {
+                                const voteIcon = vote === 'safe' ? '✅' : '❌';
+                                const emailShort = email.includes('@') ? email.split('@')[0] : email.substring(0, 8);
+                                return `${voteIcon} ${emailShort}`;
+                            }).slice(0, 5);
+                            
+                            const voterDisplay = voterList.length > 0 
+                                ? `<div style="font-size:11px; color:#64748b; margin-top:4px;">${voterList.join(', ')}${Object.keys(voters).length > 5 ? ` +${Object.keys(voters).length - 5} more` : ''}</div>`
+                                : '<div style="font-size:11px; color:#adb5bd;">No voter details</div>';
+
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td style="font-weight:600; color:#1e293b;">${item.domain}</td>
+                                <td>${progressBar}</td>
+                                <td style="color:#166534;">+${item.safe || 0}</td>
+                                <td style="color:#dc3545;">-${item.unsafe || 0}</td>
+                                <td>${statusBadge} <span style="font-size:11px; color:#64748b; margin-left:5px;">(${total} votes)</span></td>
+                                <td style="font-size:11px; max-width:200px;">${voterDisplay}</td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+                    })
+                    .catch(retryErr => {
+                        console.error('[Admin] Retry also failed:', retryErr);
+                        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#dc3545; padding:20px;">
+                            <div style="margin-bottom:10px;">❌ Error loading trust data</div>
+                            <div style="font-size:12px; color:#6c757d;">${errorMsg}</div>
+                            <div style="font-size:11px; color:#adb5bd; margin-top:8px;">Retry failed. Check server logs.</div>
+                        </td></tr>`;
+                    });
+            }, 1000);
+            
+            // Show initial error
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#dc3545; padding:20px;">
+                <div style="margin-bottom:10px;">⏳ Retrying...</div>
+                <div style="font-size:12px; color:#6c757d;">${errorMsg}</div>
+            </td></tr>`;
         });
 }
 
