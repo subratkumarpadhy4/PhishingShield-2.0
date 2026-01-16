@@ -2151,8 +2151,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const refreshTrustBtn = document.getElementById('btn-refresh-trust');
     if (refreshTrustBtn) {
         refreshTrustBtn.addEventListener('click', () => {
+            // Force refresh by clearing cache
+            refreshTrustBtn.dataset.forceRefresh = 'true';
             loadTrustData();
             checkTrustSyncStatus();
+            // Reset flag after a delay
+            setTimeout(() => {
+                refreshTrustBtn.dataset.forceRefresh = 'false';
+            }, 1000);
         });
     }
 
@@ -2184,13 +2190,16 @@ function loadTrustData() {
     const tbody = document.querySelector('#trust-table tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Fetching data...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Fetching data...</td></tr>';
 
-    fetch(`http://localhost:3000/api/trust/all?t=${Date.now()}`)
+    // Use cache-busting only if explicitly requested, otherwise use cached response
+    const cacheParam = document.getElementById('btn-refresh-trust')?.dataset.forceRefresh === 'true' ? `&t=${Date.now()}` : '';
+    
+    fetch(`http://localhost:3000/api/trust/all${cacheParam}`)
         .then(res => res.json())
         .then(data => {
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#6c757d;">No trust data recorded yet.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#6c757d;">No trust data recorded yet.</td></tr>';
                 return;
             }
 
@@ -2226,20 +2235,33 @@ function loadTrustData() {
                     <span style="font-weight:bold; font-size:12px;">${scoreText}</span>
                 `;
 
+                // Get voter details
+                const voters = item.voters || {};
+                const voterList = Object.entries(voters).map(([email, vote]) => {
+                    const voteIcon = vote === 'safe' ? '✅' : '❌';
+                    const emailShort = email.includes('@') ? email.split('@')[0] : email.substring(0, 8);
+                    return `${voteIcon} ${emailShort}`;
+                }).slice(0, 5); // Show first 5 voters
+                
+                const voterDisplay = voterList.length > 0 
+                    ? `<div style="font-size:11px; color:#64748b; margin-top:4px;">${voterList.join(', ')}${Object.keys(voters).length > 5 ? ` +${Object.keys(voters).length - 5} more` : ''}</div>`
+                    : '<div style="font-size:11px; color:#adb5bd;">No voter details</div>';
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td style="font-weight:600; color:#1e293b;">${item.domain}</td>
                     <td>${progressBar}</td>
-                    <td style="color:#166534;">+${item.safe}</td>
-                    <td style="color:#dc3545;">-${item.unsafe}</td>
+                    <td style="color:#166534;">+${item.safe || 0}</td>
+                    <td style="color:#dc3545;">-${item.unsafe || 0}</td>
                     <td>${statusBadge} <span style="font-size:11px; color:#64748b; margin-left:5px;">(${total} votes)</span></td>
+                    <td style="font-size:11px; max-width:200px;">${voterDisplay}</td>
                 `;
                 tbody.appendChild(tr);
             });
         })
         .catch(err => {
             console.error("Failed to load trust data:", err);
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#dc3545;">Error loading data. Is server running?</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#dc3545;">Error loading data. Is server running?</td></tr>';
         });
 }
 

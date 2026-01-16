@@ -249,11 +249,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data && data.timeout) {
                     if (scoreDisplay) scoreDisplay.textContent = "Offline";
                 } else if (data && scoreDisplay) {
-                    if (data.score >= 50) {
-                        scoreDisplay.textContent = `${data.score}% Safe (${data.votes} votes)`;
+                    if (data.score === null || data.votes === 0) {
+                        scoreDisplay.textContent = "No Votes Yet";
+                        scoreDisplay.style.color = '#6c757d'; // Gray
+                    } else if (data.score >= 50) {
+                        const voteText = data.votes === 1 ? 'vote' : 'votes';
+                        scoreDisplay.textContent = `${data.score}% Safe (${data.votes} ${voteText})`;
                         scoreDisplay.style.color = '#28a745'; // Green
                     } else {
-                        scoreDisplay.textContent = `${100 - data.score}% Unsafe (${data.votes} votes)`;
+                        const voteText = data.votes === 1 ? 'vote' : 'votes';
+                        scoreDisplay.textContent = `${100 - data.score}% Unsafe (${data.votes} ${voteText})`;
                         scoreDisplay.style.color = '#dc3545'; // Red
                     }
                 } else if (scoreDisplay) {

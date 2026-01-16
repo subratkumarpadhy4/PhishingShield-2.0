@@ -946,17 +946,15 @@ async function fetchLogTrustScores(entries) {
             const el = document.getElementById(entry.elementId);
 
             if (el && data) {
-                if (data.score === null) {
-                    el.innerHTML = `<span style="color:#adb5bd;">N/A</span>`;
-                } else if (data.score >= 80) {
-                    el.innerHTML = `<span style="color:#198754; font-weight:bold;">${data.score}%</span>`;
-                } else if (data.score <= 40) {
-                    el.innerHTML = `<span style="color:#dc3545; font-weight:bold;">${data.score}%</span>`;
+                if (data.score === null || data.votes === 0) {
+                    el.innerHTML = `<span style="color:#adb5bd; font-size:11px;">No votes</span>`;
                 } else {
-                    el.innerHTML = `<span style="color:#ffc107; font-weight:bold;">${data.score}%</span>`;
+                    const voteText = data.votes === 1 ? 'vote' : 'votes';
+                    const color = data.score >= 80 ? '#198754' : (data.score <= 40 ? '#dc3545' : '#ffc107');
+                    el.innerHTML = `<span style="color:${color}; font-weight:bold; font-size:11px;" title="${data.votes} ${voteText}">${data.score}% (${data.votes})</span>`;
                 }
             } else if (el) {
-                el.innerHTML = `<span style="color:#adb5bd;">N/A</span>`;
+                el.innerHTML = `<span style="color:#adb5bd; font-size:11px;">N/A</span>`;
             }
         } catch (e) {
             // Silent fail
