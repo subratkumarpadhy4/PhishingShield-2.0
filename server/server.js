@@ -1700,15 +1700,46 @@ app.get("/api/reports/global-sync", async (req, res) => {
             console.warn(`[Global-Sync] Global fetch error: ${e.message}`);
         }
 
-        // Merge Logic: Deduplicate by ID
-        const mergedReports = [...localReports];
+        // Merge Logic: ID Match + Status Priority
+        // If Global has 'banned' or 'ignored', it overwrites 'pending' locally.
+        const mergedReportsMap = new Map();
+
+        // 1. Load Local Reports First
+        localReports.forEach(r => mergedReportsMap.set(r.id, r));
+
+        // 2. Merge Global Reports
         if (Array.isArray(globalReports)) {
-            globalReports.forEach(item => {
-                if (!mergedReports.some(loc => loc.id === item.id)) {
-                    mergedReports.push(item);
+            globalReports.forEach(globalR => {
+                const localR = mergedReportsMap.get(globalR.id);
+
+                if (!localR) {
+                    // New Report from Global -> Add it
+                    mergedReportsMap.set(globalR.id, globalR);
+                } else {
+                    // Conflict: Report exists in both.
+                    // Priority Rule: 'banned' > 'ignored' > 'pending'
+                    const statusPriority = { 'banned': 3, 'ignored': 2, 'pending': 1 };
+                    
+                    const gStatus = globalR.status || 'pending';
+                    const lStatus = localR.status || 'pending';
+                    const gScore = statusPriority[gStatus] || 0;
+                    const lScore = statusPriority[lStatus] || 0;
+
+                    if (gScore > lScore) {
+                        // Global has a more significant status (e.g. Local is pending, Global is banned)
+                        mergedReportsMap.set(globalR.id, globalR);
+                    } else if (gScore === lScore) {
+                         // Same status? Use newest timestamp if available (optional)
+                         // For now, trust Global as source of truth for synchronization
+                         if (globalR.timestamp > localR.timestamp) {
+                             mergedReportsMap.set(globalR.id, globalR);
+                         }
+                    }
                 }
             });
         }
+
+        const mergedReports = Array.from(mergedReportsMap.values());
 
         console.log(`[Global-Sync] Returning ${mergedReports.length} merged reports.`);
         res.json(mergedReports);
