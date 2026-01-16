@@ -114,59 +114,62 @@ app.get('/api/trust/score', async (req, res) => {
         return null;
     })() : Promise.resolve(null);
 
-        // If we have local data, return it immediately and sync global in background
+        // Wait for global data (with timeout) and merge before returning
         if (domainData) {
-            const total = (domainData.safe || 0) + (domainData.unsafe || 0);
-            const score = total === 0 ? null : Math.round(((domainData.safe || 0) / total) * 100);
+            const localTotal = (domainData.safe || 0) + (domainData.unsafe || 0);
             
-            const response = {
-                score,
-                votes: total,
-                safe: domainData.safe || 0,
-                unsafe: domainData.unsafe || 0,
-                status: score > 70 ? 'safe' : (score < 30 ? 'malicious' : 'suspect')
-            };
-
-            // Cache the response
-            trustScoreCache.set(normalizedDomain, { data: response, timestamp: Date.now() });
-
-            // Sync with global in background (don't block) - merge if global has more votes
-            globalFetchPromise.then(globalData => {
-                if (globalData && globalData.votes && globalData.votes > total) {
-                    // Global has more votes - update cache with merged data
+            // Wait for global data with timeout (max 1.5s wait)
+            try {
+                const globalData = await Promise.race([
+                    globalFetchPromise,
+                    new Promise(resolve => setTimeout(() => resolve(null), 1500))
+                ]);
+                
+                if (globalData && globalData.votes !== undefined) {
+                    // Use global data as source of truth (it has all votes from all laptops)
                     const globalSafe = globalData.safe !== undefined ? globalData.safe : Math.round((globalData.score / 100) * globalData.votes);
                     const globalUnsafe = globalData.unsafe !== undefined ? globalData.unsafe : (globalData.votes - globalSafe);
+                    const globalTotal = globalData.votes;
                     
-                    const mergedResponse = {
-                        score: globalData.score,
-                        votes: globalData.votes,
-                        safe: globalSafe,
-                        unsafe: globalUnsafe,
-                        status: globalData.status
-                    };
-                    trustScoreCache.set(normalizedDomain, { data: mergedResponse, timestamp: Date.now() });
-                    
-                    // Update local file with merged data for persistence
+                    // Merge voters: combine local and global voters
                     const scores = readData(TRUST_FILE);
                     const localIndex = scores.findIndex(s => s.domain.toLowerCase() === normalizedDomain);
+                    const mergedVoters = { ...(domainData.voters || {}) };
+                    
+                    // Update local file with global data
                     if (localIndex !== -1) {
-                        // Merge: Keep local voters, update counts from global
                         scores[localIndex].safe = globalSafe;
                         scores[localIndex].unsafe = globalUnsafe;
-                        writeData(TRUST_FILE, scores);
-                    } else if (globalData.votes > 0) {
-                        // Add new entry from global
-                        scores.push({
-                            domain: normalizedDomain,
-                            safe: globalSafe,
-                            unsafe: globalUnsafe,
-                            voters: {}
-                        });
+                        scores[localIndex].voters = mergedVoters;
                         writeData(TRUST_FILE, scores);
                     }
+                    
+                    const response = {
+                        score: globalData.score,
+                        votes: globalTotal,
+                        safe: globalSafe,
+                        unsafe: globalUnsafe,
+                        status: globalData.status || (globalData.score > 70 ? 'safe' : (globalData.score < 30 ? 'malicious' : 'suspect'))
+                    };
+                    
+                    trustScoreCache.set(normalizedDomain, { data: response, timestamp: Date.now() });
+                    return res.json(response);
                 }
-            }).catch(() => {});
+            } catch (e) {
+                console.warn(`[Trust] Global fetch error for ${normalizedDomain}: ${e.message} - using local data`);
+            }
+            
+            // Fallback to local data if global fetch fails or times out
+            const localScore = localTotal === 0 ? null : Math.round(((domainData.safe || 0) / localTotal) * 100);
+            const response = {
+                score: localScore,
+                votes: localTotal,
+                safe: domainData.safe || 0,
+                unsafe: domainData.unsafe || 0,
+                status: localScore === null ? 'unknown' : (localScore > 70 ? 'safe' : (localScore < 30 ? 'malicious' : 'suspect'))
+            };
 
+            trustScoreCache.set(normalizedDomain, { data: response, timestamp: Date.now() });
             return res.json(response);
         }
 
@@ -220,11 +223,15 @@ app.post('/api/trust/vote', (req, res) => {
     const { domain, vote, userId } = req.body; // vote: 'safe' or 'unsafe'
     if (!domain || !vote) return res.status(400).json({ error: "Domain and vote required" });
 
+    // Normalize domain (lowercase, trim)
+    const normalizedDomain = domain.toLowerCase().trim();
+    console.log(`[Trust] Processing vote for ${normalizedDomain}: ${vote} (User: ${userId || 'Anon'})`);
+
     let scores = readData(TRUST_FILE);
-    let entry = scores.find(s => s.domain === domain);
+    let entry = scores.find(s => s.domain.toLowerCase() === normalizedDomain);
 
     if (!entry) {
-        entry = { domain, safe: 0, unsafe: 0, voters: {} };
+        entry = { domain: normalizedDomain, safe: 0, unsafe: 0, voters: {} };
         scores.push(entry);
     }
 
@@ -261,15 +268,30 @@ app.post('/api/trust/vote', (req, res) => {
     }
 
     writeData(TRUST_FILE, scores);
-    console.log(`[Trust] New vote for ${domain}: ${vote} (User: ${userId || 'Anon'})`);
+    console.log(`[Trust] Vote saved locally for ${normalizedDomain}: ${vote} (User: ${userId || 'Anon'})`);
+
+    // Clear caches to force fresh data fetch
+    trustScoreCache.delete(normalizedDomain);
+    trustAllCache.data = null;
+    trustAllCache.timestamp = 0;
+    console.log(`[Trust] Cleared cache for ${normalizedDomain} after vote`);
 
     // --- GLOBAL SYNC (FORWARD WRITE) ---
+    // Forward vote to global server immediately (don't wait, fire and forget)
     if (!process.env.RENDER) {
         fetch('https://phishingshield.onrender.com/api/trust/vote', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ domain, vote, userId })
-        }).catch(e => console.warn(`[Trust-Sync] Failed to forward vote: ${e.message}`));
+            body: JSON.stringify({ domain: normalizedDomain, vote, userId })
+        })
+        .then(globalRes => {
+            if (globalRes.ok) {
+                console.log(`[Trust-Sync] Vote forwarded to global server successfully for ${normalizedDomain}`);
+            } else {
+                console.warn(`[Trust-Sync] Global server returned ${globalRes.status} for ${normalizedDomain}`);
+            }
+        })
+        .catch(e => console.warn(`[Trust-Sync] Failed to forward vote to global server: ${e.message}`));
     }
 
     res.json({ success: true, message: "Vote recorded." });
@@ -287,22 +309,28 @@ app.post('/api/trust/clear', (req, res) => {
 let trustAllCache = {
     data: null,
     timestamp: 0,
-    TTL: 30 * 1000 // 30 seconds cache
+    TTL: 10 * 1000 // 10 seconds cache (reduced for faster sync)
 };
 
 // Admin: Get all trust scores
 app.get('/api/trust/all', async (req, res) => {
     try {
         const now = Date.now();
-        const useCache = req.query.nocache !== 'true' && req.query.t === undefined; // Allow cache bypass
+        // Bypass cache if explicitly requested (refresh button with ?t=timestamp) or ?nocache=true
+        const forceRefresh = req.query.t !== undefined || req.query.nocache === 'true';
+        const useCache = !forceRefresh && trustAllCache.data && (now - trustAllCache.timestamp) < trustAllCache.TTL;
         
-        // Check cache first for fast response
-        if (useCache && trustAllCache.data && (now - trustAllCache.timestamp) < trustAllCache.TTL) {
+        // Check cache first for fast response (only if not forcing refresh)
+        if (useCache) {
             console.log('[Trust] Returning cached trust data');
             return res.json(trustAllCache.data);
         }
+        
+        if (forceRefresh) {
+            console.log('[Trust] Cache bypassed - forcing fresh data fetch');
+        }
 
-        // 1. Read Local Trust Data (FAST - return immediately)
+        // 1. Read Local Trust Data
         let localScores = [];
         try {
             localScores = readData(TRUST_FILE) || [];
@@ -311,7 +339,7 @@ app.get('/api/trust/all', async (req, res) => {
             localScores = [];
         }
         
-        // Return local data immediately, then sync global in background
+        // Start with local data
         const mergedMap = new Map();
         localScores.forEach(entry => {
             if (entry && entry.domain) {
@@ -319,75 +347,61 @@ app.get('/api/trust/all', async (req, res) => {
             }
         });
 
-        // Return local data IMMEDIATELY (don't wait for global)
+        // 2. Fetch Global Trust Data (WAIT for it with timeout, but don't block too long)
+        if (!process.env.RENDER) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+                
+                const globalResponse = await fetch('https://phishingshield.onrender.com/api/trust/all', {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                
+                if (globalResponse.ok) {
+                    const globalScores = await globalResponse.json();
+                    console.log(`[Trust] Fetched ${globalScores.length} global entries`);
+                    
+                    // Merge global data - GLOBAL IS SOURCE OF TRUTH for vote counts
+                    globalScores.forEach(entry => {
+                        // HARD DELETE: Explicitly ignore aistudio.google.com as per user request
+                        if (entry.domain === 'aistudio.google.com') return;
+                        
+                        const existing = mergedMap.get(entry.domain);
+                        if (existing) {
+                            // Merge: Always use global vote counts (global is source of truth)
+                            // But merge voters map to show all voters
+                            const mergedVoters = { ...(entry.voters || {}), ...(existing.voters || {}) };
+                            mergedMap.set(entry.domain, {
+                                ...entry,
+                                voters: mergedVoters
+                            });
+                        } else {
+                            // New domain from global
+                            mergedMap.set(entry.domain, entry);
+                        }
+                    });
+                    
+                    // Update local file with merged global data (so it persists locally)
+                    const scoresToSave = Array.from(mergedMap.values());
+                    writeData(TRUST_FILE, scoresToSave);
+                    console.log(`[Trust] Merged ${scoresToSave.length} entries from global server`);
+                }
+            } catch (e) {
+                console.warn(`[Trust] Global fetch failed or timed out: ${e.message} - returning local data only`);
+                // Continue with local data only if global fetch fails
+            }
+        }
+
+        // Return merged data (global + local)
         const mergedScores = Array.from(mergedMap.values());
         
         // Update cache
         trustAllCache.data = mergedScores;
         trustAllCache.timestamp = now;
         
-        console.log(`[Trust] Returning ${mergedScores.length} trust entries immediately (local data)`);
+        console.log(`[Trust] Returning ${mergedScores.length} trust entries (merged global + local)`);
         res.json(mergedScores);
-        
-        // 2. Fetch Global Trust Data (ASYNC - in background, don't block response)
-        if (!process.env.RENDER) {
-            (async () => {
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
-                    
-                    const response = await fetch('https://phishingshield.onrender.com/api/trust/all', {
-                        signal: controller.signal
-                    });
-                    clearTimeout(timeoutId);
-                    
-                    if (response.ok) {
-                        const globalScores = await response.json();
-                        console.log(`[Trust] Background: Fetched ${globalScores.length} global entries`);
-                        
-                        // Re-read local data (might have changed)
-                        const currentLocalScores = readData(TRUST_FILE) || [];
-                        const backgroundMap = new Map();
-                        currentLocalScores.forEach(entry => {
-                            if (entry && entry.domain) {
-                                backgroundMap.set(entry.domain, entry);
-                            }
-                        });
-                        
-                        // Merge global data (takes priority for vote counts)
-                        globalScores.forEach(entry => {
-                            // HARD DELETE: Explicitly ignore aistudio.google.com as per user request
-                            if (entry.domain === 'aistudio.google.com') return;
-                            
-                            const existing = backgroundMap.get(entry.domain);
-                            if (existing) {
-                                // Merge: Use higher vote counts (global is source of truth for aggregates)
-                                const globalTotal = (entry.safe || 0) + (entry.unsafe || 0);
-                                const localTotal = (existing.safe || 0) + (existing.unsafe || 0);
-                                
-                                if (globalTotal > localTotal) {
-                                    backgroundMap.set(entry.domain, entry);
-                                } else {
-                                    // Local has more votes, but merge voters map
-                                    entry.voters = { ...(entry.voters || {}), ...(existing.voters || {}) };
-                                    backgroundMap.set(entry.domain, entry);
-                                }
-                            } else {
-                                backgroundMap.set(entry.domain, entry);
-                            }
-                        });
-                        
-                        // Update cache with merged data for next request
-                        const finalScores = Array.from(backgroundMap.values());
-                        trustAllCache.data = finalScores;
-                        trustAllCache.timestamp = Date.now();
-                        console.log(`[Trust] Background sync completed. Updated cache with ${finalScores.length} entries.`);
-                    }
-                } catch (e) {
-                    console.warn(`[Trust] Background global fetch failed or timed out: ${e.message}`);
-                }
-            })();
-        }
 
         // AUTO-REPAIR / SYNC-UP (Background - don't block)
         if (!process.env.RENDER && localScores.length > 0) {
