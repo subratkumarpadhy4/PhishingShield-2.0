@@ -1722,15 +1722,43 @@ app.get("/api/reports/global-sync", async (req, res) => {
         localReports.forEach(r => mergedReportsMap.set(r.id, r));
 
         // 2. Merge Global Reports
+        const healingQueue = [];
+
+        // Helper: Find existing report by ID OR unique URL
+        const findMatch = (gReport) => {
+            if (mergedReportsMap.has(gReport.id)) return mergedReportsMap.get(gReport.id);
+            // Fallback: Check by URL (Case insensitive)
+            for (const localR of mergedReportsMap.values()) {
+                if (localR.url && gReport.url && localR.url.toLowerCase() === gReport.url.toLowerCase()) {
+                    return localR;
+                }
+            }
+            return null;
+        };
+
         if (Array.isArray(globalReports)) {
             globalReports.forEach(globalR => {
-                const localR = mergedReportsMap.get(globalR.id);
+                const localR = findMatch(globalR);
 
                 if (!localR) {
                     // New Report from Global -> Add it
                     mergedReportsMap.set(globalR.id, globalR);
                     dataChanged = true;
                 } else {
+                    // Conflict: Report exists (by ID or URL).
+                    // Align IDs if we matched by URL but IDs differed
+                    if (localR.id !== globalR.id) {
+                        console.log(`[Global-Sync] Merging duplicate URL IDs: Local(${localR.id}) vs Global(${globalR.id})`);
+                        // We keep the Global ID as canonical if possible, or just link them.
+                        // For now, let's update the LOCAL record with the GLOBAL ID to converge.
+                        mergedReportsMap.delete(localR.id);
+                        globalR.status = localR.status; // Preserve local status for now before check
+                        mergedReportsMap.set(globalR.id, globalR);
+                        // Now re-evaluate localR as the new object
+                        // But wait, we need to compare statuses.
+                    }
+
+                    // Priority Rule: 'banned' > 'ignored' > 'pending'
                     // Conflict: Report exists in both.
                     // Priority Rule: 'banned' > 'ignored' > 'pending'
                     const statusPriority = { 'banned': 3, 'ignored': 2, 'pending': 1 };
