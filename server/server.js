@@ -1763,6 +1763,13 @@ app.get("/api/reports/global-sync", async (req, res) => {
                     const gTime = globalR.lastUpdated || 0;
                     const lTime = localR.lastUpdated || 0;
 
+                    // Definitions essential for fallback logic and logging
+                    const statusPriority = { 'banned': 3, 'ignored': 2, 'pending': 1 };
+                    const gStatus = globalR.status || 'pending';
+                    const lStatus = localR.status || 'pending';
+                    const gScore = statusPriority[gStatus] || 0;
+                    const lScore = statusPriority[lStatus] || 0;
+
                     if (gTime > lTime) {
                         // Global is newer -> Update Local
                         mergedReportsMap.set(globalR.id, globalR);
