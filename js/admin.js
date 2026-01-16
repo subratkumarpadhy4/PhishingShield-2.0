@@ -2176,12 +2176,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (trustTabLink) {
         trustTabLink.addEventListener('click', () => {
-            // Only load data on first visit to the tab
-            if (!trustDataLoaded) {
-                loadTrustData();
-                checkTrustSyncStatus();
-                trustDataLoaded = true;
-            }
+            // Always reload data when tab is clicked to ensure fresh global sync
+            console.log('[Admin] Community Trust tab clicked - loading fresh data...');
+            loadTrustData();
+            checkTrustSyncStatus();
+            trustDataLoaded = true;
         });
     }
 });
@@ -2192,9 +2191,9 @@ function loadTrustData() {
 
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Fetching data...</td></tr>';
 
-    // Use cache-busting only if explicitly requested, otherwise use cached response
-    const forceRefresh = document.getElementById('btn-refresh-trust')?.dataset.forceRefresh === 'true';
-    const cacheParam = forceRefresh ? `?t=${Date.now()}` : '';
+    // Always use cache-busting to ensure fresh data (cache disabled on server anyway)
+    // This ensures friend's device always gets latest votes
+    const cacheParam = `?t=${Date.now()}`;
     const url = `http://localhost:3000/api/trust/all${cacheParam}`;
     
     console.log('[Admin] Fetching trust data from server...', url);
