@@ -74,10 +74,33 @@ const writeData = (file, data) => {
 
 
 // --- TRUST SCORE SYSTEM (Community Voting) ---
-app.get('/api/trust/score', (req, res) => {
+app.get('/api/trust/score', async (req, res) => {
     const { domain } = req.query;
     if (!domain) return res.status(400).json({ error: "Domain required" });
 
+    // 1. Try Global Server First (Sync Priority)
+    try {
+        // Prevent infinite loop if we ARE the global server (basic check)
+        if (!process.env.RENDER) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5s Timeout
+
+            const globalRes = await fetch(`https://phishingshield.onrender.com/api/trust/score?domain=${domain}`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (globalRes.ok) {
+                const globalData = await globalRes.json();
+                // Optional: background save to local cache could happen here
+                return res.json(globalData);
+            }
+        }
+    } catch (e) {
+        console.warn(`[Trust] Global fetch failed for ${domain}: ${e.message}. Falling back to local.`);
+    }
+
+    // 2. Fallback to Local Data
     const scores = readData(TRUST_FILE);
     const domainData = scores.find(s => s.domain === domain);
 
@@ -142,11 +165,13 @@ app.post('/api/trust/vote', (req, res) => {
     console.log(`[Trust] New vote for ${domain}: ${vote} (User: ${userId || 'Anon'})`);
 
     // --- GLOBAL SYNC (FORWARD WRITE) ---
-    fetch('https://phishingshield.onrender.com/api/trust/vote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain, vote, userId })
-    }).catch(e => console.warn(`[Trust-Sync] Failed to forward vote: ${e.message}`));
+    if (!process.env.RENDER) {
+        fetch('https://phishingshield.onrender.com/api/trust/vote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain, vote, userId })
+        }).catch(e => console.warn(`[Trust-Sync] Failed to forward vote: ${e.message}`));
+    }
 
     res.json({ success: true, message: "Vote recorded." });
 });
@@ -168,16 +193,18 @@ app.get('/api/trust/all', async (req, res) => {
         // 2. Fetch Global Trust Data
         let globalScores = [];
         try {
-            const response = await fetch('https://phishingshield.onrender.com/api/trust/all');
-            if (response.ok) {
-                globalScores = await response.json();
+            if (!process.env.RENDER) {
+                const response = await fetch('https://phishingshield.onrender.com/api/trust/all');
+                if (response.ok) {
+                    globalScores = await response.json();
 
-                // DEBUG: Log counts to see if they are increasing
-                const gCount = globalScores.length > 0 ? (globalScores[0].safe + globalScores[0].unsafe) : 0;
-                const lCount = localScores.length > 0 ? (localScores[0].safe + localScores[0].unsafe) : 0;
-                console.log(`[Trust-Debug] Local Entries: ${localScores.length}, Global Entries: ${globalScores.length}`);
-                if (localScores.length > 0) console.log(`[Trust-Debug] First Local (${localScores[0].domain}): ${lCount} votes`);
-                if (globalScores.length > 0) console.log(`[Trust-Debug] First Global (${globalScores[0].domain}): ${gCount} votes`);
+                    // DEBUG: Log counts to see if they are increasing
+                    const gCount = globalScores.length > 0 ? (globalScores[0].safe + globalScores[0].unsafe) : 0;
+                    const lCount = localScores.length > 0 ? (localScores[0].safe + localScores[0].unsafe) : 0;
+                    console.log(`[Trust-Debug] Local Entries: ${localScores.length}, Global Entries: ${globalScores.length}`);
+                    if (localScores.length > 0) console.log(`[Trust-Debug] First Local (${localScores[0].domain}): ${lCount} votes`);
+                    if (globalScores.length > 0) console.log(`[Trust-Debug] First Global (${globalScores[0].domain}): ${gCount} votes`);
+                }
             }
         } catch (e) {
             console.warn(`[Trust] Failed to fetch global data: ${e.message}`);
@@ -201,6 +228,45 @@ app.get('/api/trust/all', async (req, res) => {
             }
         });
 
+        // --- AUTO-REPAIR / SYNC-UP ---
+        // If we have local data that isn't in global (or global is empty), push it up.
+        // This ensures "Vote Never Get Deleted" even if Global Server restarts/wipes.
+        if (!process.env.RENDER && localScores.length > 0) {
+            const missingInGlobal = localScores.filter(l => !globalScores.some(g => g.domain === l.domain));
+
+            if (missingInGlobal.length > 0) {
+                console.log(`[Trust-Sync] Found ${missingInGlobal.length} domains with votes locally but missing globally. Syncing up...`);
+
+                // Fire and forget - Sync missing votes to global
+                (async () => {
+                    for (const item of missingInGlobal) {
+                        try {
+                            // We need to send the aggregate data. 
+                            // Since the /vote endpoint expects a single vote, we might need a bulk update endpoint 
+                            // OR we just simulate a vote to register the domain.
+                            // BUT our current /vote endpoint increments data. 
+                            // Strategy: We need a way to RESTORE state.
+                            // For now, let's just use the /vote endpoint to at least register the domain exists,
+                            // or better, if we had a /trust/sync endpoint.
+                            // Since we don't have a bulk restore, we will rely on the fact that 
+                            // data persistence should be handled by the file system or DB.
+                            // However, we can at least try to re-register the voters if we have them.
+
+                            // BETTER APPROACH: Create a seed/restore endpoint or just rely on next vote.
+                            // User wants it to NEVER delete. 
+                            // Let's implement a 'seed' call.
+
+                            await fetch('https://phishingshield.onrender.com/api/trust/seed', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(item)
+                            });
+                        } catch (e) { /* ignore */ }
+                    }
+                })();
+            }
+        }
+
         const mergedScores = Array.from(mergedMap.values());
         res.json(mergedScores);
     } catch (error) {
@@ -208,6 +274,37 @@ app.get('/api/trust/all', async (req, res) => {
         // Fallback to local only
         res.json(readData(TRUST_FILE));
     }
+});
+
+// Admin: Seed Trust Data (Restore from backup)
+app.post('/api/trust/seed', (req, res) => {
+    const data = req.body; // Expects { domain, safe, unsafe, voters }
+    if (!data.domain) return res.status(400).json({ error: "Domain required" });
+
+    let scores = readData(TRUST_FILE);
+    let entry = scores.find(s => s.domain === data.domain);
+
+    if (!entry) {
+        // Create new entry from seed
+        scores.push({
+            domain: data.domain,
+            safe: data.safe || 0,
+            unsafe: data.unsafe || 0,
+            voters: data.voters || {}
+        });
+        console.log(`[Trust] Restored/Seeded data for ${data.domain}`);
+    } else {
+        // Merge: Take max values to be safe
+        if ((data.safe + data.unsafe) > (entry.safe + entry.unsafe)) {
+            entry.safe = data.safe;
+            entry.unsafe = data.unsafe;
+            entry.voters = { ...entry.voters, ...data.voters }; // Merge voters
+            console.log(`[Trust] Updated data for ${data.domain} from seed`);
+        }
+    }
+
+    writeData(TRUST_FILE, scores);
+    res.json({ success: true });
 });
 
 // Admin: Simulate Sync to Global Server
@@ -253,10 +350,12 @@ app.get('/api/logs/all', async (req, res) => {
         // 2. Fetch Global Logs
         let globalLogs = [];
         try {
-            const response = await fetch('https://phishingshield.onrender.com/api/logs');
-            if (response.ok) {
-                globalLogs = await response.json();
-                console.log(`[Logs] Fetched ${globalLogs.length} global threat logs`);
+            if (!process.env.RENDER) {
+                const response = await fetch('https://phishingshield.onrender.com/api/logs/all');
+                if (response.ok) {
+                    globalLogs = await response.json();
+                    console.log(`[Logs] Fetched ${globalLogs.length} global threat logs`);
+                }
             }
         } catch (e) {
             console.warn(`[Logs] Failed to fetch global logs: ${e.message}`);
@@ -310,11 +409,13 @@ app.post('/api/logs', (req, res) => {
     console.log(`[Logs] New threat log: ${log.hostname} (Score: ${log.score})`);
 
     // 2. Forward to global server
-    fetch('https://phishingshield.onrender.com/api/logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(log)
-    }).catch(e => console.warn(`[Logs-Sync] Failed to forward log: ${e.message}`));
+    if (!process.env.RENDER) {
+        fetch('https://phishingshield.onrender.com/api/logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(log)
+        }).catch(e => console.warn(`[Logs-Sync] Failed to forward log: ${e.message}`));
+    }
 
     res.json({ success: true });
 });
@@ -385,11 +486,13 @@ app.post("/api/reports", (req, res) => {
     console.log(`[Report] ${report.url} by ${report.reporter}`);
 
     // --- GLOBAL SYNC (FORWARD WRITE) ---
-    fetch('https://phishingshield.onrender.com/api/reports', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(report)
-    }).catch(e => console.warn(`[Report-Sync] Failed: ${e.message}`));
+    if (!process.env.RENDER) {
+        fetch('https://phishingshield.onrender.com/api/reports', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(report)
+        }).catch(e => console.warn(`[Report-Sync] Failed: ${e.message}`));
+    }
 
     res.status(201).json({ message: "Report logged", report });
 });
@@ -1655,13 +1758,15 @@ app.post("/api/reports/update", (req, res) => {
 
         // --- GLOBAL SYNC (FORWARD WRITE) ---
         // Fire and forget - don't block local success
-        fetch('https://phishingshield.onrender.com/api/reports/update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, status })
-        })
-            .then(r => console.log(`[Global-Forward] Report update sent to cloud. Status: ${r.status}`))
-            .catch(e => console.warn(`[Global-Forward] Failed to sync with cloud: ${e.message}`));
+        if (!process.env.RENDER) {
+            fetch('https://phishingshield.onrender.com/api/reports/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, status })
+            })
+                .then(r => console.log(`[Global-Forward] Report update sent to cloud. Status: ${r.status}`))
+                .catch(e => console.warn(`[Global-Forward] Failed to sync with cloud: ${e.message}`));
+        }
 
         res.json({ success: true });
     } else {
@@ -1688,11 +1793,13 @@ app.post("/api/reports/delete", (req, res) => {
         console.log(`[Report] Deleted ${initialLen - reports.length} reports.`);
 
         // --- GLOBAL SYNC ---
-        fetch('https://phishingshield.onrender.com/api/reports/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids })
-        }).catch(e => console.warn(`[Report-Del-Sync] Failed: ${e.message}`));
+        if (!process.env.RENDER) {
+            fetch('https://phishingshield.onrender.com/api/reports/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids })
+            }).catch(e => console.warn(`[Report-Del-Sync] Failed: ${e.message}`));
+        }
 
         res.json({ success: true, deletedCount: initialLen - reports.length });
     } else {
@@ -1707,6 +1814,11 @@ app.get("/api/reports/global-sync", async (req, res) => {
     try {
         const localReports = readData(REPORTS_FILE) || [];
         console.log(`[Global-Sync] Loaded ${localReports.length} local reports.`);
+
+        // OPTIMIZATION: If we are the Global Server, we don't need to sync with ourselves.
+        if (process.env.RENDER) {
+            return res.json(localReports);
+        }
 
         let globalReports = [];
         try {
@@ -1940,6 +2052,11 @@ app.get("/api/users/global-sync", async (req, res) => {
         const deletedUsers = readData(DELETED_USERS_FILE) || [];
 
         console.log(`[User-Sync] Loaded ${localUsers.length} local users.`);
+
+        if (process.env.RENDER) {
+            console.log("[User-Sync] Global Server detected - returning local data only.");
+            return res.json(localUsers);
+        }
 
         let globalUsers = [];
         try {
