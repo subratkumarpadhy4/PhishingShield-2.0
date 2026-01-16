@@ -1738,7 +1738,10 @@ app.get("/api/reports/global-sync", async (req, res) => {
         };
 
         if (Array.isArray(globalReports)) {
+            const processedIds = new Set();
+
             globalReports.forEach(globalR => {
+                processedIds.add(globalR.id);
                 const localR = findMatch(globalR);
 
                 if (!localR) {
@@ -1814,6 +1817,28 @@ app.get("/api/reports/global-sync", async (req, res) => {
                     }
                 }
             });
+
+            // 3. PUSH MISSING REPORTS (Local-Only -> Global)
+            for (const [id, report] of mergedReportsMap) {
+                if (!processedIds.has(id)) {
+                    console.log(`[Global-Sync] Found Local-Only report ${id} (${report.url}). Uploading to Cloud...`);
+                    // Fire and forget upload
+                    fetch('https://phishingshield.onrender.com/api/reports', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(report)
+                    }).then(() => {
+                        // Also sync status if not pending
+                        if (report.status && report.status !== 'pending') {
+                            fetch('https://phishingshield.onrender.com/api/reports/update', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: report.id, status: report.status })
+                            }).catch(() => { });
+                        }
+                    }).catch(e => console.warn(`[Push-Fail] ${e.message}`));
+                }
+            }
         }
 
         const mergedReports = Array.from(mergedReportsMap.values());
