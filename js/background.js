@@ -761,9 +761,31 @@ function updateBlocklistFromStorage(bypassUrl = null, callback = null, forceRefr
 
         let banned = reports.filter(r => r.status === 'banned');
 
+        // Helper to normalize URLs for comparison
+        const normalizeUrl = (u) => {
+            if (!u) return '';
+            try {
+                let normalized = u.trim().toLowerCase();
+                normalized = normalized.replace(/^https?:\/\//, '');
+                normalized = normalized.replace(/\/+$/, '');
+                return normalized;
+            } catch (e) {
+                return u.trim().toLowerCase();
+            }
+        };
+
         // Also add any URLs from blacklist array that aren't in reports
+        // (Server status check will happen in processBlocklist)
         blacklist.forEach(url => {
-            if (!banned.find(r => r.url === url)) {
+            const normalizedUrl = normalizeUrl(url);
+            // Check if already in banned list (using normalized comparison)
+            const alreadyBanned = banned.some(r => {
+                const rUrl = normalizeUrl(r.url);
+                const rHostname = normalizeUrl(r.hostname || '');
+                return rUrl === normalizedUrl || rHostname === normalizedUrl;
+            });
+            
+            if (!alreadyBanned) {
                 try {
                     const hostname = new URL(url).hostname;
                     banned.push({
@@ -816,6 +838,33 @@ function updateBlocklistFromStorage(bypassUrl = null, callback = null, forceRefr
             blocklistCache.data = mergedReports;
             blocklistCache.timestamp = nowServer;
 
+            // Clean up blacklist: Remove URLs that are explicitly unbanned on server
+            const unbannedUrls = new Set();
+            mergedReports.forEach(r => {
+                if (r.status !== 'banned') {
+                    unbannedUrls.add(normalizeUrl(r.url));
+                    try {
+                        const hostname = r.hostname || new URL(r.url).hostname;
+                        unbannedUrls.add(normalizeUrl(hostname));
+                    } catch (e) {
+                        // Skip if URL parsing fails
+                    }
+                }
+            });
+
+            // Remove unbanned URLs from blacklist array
+            if (unbannedUrls.size > 0) {
+                const cleanedBlacklist = blacklist.filter(url => {
+                    const normalized = normalizeUrl(url);
+                    return !unbannedUrls.has(normalized);
+                });
+                
+                if (cleanedBlacklist.length !== blacklist.length) {
+                    console.log(`[PhishingShield] Cleaning blacklist: removed ${blacklist.length - cleanedBlacklist.length} unbanned URLs`);
+                    chrome.storage.local.set({ blacklist: cleanedBlacklist });
+                }
+            }
+
             processBlocklist(mergedReports, banned, bypassTokens, callback);
         });
     });
@@ -825,14 +874,101 @@ function updateBlocklistFromStorage(bypassUrl = null, callback = null, forceRefr
 function processBlocklist(serverReports, banned, bypassTokens, callback) {
     const serverBanned = serverReports.filter(r => r.status === 'banned');
 
-    // Merge local and server banned sites (deduplicate by URL)
-    const bannedMap = new Map();
-    banned.forEach(r => bannedMap.set(r.url, r));
-    serverBanned.forEach(r => {
-        if (!bannedMap.has(r.url)) {
-            bannedMap.set(r.url, r);
+    // Helper to normalize URLs for comparison
+    const normalizeUrl = (u) => {
+        if (!u) return '';
+        try {
+            let normalized = u.trim().toLowerCase();
+            normalized = normalized.replace(/^https?:\/\//, '');
+            normalized = normalized.replace(/\/+$/, '');
+            return normalized;
+        } catch (e) {
+            return u.trim().toLowerCase();
+        }
+    };
+
+    // Create a map of ALL server reports (not just banned) for status checking
+    // Index by both URL and hostname for flexible matching
+    const serverReportsByUrl = new Map();
+    const serverReportsByHostname = new Map();
+    
+    serverReports.forEach(r => {
+        const urlKey = normalizeUrl(r.url);
+        if (!serverReportsByUrl.has(urlKey)) {
+            serverReportsByUrl.set(urlKey, r);
+        }
+        
+        // Also index by hostname
+        try {
+            const hostname = r.hostname || new URL(r.url).hostname;
+            const hostKey = normalizeUrl(hostname);
+            if (!serverReportsByHostname.has(hostKey)) {
+                serverReportsByHostname.set(hostKey, r);
+            }
+        } catch (e) {
+            // Skip if URL parsing fails
         }
     });
+
+    // Helper to find matching server report for a banned item
+    const findServerReport = (bannedItem) => {
+        const urlKey = normalizeUrl(bannedItem.url);
+        const hostnameKey = normalizeUrl(bannedItem.hostname || '');
+        
+        // Check by URL first
+        let serverReport = serverReportsByUrl.get(urlKey);
+        if (serverReport) return serverReport;
+        
+        // Check by hostname
+        if (hostnameKey) {
+            serverReport = serverReportsByHostname.get(hostnameKey);
+            if (serverReport) return serverReport;
+        }
+        
+        // Also check if any server report's URL/hostname matches this banned item's URL/hostname
+        for (const r of serverReports) {
+            const rUrlKey = normalizeUrl(r.url);
+            const rHostnameKey = normalizeUrl(r.hostname || '');
+            
+            if (rUrlKey === urlKey || rUrlKey === hostnameKey || 
+                (hostnameKey && rHostnameKey === hostnameKey) ||
+                (hostnameKey && rHostnameKey === urlKey)) {
+                return r;
+            }
+        }
+        
+        return null;
+    };
+
+    // Merge local and server banned sites (deduplicate by URL)
+    // BUT: Remove any local banned sites that are explicitly unbanned on server
+    const bannedMap = new Map();
+    
+    // First, add local banned sites, but check server status
+    banned.forEach(r => {
+        const serverReport = findServerReport(r);
+        
+        // If server has this URL and it's NOT banned, skip it (it's been unbanned)
+        if (serverReport && serverReport.status !== 'banned') {
+            console.log(`[PhishingShield] Skipping ${r.url} - server status is '${serverReport.status}' (unbanned)`);
+            return; // Skip this banned entry
+        }
+        
+        const key = normalizeUrl(r.url);
+        bannedMap.set(key, r);
+    });
+    
+    // Then add server banned sites
+    serverBanned.forEach(r => {
+        const key = normalizeUrl(r.url);
+        if (!bannedMap.has(key)) {
+            bannedMap.set(key, r);
+        } else {
+            // Update with server data (server is source of truth)
+            bannedMap.set(key, r);
+        }
+    });
+    
     banned = Array.from(bannedMap.values());
 
     // Filter out URLs that have active bypass tokens

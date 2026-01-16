@@ -1208,10 +1208,38 @@ window.banSite = async function (url, reportId) {
             }
 
             // 2. Add to Blacklist (both URL and hostname for better blocking)
-            if (!blacklist.includes(url)) {
+            // Helper to normalize URLs for comparison
+            const normalizeUrl = (u) => {
+                if (!u) return '';
+                try {
+                    let normalized = u.trim().toLowerCase();
+                    normalized = normalized.replace(/^https?:\/\//, '');
+                    normalized = normalized.replace(/\/+$/, '');
+                    return normalized;
+                } catch (e) {
+                    return u.trim().toLowerCase();
+                }
+            };
+            
+            const normalizedUrl = normalizeUrl(url);
+            const normalizedHostname = normalizeUrl(hostname);
+            
+            // Check if URL is already in blacklist (using normalized comparison)
+            const urlInBlacklist = blacklist.some(item => {
+                const normalizedItem = normalizeUrl(item);
+                return normalizedItem === normalizedUrl;
+            });
+            
+            // Check if hostname is already in blacklist
+            const hostnameInBlacklist = hostname && blacklist.some(item => {
+                const normalizedItem = normalizeUrl(item);
+                return normalizedItem === normalizedHostname;
+            });
+            
+            if (!urlInBlacklist) {
                 blacklist.push(url);
             }
-            if (hostname && !blacklist.includes(hostname)) {
+            if (hostname && !hostnameInBlacklist) {
                 blacklist.push(hostname);
             }
 
@@ -1318,11 +1346,39 @@ window.unbanSite = async function (url, reportId) {
         // Update cached global reports to reflect the unban immediately
         chrome.storage.local.get(['cachedGlobalReports'], (cacheData) => {
             const cachedReports = cacheData.cachedGlobalReports || [];
-            const reportIndex = cachedReports.findIndex(r => r.id === reportId || r.url === url);
-            if (reportIndex !== -1) {
-                cachedReports[reportIndex].status = 'pending';
-                delete cachedReports[reportIndex].bannedAt;
-            }
+            
+            // Helper to normalize URLs for comparison
+            const normalizeUrl = (u) => {
+                if (!u) return '';
+                try {
+                    let normalized = u.trim().toLowerCase();
+                    normalized = normalized.replace(/^https?:\/\//, '');
+                    normalized = normalized.replace(/\/+$/, '');
+                    return normalized;
+                } catch (e) {
+                    return u.trim().toLowerCase();
+                }
+            };
+            
+            const normalizedUrl = normalizeUrl(url);
+            const normalizedHostname = normalizeUrl(hostname);
+            
+            // Find and update all matching reports (by ID or normalized URL)
+            cachedReports.forEach((report, index) => {
+                if (report.id === reportId) {
+                    cachedReports[index].status = 'pending';
+                    delete cachedReports[index].bannedAt;
+                } else {
+                    const rUrl = normalizeUrl(report.url);
+                    const rHostname = normalizeUrl(report.hostname);
+                    if (rUrl === normalizedUrl || rUrl === normalizedHostname || 
+                        rHostname === normalizedUrl || rHostname === normalizedHostname) {
+                        cachedReports[index].status = 'pending';
+                        delete cachedReports[index].bannedAt;
+                    }
+                }
+            });
+            
             chrome.storage.local.set({ cachedGlobalReports: cachedReports });
         });
 
@@ -1330,19 +1386,45 @@ window.unbanSite = async function (url, reportId) {
             let reports = data.reportedSites || [];
             let blacklist = data.blacklist || [];
 
-            // Update report status
-            const reportIndex = reports.findIndex(r => r.id === reportId || r.url === url);
+            // Helper function to normalize URLs for comparison
+            const normalizeUrl = (u) => {
+                if (!u) return '';
+                try {
+                    // Remove protocol, trailing slashes, and normalize
+                    let normalized = u.trim().toLowerCase();
+                    normalized = normalized.replace(/^https?:\/\//, ''); // Remove http:// or https://
+                    normalized = normalized.replace(/\/+$/, ''); // Remove trailing slashes
+                    return normalized;
+                } catch (e) {
+                    return u.trim().toLowerCase();
+                }
+            };
+
+            const normalizedUrl = normalizeUrl(url);
+            const normalizedHostname = normalizeUrl(hostname);
+
+            // Update report status - check by ID first, then URL (normalized)
+            const reportIndex = reports.findIndex(r => {
+                if (r.id === reportId) return true;
+                const rUrl = normalizeUrl(r.url);
+                return rUrl === normalizedUrl || rUrl === normalizedHostname;
+            });
             if (reportIndex !== -1) {
                 reports[reportIndex].status = 'pending';
                 delete reports[reportIndex].bannedAt;
             }
 
-            // Remove from blacklist (both URL and hostname)
-            blacklist = blacklist.filter(item => item !== url && item !== hostname);
+            // Remove from blacklist - check all variations (with/without protocol, trailing slashes, etc.)
+            blacklist = blacklist.filter(item => {
+                const normalizedItem = normalizeUrl(item);
+                // Remove if it matches the URL or hostname in any format
+                return normalizedItem !== normalizedUrl && normalizedItem !== normalizedHostname;
+            });
 
             console.log('[Admin] Site unbanned, blacklist updated:', blacklist);
 
             chrome.storage.local.set({ reportedSites: reports, blacklist: blacklist }, () => {
+                // Clear blocklist cache to force fresh fetch from server
                 chrome.runtime.sendMessage({ type: "UPDATE_BLOCKLIST" }, (response) => {
                     if (chrome.runtime.lastError) {
                         console.error('[Admin] Error sending UPDATE_BLOCKLIST:', chrome.runtime.lastError);
@@ -1353,7 +1435,7 @@ window.unbanSite = async function (url, reportId) {
                         console.log('[Admin] Force sync triggered');
                     });
 
-                    alert(`✅ Site Unbanned\n\nUsers can now visit this site.`);
+                    alert(`✅ Site Unbanned\n\nUsers can now visit this site.\n\nNote: Other devices will sync within 10 seconds.`);
                     loadDashboardData(); // Refresh UI
                     loadBannedSites(); // Refresh banned sites table
                 });
