@@ -1,10 +1,10 @@
 [
   {
-    "name": "raj",
+    "name": "System Admin",
     "email": "rajkumarpadhy2006@gmail.com",
     "password": "rajkumarpadhy2006@gmail.com",
     "joined": 1703800000000,
-    "xp": 48590,
+    "xp": 50100,
     "level": 23,
     "history": [],
     "lastCriticalTime": 1703800000000,
@@ -12,29 +12,29 @@
     "settings": {
       "enableDownloads": true
     },
-    "lastUpdated": 1768515288651
+    "lastUpdated": 1768567794476
   },
   {
     "name": "subrat kumar padhy",
     "email": "padhysubratkumar7@gmail.com",
     "password": "padhysubratkumar7@gmail.com",
-    "xp": 1230,
+    "xp": 1240,
     "level": 4,
     "joined": 1766952392006,
     "rank": "Novice",
     "isPenalty": false,
-    "lastUpdated": 1768514954259
+    "lastUpdated": 1768566990493
   },
   {
     "email": "jenapriyanshu2006@gmail.com",
     "isPenalty": false,
     "joined": 1768240676930,
-    "level": 2,
+    "level": 11,
     "name": "PRIYANSHU JENA",
     "password": "jenapriyanshu2006@gmail.com",
     "rank": "Novice",
-    "xp": 120,
-    "lastUpdated": 1768510799440
+    "xp": 11540,
+    "lastUpdated": 1768567417968
   },
   {
     "email": "gopakishor007@gmail.com",
@@ -74,26 +74,5 @@
     "rank": "Novice",
     "xp": 10,
     "lastUpdated": 1768515398584
-  },
-  {
-    "email": "subratkumarpadhy.g.new@gmail.com",
-    "isPenalty": false,
-    "joined": 1766954223620,
-    "lastUpdated": 1768495550742,
-    "level": 6,
-    "name": "subrat.g",
-    "password": "subratkumarpadhy.g.new@gmail.com",
-    "rank": "Novice",
-    "xp": 3555
-  },
-  {
-    "name": "james",
-    "email": "james71739@gmail.com",
-    "password": "james71739@gmail.com",
-    "xp": 20,
-    "level": 1,
-    "joined": 1768483358680,
-    "rank": "Novice",
-    "lastUpdated": 1768500661239
   }
 ]
