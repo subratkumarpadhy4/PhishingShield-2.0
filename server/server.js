@@ -1741,9 +1741,17 @@ app.get("/api/reports/global-sync", async (req, res) => {
                     const lScore = statusPriority[lStatus] || 0;
 
                     if (gScore > lScore) {
-                        // Global has a more significant status (e.g. Local is pending, Global is banned)
+                        // Global is better -> Update Local
                         mergedReportsMap.set(globalR.id, globalR);
                         dataChanged = true;
+                    } else if (lScore > gScore) {
+                        // Local is better -> HEAL GLOBAL (Fire and Forget)
+                        console.log(`[Global-Sync] Local '${lStatus}' > Global '${gStatus}'. Healing...`);
+                        fetch('https://phishingshield.onrender.com/api/reports/update', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: localR.id, status: lStatus })
+                        }).catch(e => console.warn(`[Heal-Fail] ${e.message}`));
                     } else if (gScore === lScore) {
                         // Same status? Use newest timestamp if available (optional)
                         // For now, trust Global as source of truth for synchronization
