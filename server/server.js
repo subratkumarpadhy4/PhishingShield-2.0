@@ -1734,11 +1734,15 @@ app.get("/api/reports/global-sync", async (req, res) => {
         const healingQueue = [];
 
         // Helper: Find existing report by ID OR unique URL
+        const normalizeUrl = (u) => u ? u.trim().toLowerCase().replace(/\/+$/, "") : "";
+
         const findMatch = (gReport) => {
             if (mergedReportsMap.has(gReport.id)) return mergedReportsMap.get(gReport.id);
-            // Fallback: Check by URL (Case insensitive)
+
+            const gUrl = normalizeUrl(gReport.url);
+            // Fallback: Check by Normalized URL
             for (const localR of mergedReportsMap.values()) {
-                if (localR.url && gReport.url && localR.url.toLowerCase() === gReport.url.toLowerCase()) {
+                if (normalizeUrl(localR.url) === gUrl) {
                     return localR;
                 }
             }
