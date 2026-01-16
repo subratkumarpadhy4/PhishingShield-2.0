@@ -570,19 +570,19 @@ function loadDashboardData() {
                             localReports.forEach(localR => {
                                 // First try to find by ID
                                 let serverReport = mergedReports.find(serverR => serverR.id === localR.id);
-                                
+
                                 // If not found by ID, try to find by URL (normalized)
                                 if (!serverReport) {
                                     const localUrlNorm = normalizeUrl(localR.url);
                                     serverReport = mergedReports.find(serverR => {
                                         const serverUrlNorm = normalizeUrl(serverR.url);
                                         const serverHostnameNorm = normalizeUrl(serverR.hostname || '');
-                                        return serverUrlNorm === localUrlNorm || 
-                                               serverHostnameNorm === localUrlNorm ||
-                                               normalizeUrl(localR.hostname || '') === serverUrlNorm;
+                                        return serverUrlNorm === localUrlNorm ||
+                                            serverHostnameNorm === localUrlNorm ||
+                                            normalizeUrl(localR.hostname || '') === serverUrlNorm;
                                     });
                                 }
-                                
+
                                 if (!serverReport) {
                                     // Local report not on server, add it
                                     mergedReports.push(localR);
@@ -598,7 +598,7 @@ function loadDashboardData() {
                             // Edge Case: Server has SOME data but less than cache? 
                             // Usually implies partial wipe or just new reports. We trust Server + Cache merge.
                             // CRITICAL FIX: Update existing entries with server status (server is source of truth)
-                            
+
                             // Helper to normalize URLs for comparison
                             const normalizeUrl = (u) => {
                                 if (!u) return '';
@@ -611,24 +611,24 @@ function loadDashboardData() {
                                     return u.trim().toLowerCase();
                                 }
                             };
-                            
+
                             const mergedCache = [...cached];
                             serverReports.forEach(serverR => {
                                 // First try to find by ID
                                 let existingIndex = mergedCache.findIndex(c => c.id === serverR.id);
-                                
+
                                 // If not found by ID, try to find by URL (normalized)
                                 if (existingIndex === -1) {
                                     const serverUrlNorm = normalizeUrl(serverR.url);
                                     existingIndex = mergedCache.findIndex(c => {
                                         const cacheUrlNorm = normalizeUrl(c.url);
                                         const cacheHostnameNorm = normalizeUrl(c.hostname || '');
-                                        return cacheUrlNorm === serverUrlNorm || 
-                                               cacheHostnameNorm === serverUrlNorm ||
-                                               normalizeUrl(serverR.hostname || '') === cacheUrlNorm;
+                                        return cacheUrlNorm === serverUrlNorm ||
+                                            cacheHostnameNorm === serverUrlNorm ||
+                                            normalizeUrl(serverR.hostname || '') === cacheUrlNorm;
                                     });
                                 }
-                                
+
                                 if (existingIndex !== -1) {
                                     // Update existing entry with server data (server status takes precedence)
                                     const oldStatus = mergedCache[existingIndex].status;
@@ -1286,22 +1286,22 @@ window.banSite = async function (url, reportId) {
                     return u.trim().toLowerCase();
                 }
             };
-            
+
             const normalizedUrl = normalizeUrl(url);
             const normalizedHostname = normalizeUrl(hostname);
-            
+
             // Check if URL is already in blacklist (using normalized comparison)
             const urlInBlacklist = blacklist.some(item => {
                 const normalizedItem = normalizeUrl(item);
                 return normalizedItem === normalizedUrl;
             });
-            
+
             // Check if hostname is already in blacklist
             const hostnameInBlacklist = hostname && blacklist.some(item => {
                 const normalizedItem = normalizeUrl(item);
                 return normalizedItem === normalizedHostname;
             });
-            
+
             if (!urlInBlacklist) {
                 blacklist.push(url);
             }
@@ -1412,7 +1412,7 @@ window.unbanSite = async function (url, reportId) {
         // Update cached global reports to reflect the unban immediately
         chrome.storage.local.get(['cachedGlobalReports'], (cacheData) => {
             const cachedReports = cacheData.cachedGlobalReports || [];
-            
+
             // Helper to normalize URLs for comparison
             const normalizeUrl = (u) => {
                 if (!u) return '';
@@ -1425,10 +1425,10 @@ window.unbanSite = async function (url, reportId) {
                     return u.trim().toLowerCase();
                 }
             };
-            
+
             const normalizedUrl = normalizeUrl(url);
             const normalizedHostname = normalizeUrl(hostname);
-            
+
             // Find and update all matching reports (by ID or normalized URL)
             cachedReports.forEach((report, index) => {
                 if (report.id === reportId) {
@@ -1437,14 +1437,14 @@ window.unbanSite = async function (url, reportId) {
                 } else {
                     const rUrl = normalizeUrl(report.url);
                     const rHostname = normalizeUrl(report.hostname);
-                    if (rUrl === normalizedUrl || rUrl === normalizedHostname || 
+                    if (rUrl === normalizedUrl || rUrl === normalizedHostname ||
                         rHostname === normalizedUrl || rHostname === normalizedHostname) {
                         cachedReports[index].status = 'pending';
                         delete cachedReports[index].bannedAt;
                     }
                 }
             });
-            
+
             chrome.storage.local.set({ cachedGlobalReports: cachedReports });
         });
 
@@ -2186,7 +2186,7 @@ function loadTrustData() {
 
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Fetching data...</td></tr>';
 
-    fetch('http://localhost:3000/api/trust/all')
+    fetch(`http://localhost:3000/api/trust/all?t=${Date.now()}`)
         .then(res => res.json())
         .then(data => {
             if (!data || data.length === 0) {
