@@ -1638,6 +1638,7 @@ app.post("/api/reports/update", (req, res) => {
 
     if (idx !== -1) {
         reports[idx].status = status;
+        reports[idx].lastUpdated = Date.now(); // Essential for sync logic
         if (status === "banned") reports[idx].bannedAt = Date.now();
         if (status === "ignored") reports[idx].ignoredAt = Date.now();
 
@@ -1758,34 +1759,40 @@ app.get("/api/reports/global-sync", async (req, res) => {
                         // But wait, we need to compare statuses.
                     }
 
-                    // Priority Rule: 'banned' > 'ignored' > 'pending'
-                    // Conflict: Report exists in both.
-                    // Priority Rule: 'banned' > 'ignored' > 'pending'
-                    const statusPriority = { 'banned': 3, 'ignored': 2, 'pending': 1 };
+                    // TIME-BASED SYNCHRONIZATION (Last Write Wins)
+                    const gTime = globalR.lastUpdated || 0;
+                    const lTime = localR.lastUpdated || 0;
 
-                    const gStatus = globalR.status || 'pending';
-                    const lStatus = localR.status || 'pending';
-                    const gScore = statusPriority[gStatus] || 0;
-                    const lScore = statusPriority[lStatus] || 0;
-
-                    if (gScore > lScore) {
-                        // Global is better -> Update Local
+                    if (gTime > lTime) {
+                        // Global is newer -> Update Local
                         mergedReportsMap.set(globalR.id, globalR);
                         dataChanged = true;
-                    } else if (lScore > gScore) {
-                        // Local is better -> HEAL GLOBAL (Fire and Forget)
-                        console.log(`[Global-Sync] Local '${lStatus}' > Global '${gStatus}'. Healing...`);
+                    }
+                    else if (lTime > gTime) {
+                        // Local is newer -> HEAL GLOBAL
+                        console.log(`[Global-Sync] Local '${lStatus}' (t=${lTime}) is newer than Global '${gStatus}' (t=${gTime}). Healing...`);
                         fetch('https://phishingshield.onrender.com/api/reports/update', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ id: localR.id, status: lStatus })
                         }).catch(e => console.warn(`[Heal-Fail] ${e.message}`));
-                    } else if (gScore === lScore) {
-                        // Same status? Use newest timestamp if available (optional)
-                        // For now, trust Global as source of truth for synchronization
-                        if (globalR.timestamp > localR.timestamp) {
+                    }
+                    else {
+                        // Timestamps equal (or both 0). Fallback to old Priority Rule for safety.
+                        const statusPriority = { 'banned': 3, 'ignored': 2, 'pending': 1 };
+                        const gScore = statusPriority[gStatus] || 0;
+                        const lScore = statusPriority[lStatus] || 0;
+
+                        if (gScore > lScore) {
                             mergedReportsMap.set(globalR.id, globalR);
                             dataChanged = true;
+                        } else if (lScore > gScore) {
+                            // Heal Global in tie-break case too
+                            fetch('https://phishingshield.onrender.com/api/reports/update', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: localR.id, status: lStatus })
+                            }).catch(() => { });
                         }
                     }
                 }
