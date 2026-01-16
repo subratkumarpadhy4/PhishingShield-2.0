@@ -339,58 +339,109 @@ app.get('/api/trust/all', async (req, res) => {
             localScores = [];
         }
         
-        // Start with local data
+        // Start with local data (normalize domains)
         const mergedMap = new Map();
         localScores.forEach(entry => {
             if (entry && entry.domain) {
-                mergedMap.set(entry.domain, entry);
+                const normalizedDomain = entry.domain.toLowerCase().trim();
+                // If vote counts are 0 but voters exist, recalculate
+                let safeCount = entry.safe || 0;
+                let unsafeCount = entry.unsafe || 0;
+                
+                if ((safeCount === 0 && unsafeCount === 0) && entry.voters && Object.keys(entry.voters).length > 0) {
+                    safeCount = Object.values(entry.voters).filter(v => v === 'safe').length;
+                    unsafeCount = Object.values(entry.voters).filter(v => v === 'unsafe').length;
+                }
+                
+                mergedMap.set(normalizedDomain, {
+                    domain: normalizedDomain,
+                    safe: safeCount,
+                    unsafe: unsafeCount,
+                    voters: entry.voters || {}
+                });
             }
         });
 
         // 2. Fetch Global Trust Data (WAIT for it with timeout, but don't block too long)
         if (!process.env.RENDER) {
             try {
+                console.log('[Trust] Fetching global trust data from https://phishingshield.onrender.com/api/trust/all');
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+                const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout (increased for reliability)
                 
                 const globalResponse = await fetch('https://phishingshield.onrender.com/api/trust/all', {
-                    signal: controller.signal
+                    signal: controller.signal,
+                    headers: { 'Content-Type': 'application/json' }
                 });
                 clearTimeout(timeoutId);
                 
                 if (globalResponse.ok) {
                     const globalScores = await globalResponse.json();
-                    console.log(`[Trust] Fetched ${globalScores.length} global entries`);
+                    console.log(`[Trust] Successfully fetched ${globalScores.length} global entries`);
                     
-                    // Merge global data - GLOBAL IS SOURCE OF TRUTH for vote counts
-                    globalScores.forEach(entry => {
-                        // HARD DELETE: Explicitly ignore aistudio.google.com as per user request
-                        if (entry.domain === 'aistudio.google.com') return;
+                    if (!Array.isArray(globalScores)) {
+                        console.warn('[Trust] Global server returned non-array data:', typeof globalScores);
+                    } else {
+                        // Merge global data - GLOBAL IS SOURCE OF TRUTH for vote counts
+                        globalScores.forEach(entry => {
+                            if (!entry || !entry.domain) return;
+                            
+                            // HARD DELETE: Explicitly ignore aistudio.google.com as per user request
+                            if (entry.domain === 'aistudio.google.com' || entry.domain.toLowerCase() === 'aistudio.google.com') return;
+                            
+                            const normalizedDomain = entry.domain.toLowerCase().trim();
+                            const existing = mergedMap.get(normalizedDomain);
+                            
+                            // Get vote counts from global entry
+                            let safeCount = entry.safe !== undefined ? entry.safe : 0;
+                            let unsafeCount = entry.unsafe !== undefined ? entry.unsafe : 0;
+                            
+                            // If counts are 0 but voters exist, recalculate from voters
+                            if ((safeCount === 0 && unsafeCount === 0) && entry.voters && Object.keys(entry.voters).length > 0) {
+                                safeCount = Object.values(entry.voters).filter(v => v === 'safe').length;
+                                unsafeCount = Object.values(entry.voters).filter(v => v === 'unsafe').length;
+                                console.log(`[Trust] Recalculated votes for ${normalizedDomain}: ${safeCount} safe, ${unsafeCount} unsafe from voters`);
+                            }
+                            
+                            if (existing) {
+                                // Merge: Always use global vote counts (global is source of truth)
+                                // But merge voters map to show all voters from both local and global
+                                const mergedVoters = { ...(entry.voters || {}), ...(existing.voters || {}) };
+                                
+                                mergedMap.set(normalizedDomain, {
+                                    domain: normalizedDomain,
+                                    safe: safeCount, // Use global counts
+                                    unsafe: unsafeCount, // Use global counts
+                                    voters: mergedVoters
+                                });
+                                console.log(`[Trust] Merged ${normalizedDomain}: ${safeCount} safe, ${unsafeCount} unsafe (from global)`);
+                            } else {
+                                // New domain from global
+                                mergedMap.set(normalizedDomain, {
+                                    domain: normalizedDomain,
+                                    safe: safeCount,
+                                    unsafe: unsafeCount,
+                                    voters: entry.voters || {}
+                                });
+                                console.log(`[Trust] Added new domain from global: ${normalizedDomain}: ${safeCount} safe, ${unsafeCount} unsafe`);
+                            }
+                        });
                         
-                        const existing = mergedMap.get(entry.domain);
-                        if (existing) {
-                            // Merge: Always use global vote counts (global is source of truth)
-                            // But merge voters map to show all voters
-                            const mergedVoters = { ...(entry.voters || {}), ...(existing.voters || {}) };
-                            mergedMap.set(entry.domain, {
-                                ...entry,
-                                voters: mergedVoters
-                            });
-                        } else {
-                            // New domain from global
-                            mergedMap.set(entry.domain, entry);
-                        }
-                    });
-                    
-                    // Update local file with merged global data (so it persists locally)
-                    const scoresToSave = Array.from(mergedMap.values());
-                    writeData(TRUST_FILE, scoresToSave);
-                    console.log(`[Trust] Merged ${scoresToSave.length} entries from global server`);
+                        // Update local file with merged global data (so it persists locally)
+                        const scoresToSave = Array.from(mergedMap.values());
+                        writeData(TRUST_FILE, scoresToSave);
+                        console.log(`[Trust] Merged ${scoresToSave.length} total entries from global server and saved to local file`);
+                    }
+                } else {
+                    console.warn(`[Trust] Global server returned ${globalResponse.status}: ${globalResponse.statusText}`);
                 }
             } catch (e) {
                 console.warn(`[Trust] Global fetch failed or timed out: ${e.message} - returning local data only`);
+                console.warn(`[Trust] Error details:`, e);
                 // Continue with local data only if global fetch fails
             }
+        } else {
+            console.log('[Trust] Running on global server (RENDER=true), skipping global fetch');
         }
 
         // Return merged data (global + local)
