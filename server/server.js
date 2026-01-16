@@ -1811,15 +1811,25 @@ app.get("/api/reports/global-sync", async (req, res) => {
 
                         let resolved = false;
 
-                        // Case: Local Banned vs Global Pending
-                        // If Global has the SAME bannedAt time, it means Global saw the ban and moved to Pending (Unban).
-                        // We should trust Global.
-                        if (lStatus === 'banned' && gStatus === 'pending') {
-                            if (globalR.bannedAt && localR.bannedAt && globalR.bannedAt === localR.bannedAt) {
-                                console.log(`[Global-Sync] Handled Legacy Unban: Global is Pending but shares bannedAt with Local. Trusting Global.`);
-                                mergedReportsMap.set(globalR.id, globalR);
+                        // Case: Local Pending (Unban) vs Global Banned (Zombie)
+                        // If Local has the SAME bannedAt time as Global, it means Local WAS banned at that time 
+                        // but is now Pending (Unbanned). Local is newer.
+                        if (lStatus === 'pending' && gStatus === 'banned') {
+                            // Note: strict equality might fail if one is string one is number, but usually they are both numbers from Date.now()
+                            if (globalR.bannedAt && localR.bannedAt && globalR.bannedAt == localR.bannedAt) {
+                                console.log(`[Global-Sync] Handled Zombie Ban: Local unbanned but shares bannedAt with Global. Healing Global.`);
+
+                                // Trust Local (Pending) -> Heal Global
+                                const winner = { ...globalR, status: lStatus };
+                                mergedReportsMap.set(globalR.id, winner);
                                 dataChanged = true;
                                 resolved = true;
+
+                                fetch('https://phishingshield.onrender.com/api/reports/update', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ id: globalR.id, status: lStatus })
+                                }).catch(() => { });
                             }
                         }
 
