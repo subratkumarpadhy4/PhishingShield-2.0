@@ -1769,8 +1769,8 @@ app.get("/api/reports/global-sync", async (req, res) => {
                     }
 
                     // TIME-BASED SYNCHRONIZATION (Last Write Wins)
-                    const gTime = globalR.lastUpdated || 0;
-                    const lTime = localR.lastUpdated || 0;
+                    const gTime = Number(globalR.lastUpdated) || 0;
+                    const lTime = Number(localR.lastUpdated) || 0;
 
                     // Definitions essential for fallback logic and logging
                     const statusPriority = { 'banned': 3, 'ignored': 2, 'pending': 1 };
@@ -1781,6 +1781,7 @@ app.get("/api/reports/global-sync", async (req, res) => {
 
                     if (gTime > lTime) {
                         // Global is newer -> Update Local
+                        console.log(`[Global-Sync] Global '${gStatus}' (t=${gTime}) is newer than Local '${lStatus}' (t=${lTime}). Updating Local.`);
                         mergedReportsMap.set(globalR.id, globalR);
                         dataChanged = true;
                     }
