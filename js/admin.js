@@ -2189,7 +2189,7 @@ function loadTrustData() {
     const tbody = document.querySelector('#trust-table tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Fetching data...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Fetching data...</td></tr>';
 
     // Always use cache-busting to ensure fresh data (cache disabled on server anyway)
     // This ensures friend's device always gets latest votes
@@ -2231,12 +2231,12 @@ function loadTrustData() {
             // Ensure data is an array
             if (!Array.isArray(data)) {
                 console.warn('[Admin] Trust data is not an array:', typeof data, data);
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#dc3545;">Invalid data format received from server.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#dc3545;">Invalid data format received from server.</td></tr>';
                 return;
             }
             
             if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#6c757d;">No trust data recorded yet.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#6c757d;">No trust data recorded yet.</td></tr>';
                 return;
             }
 
@@ -2282,17 +2282,6 @@ function loadTrustData() {
                 `;
 
                 // Get voter details
-                const voters = item.voters || {};
-                const voterList = Object.entries(voters).map(([email, vote]) => {
-                    const voteIcon = vote === 'safe' ? '✅' : '❌';
-                    const emailShort = email.includes('@') ? email.split('@')[0] : email.substring(0, 8);
-                    return `${voteIcon} ${emailShort}`;
-                }).slice(0, 5); // Show first 5 voters
-                
-                const voterDisplay = voterList.length > 0 
-                    ? `<div style="font-size:11px; color:#64748b; margin-top:4px;">${voterList.join(', ')}${Object.keys(voters).length > 5 ? ` +${Object.keys(voters).length - 5} more` : ''}</div>`
-                    : '<div style="font-size:11px; color:#adb5bd;">No voter details</div>';
-
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td style="font-weight:600; color:#1e293b;">${item.domain}</td>
@@ -2300,7 +2289,6 @@ function loadTrustData() {
                     <td style="color:#166534;">+${item.safe || 0}</td>
                     <td style="color:#dc3545;">-${item.unsafe || 0}</td>
                     <td>${statusBadge} <span style="font-size:11px; color:#64748b; margin-left:5px;">(${total} votes)</span></td>
-                    <td style="font-size:11px; max-width:200px;">${voterDisplay}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -2322,12 +2310,12 @@ function loadTrustData() {
                     .then(data => {
                         if (!Array.isArray(data)) {
                             console.warn('[Admin] Retry: Trust data is not an array:', typeof data);
-                            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#dc3545;">Invalid data format received from server.</td></tr>';
+                            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#dc3545;">Invalid data format received from server.</td></tr>';
                             return;
                         }
                         
                         if (data.length === 0) {
-                            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#6c757d;">No trust data recorded yet.</td></tr>';
+                            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#6c757d;">No trust data recorded yet.</td></tr>';
                             return;
                         }
 
@@ -2368,17 +2356,6 @@ function loadTrustData() {
                                 <span style="font-weight:bold; font-size:12px;">${scoreText}</span>
                             `;
 
-                            const voters = item.voters || {};
-                            const voterList = Object.entries(voters).map(([email, vote]) => {
-                                const voteIcon = vote === 'safe' ? '✅' : '❌';
-                                const emailShort = email.includes('@') ? email.split('@')[0] : email.substring(0, 8);
-                                return `${voteIcon} ${emailShort}`;
-                            }).slice(0, 5);
-                            
-                            const voterDisplay = voterList.length > 0 
-                                ? `<div style="font-size:11px; color:#64748b; margin-top:4px;">${voterList.join(', ')}${Object.keys(voters).length > 5 ? ` +${Object.keys(voters).length - 5} more` : ''}</div>`
-                                : '<div style="font-size:11px; color:#adb5bd;">No voter details</div>';
-
                             const tr = document.createElement('tr');
                             tr.innerHTML = `
                                 <td style="font-weight:600; color:#1e293b;">${item.domain}</td>
@@ -2386,14 +2363,13 @@ function loadTrustData() {
                                 <td style="color:#166534;">+${item.safe || 0}</td>
                                 <td style="color:#dc3545;">-${item.unsafe || 0}</td>
                                 <td>${statusBadge} <span style="font-size:11px; color:#64748b; margin-left:5px;">(${total} votes)</span></td>
-                                <td style="font-size:11px; max-width:200px;">${voterDisplay}</td>
                             `;
                             tbody.appendChild(tr);
                         });
                     })
                     .catch(retryErr => {
                         console.error('[Admin] Retry also failed:', retryErr);
-                        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#dc3545; padding:20px;">
+                        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#dc3545; padding:20px;">
                             <div style="margin-bottom:10px;">❌ Error loading trust data</div>
                             <div style="font-size:12px; color:#6c757d;">${errorMsg}</div>
                             <div style="font-size:11px; color:#adb5bd; margin-top:8px;">Retry failed. Check server logs.</div>
@@ -2402,7 +2378,7 @@ function loadTrustData() {
             }, 1000);
             
             // Show initial error
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#dc3545; padding:20px;">
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#dc3545; padding:20px;">
                 <div style="margin-bottom:10px;">⏳ Retrying...</div>
                 <div style="font-size:12px; color:#6c757d;">${errorMsg}</div>
             </td></tr>`;

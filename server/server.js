@@ -8,8 +8,21 @@ const fs = require("fs");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
+// MongoDB setup
+const { connectDB, isConnected, TrustScore, Report, User, AuditLog, AdminSession, DeletedUser } = require('./db');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Initialize MongoDB connection
+(async () => {
+    try {
+        await connectDB();
+        console.log('[Server] MongoDB ready');
+    } catch (error) {
+        console.warn('[Server] MongoDB not available, using JSON file storage');
+    }
+})();
 const REPORTS_FILE = path.join(__dirname, 'reports.json');
 const USERS_FILE = path.join(__dirname, 'users.json');
 const DELETED_USERS_FILE = path.join(__dirname, 'data', 'deleted_users.json'); // Persistent deletion list
@@ -60,16 +73,146 @@ if (!fs.existsSync(AUDIT_LOG_FILE)) fs.writeFileSync(AUDIT_LOG_FILE, JSON.string
 if (!fs.existsSync(TRUST_FILE)) fs.writeFileSync(TRUST_FILE, JSON.stringify([], null, 2));
 if (!fs.existsSync(DELETED_USERS_FILE)) fs.writeFileSync(DELETED_USERS_FILE, JSON.stringify([], null, 2));
 
-// --- Helpers ---
-const readData = (file) => {
+// --- Data Access Layer (MongoDB with JSON fallback) ---
+const readData = async (file) => {
+    if (isConnected()) {
+        // Use MongoDB based on file type
+        try {
+            if (file === TRUST_FILE) {
+                const docs = await TrustScore.find({}).lean();
+                return docs.map(doc => ({
+                    domain: doc.domain,
+                    safe: doc.safe || 0,
+                    unsafe: doc.unsafe || 0,
+                    voters: doc.voters instanceof Map ? Object.fromEntries(doc.voters) : (doc.voters || {})
+                }));
+            } else if (file === REPORTS_FILE) {
+                const docs = await Report.find({}).lean();
+                return docs.map(doc => {
+                    const { _id, __v, createdAt, updatedAt, ...rest } = doc;
+                    return rest;
+                });
+            } else if (file === USERS_FILE) {
+                const docs = await User.find({}).lean();
+                return docs.map(doc => {
+                    const { _id, __v, createdAt, updatedAt, ...rest } = doc;
+                    return rest;
+                });
+            } else if (file === AUDIT_LOG_FILE) {
+                const docs = await AuditLog.find({}).sort({ timestamp: -1 }).lean();
+                return docs.map(doc => {
+                    const { _id, __v, createdAt, updatedAt, ...rest } = doc;
+                    return rest;
+                });
+            } else if (file === DELETED_USERS_FILE) {
+                const docs = await DeletedUser.find({}).lean();
+                return docs.map(doc => ({
+                    email: doc.email,
+                    deletedAt: doc.deletedAt
+                }));
+            }
+        } catch (error) {
+            console.error(`[MongoDB] Error reading ${file}:`, error.message);
+            // Fallback to JSON
+        }
+    }
+    
+    // JSON fallback
     try {
-        return JSON.parse(fs.readFileSync(file));
+        return JSON.parse(fs.readFileSync(file, 'utf8'));
     } catch (e) {
         return [];
     }
 };
-const writeData = (file, data) => {
+
+const writeData = async (file, data) => {
+    if (isConnected()) {
+        try {
+            if (file === TRUST_FILE) {
+                // Bulk upsert trust scores
+                const operations = data.map(item => ({
+                    updateOne: {
+                        filter: { domain: item.domain?.toLowerCase().trim() },
+                        update: {
+                            $set: {
+                                domain: item.domain?.toLowerCase().trim(),
+                                safe: item.safe || 0,
+                                unsafe: item.unsafe || 0,
+                                voters: item.voters || {},
+                                updatedAt: new Date()
+                            }
+                        },
+                        upsert: true
+                    }
+                }));
+                if (operations.length > 0) {
+                    await TrustScore.bulkWrite(operations);
+                }
+                return;
+            } else if (file === REPORTS_FILE) {
+                // Bulk upsert reports
+                const operations = data.map(item => ({
+                    updateOne: {
+                        filter: { id: item.id },
+                        update: { $set: { ...item } },
+                        upsert: true
+                    }
+                }));
+                if (operations.length > 0) {
+                    await Report.bulkWrite(operations);
+                }
+                return;
+            } else if (file === USERS_FILE) {
+                // Bulk upsert users
+                const operations = data.map(item => ({
+                    updateOne: {
+                        filter: { email: item.email?.toLowerCase().trim() },
+                        update: { $set: { ...item, email: item.email?.toLowerCase().trim() } },
+                        upsert: true
+                    }
+                }));
+                if (operations.length > 0) {
+                    await User.bulkWrite(operations);
+                }
+                return;
+            } else if (file === AUDIT_LOG_FILE) {
+                // Insert audit logs (append only)
+                if (data.length > 0) {
+                    await AuditLog.insertMany(data.map(item => ({ ...item })), { ordered: false });
+                }
+                return;
+            } else if (file === DELETED_USERS_FILE) {
+                // Bulk upsert deleted users
+                const operations = data.map(item => ({
+                    updateOne: {
+                        filter: { email: item.email?.toLowerCase().trim() },
+                        update: { $set: { email: item.email?.toLowerCase().trim(), deletedAt: item.deletedAt || new Date() } },
+                        upsert: true
+                    }
+                }));
+                if (operations.length > 0) {
+                    await DeletedUser.bulkWrite(operations);
+                }
+                return;
+            }
+        } catch (error) {
+            console.error(`[MongoDB] Error writing ${file}:`, error.message);
+            // Fallback to JSON
+        }
+    }
+    
+    // JSON fallback
     fs.writeFileSync(file, JSON.stringify(data, null, 2));
+};
+
+// Sync version for backward compatibility (calls async but doesn't await - use carefully)
+const readDataSync = (file) => {
+    // Try JSON first for immediate return
+    try {
+        return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (e) {
+        return [];
+    }
 };
 
 
@@ -90,7 +233,7 @@ app.get('/api/trust/score', async (req, res) => {
     }
 
     // 1. Read Local Data FIRST (Fast response)
-    const scores = readData(TRUST_FILE);
+    const scores = await readData(TRUST_FILE);
     let domainData = scores.find(s => {
         const domain = s.domain || '';
         return domain.toLowerCase().trim() === normalizedDomain;
@@ -135,29 +278,41 @@ app.get('/api/trust/score', async (req, res) => {
                     const globalTotal = globalData.votes;
                     
                     // Merge voters: combine local and global voters (global takes priority for vote counts, but merge voters map)
-                    const scores = readData(TRUST_FILE);
-                    const localIndex = scores.findIndex(s => {
-                        const domain = s.domain || '';
-                        return domain.toLowerCase().trim() === normalizedDomain;
-                    });
-                    // Merge voters: global has all votes from all devices, so use global voters
-                    const mergedVoters = { ...(globalData.voters || domainData.voters || {}) };
-                    
-                    // Update local file with global data (global is source of truth)
-                    if (localIndex !== -1) {
-                        scores[localIndex].safe = globalSafe;
-                        scores[localIndex].unsafe = globalUnsafe;
-                        scores[localIndex].voters = mergedVoters; // Use merged voters
-                        writeData(TRUST_FILE, scores);
-                    } else if (globalTotal > 0) {
-                        // Add new entry from global if it doesn't exist locally
-                        scores.push({
-                            domain: normalizedDomain,
-                            safe: globalSafe,
-                            unsafe: globalUnsafe,
-                            voters: mergedVoters
+                    // Update MongoDB or JSON with global data (global is source of truth)
+                    if (isConnected()) {
+                        await TrustScore.findOneAndUpdate(
+                            { domain: normalizedDomain },
+                            {
+                                domain: normalizedDomain,
+                                safe: globalSafe,
+                                unsafe: globalUnsafe,
+                                voters: { ...(globalData.voters || domainData.voters || {}) },
+                                updatedAt: new Date()
+                            },
+                            { upsert: true, new: true }
+                        );
+                    } else {
+                        const scores = await readData(TRUST_FILE);
+                        const localIndex = scores.findIndex(s => {
+                            const domain = s.domain || '';
+                            return domain.toLowerCase().trim() === normalizedDomain;
                         });
-                        writeData(TRUST_FILE, scores);
+                        const mergedVoters = { ...(globalData.voters || domainData.voters || {}) };
+                        
+                        if (localIndex !== -1) {
+                            scores[localIndex].safe = globalSafe;
+                            scores[localIndex].unsafe = globalUnsafe;
+                            scores[localIndex].voters = mergedVoters;
+                            await writeData(TRUST_FILE, scores);
+                        } else if (globalTotal > 0) {
+                            scores.push({
+                                domain: normalizedDomain,
+                                safe: globalSafe,
+                                unsafe: globalUnsafe,
+                                voters: mergedVoters
+                            });
+                            await writeData(TRUST_FILE, scores);
+                        }
                     }
                     
                     const response = {
@@ -201,19 +356,34 @@ app.get('/api/trust/score', async (req, res) => {
                 const globalSafe = globalData.safe !== undefined ? globalData.safe : Math.round((globalData.score / 100) * globalData.votes);
                 const globalUnsafe = globalData.unsafe !== undefined ? globalData.unsafe : (globalData.votes - globalSafe);
                 
-                const scores = readData(TRUST_FILE);
-                const exists = scores.find(s => {
-                    const domain = s.domain || '';
-                    return domain.toLowerCase().trim() === normalizedDomain;
-                });
-                if (!exists) {
-                    scores.push({
-                        domain: normalizedDomain,
-                        safe: globalSafe,
-                        unsafe: globalUnsafe,
-                        voters: {}
+                // Save global data to local cache
+                if (isConnected()) {
+                    await TrustScore.findOneAndUpdate(
+                        { domain: normalizedDomain },
+                        {
+                            domain: normalizedDomain,
+                            safe: globalSafe,
+                            unsafe: globalUnsafe,
+                            voters: {},
+                            updatedAt: new Date()
+                        },
+                        { upsert: true }
+                    );
+                } else {
+                    const scores = await readData(TRUST_FILE);
+                    const exists = scores.find(s => {
+                        const domain = s.domain || '';
+                        return domain.toLowerCase().trim() === normalizedDomain;
                     });
-                    writeData(TRUST_FILE, scores);
+                    if (!exists) {
+                        scores.push({
+                            domain: normalizedDomain,
+                            safe: globalSafe,
+                            unsafe: globalUnsafe,
+                            voters: {}
+                        });
+                        await writeData(TRUST_FILE, scores);
+                    }
                 }
                 
                 const response = {
@@ -237,7 +407,7 @@ app.get('/api/trust/score', async (req, res) => {
         return res.json(noDataResponse);
 });
 
-app.post('/api/trust/vote', (req, res) => {
+app.post('/api/trust/vote', async (req, res) => {
     // userId is recommended to limit spam
     const { domain, vote, userId } = req.body; // vote: 'safe' or 'unsafe'
     if (!domain || !vote) return res.status(400).json({ error: "Domain and vote required" });
@@ -246,61 +416,117 @@ app.post('/api/trust/vote', (req, res) => {
     const normalizedDomain = domain.toLowerCase().trim();
     console.log(`[Trust] Processing vote for ${normalizedDomain}: ${vote} (User: ${userId || 'Anon'})`);
 
-    let scores = readData(TRUST_FILE);
-    // Normalize domain for lookup - handle both normalized and non-normalized entries
-    let entry = scores.find(s => {
-        const domain = s.domain || '';
-        return domain.toLowerCase().trim() === normalizedDomain;
-    });
+    try {
+        let entry;
+        let shouldUpdate = false;
 
-    if (!entry) {
-        entry = { domain: normalizedDomain, safe: 0, unsafe: 0, voters: {} };
-        scores.push(entry);
-    } else {
-        // Ensure stored domain is normalized (fix any old entries)
-        entry.domain = normalizedDomain;
-    }
+        if (isConnected()) {
+            // Use MongoDB
+            entry = await TrustScore.findOne({ domain: normalizedDomain });
+            
+            if (!entry) {
+                entry = new TrustScore({
+                    domain: normalizedDomain,
+                    safe: 0,
+                    unsafe: 0,
+                    voters: {}
+                });
+            }
 
-    // Initialize voters map if simple structure exists
-    if (!entry.voters) entry.voters = {};
+            // Initialize voters object
+            if (!entry.voters) entry.voters = {};
+            
+            // Ensure voters is a plain object (not Map)
+            const votersObj = entry.voters instanceof Map 
+                ? Object.fromEntries(entry.voters) 
+                : (entry.voters || {});
 
-    // ANONYMOUS MODE FALLBACK: If no userId, allow infinite votes (legacy behavior)
-    // To enforcing limits, client MUST send userId.
-    const uid = userId || 'anonymous_' + Date.now();
+            // ANONYMOUS MODE FALLBACK: If no userId, allow infinite votes (legacy behavior)
+            if (userId && votersObj[userId]) {
+                const previousVote = votersObj[userId];
 
-    if (userId && entry.voters[userId]) {
-        const previousVote = entry.voters[userId];
+                if (previousVote === vote) {
+                    return res.json({ success: true, message: "You have already voted this way." });
+                } else {
+                    // Switch vote
+                    if (previousVote === 'safe') entry.safe = Math.max(0, entry.safe - 1);
+                    else entry.unsafe = Math.max(0, entry.unsafe - 1);
 
-        if (previousVote === vote) {
-            return res.json({ success: true, message: "You have already voted this way." });
+                    if (vote === 'safe') entry.safe++;
+                    else entry.unsafe++;
+
+                    votersObj[userId] = vote;
+                    entry.voters = votersObj;
+                    shouldUpdate = true;
+                    console.log(`[Trust] Vote SWITCHED for ${domain} by ${userId}: ${previousVote} -> ${vote}`);
+                }
+            } else {
+                // New Vote
+                if (vote === 'safe') entry.safe++;
+                else if (vote === 'unsafe') entry.unsafe++;
+
+                // Track it
+                if (userId) {
+                    votersObj[userId] = vote;
+                    entry.voters = votersObj;
+                }
+                shouldUpdate = true;
+            }
+
+            await entry.save();
         } else {
-            // Switch vote
-            if (previousVote === 'safe') entry.safe = Math.max(0, entry.safe - 1);
-            else entry.unsafe = Math.max(0, entry.unsafe - 1);
+            // JSON fallback
+            let scores = await readData(TRUST_FILE);
+            entry = scores.find(s => {
+                const domain = s.domain || '';
+                return domain.toLowerCase().trim() === normalizedDomain;
+            });
 
-            if (vote === 'safe') entry.safe++;
-            else entry.unsafe++;
+            if (!entry) {
+                entry = { domain: normalizedDomain, safe: 0, unsafe: 0, voters: {} };
+                scores.push(entry);
+            } else {
+                entry.domain = normalizedDomain;
+            }
 
-            entry.voters[userId] = vote;
-            console.log(`[Trust] Vote SWITCHED for ${domain} by ${userId}: ${previousVote} -> ${vote}`);
+            if (!entry.voters) entry.voters = {};
+
+            if (userId && entry.voters[userId]) {
+                const previousVote = entry.voters[userId];
+
+                if (previousVote === vote) {
+                    return res.json({ success: true, message: "You have already voted this way." });
+                } else {
+                    if (previousVote === 'safe') entry.safe = Math.max(0, entry.safe - 1);
+                    else entry.unsafe = Math.max(0, entry.unsafe - 1);
+
+                    if (vote === 'safe') entry.safe++;
+                    else entry.unsafe++;
+
+                    entry.voters[userId] = vote;
+                    console.log(`[Trust] Vote SWITCHED for ${domain} by ${userId}: ${previousVote} -> ${vote}`);
+                }
+            } else {
+                if (vote === 'safe') entry.safe++;
+                else if (vote === 'unsafe') entry.unsafe++;
+
+                if (userId) entry.voters[userId] = vote;
+            }
+
+            await writeData(TRUST_FILE, scores);
         }
-    } else {
-        // New Vote
-        if (vote === 'safe') entry.safe++;
-        else if (vote === 'unsafe') entry.unsafe++;
 
-        // Track it
-        if (userId) entry.voters[userId] = vote;
+        console.log(`[Trust] Vote saved locally for ${normalizedDomain}: ${vote} (User: ${userId || 'Anon'})`);
+
+        // Clear caches to force fresh data fetch
+        trustScoreCache.delete(normalizedDomain);
+        trustAllCache.data = null;
+        trustAllCache.timestamp = 0;
+        console.log(`[Trust] Cleared cache for ${normalizedDomain} after vote`);
+    } catch (error) {
+        console.error(`[Trust] Error processing vote:`, error);
+        return res.status(500).json({ success: false, message: "Failed to process vote" });
     }
-
-    writeData(TRUST_FILE, scores);
-    console.log(`[Trust] Vote saved locally for ${normalizedDomain}: ${vote} (User: ${userId || 'Anon'})`);
-
-    // Clear caches to force fresh data fetch
-    trustScoreCache.delete(normalizedDomain);
-    trustAllCache.data = null;
-    trustAllCache.timestamp = 0;
-    console.log(`[Trust] Cleared cache for ${normalizedDomain} after vote`);
 
     // --- GLOBAL SYNC (FORWARD WRITE) ---
     // Forward vote to global server immediately (don't wait, fire and forget)
@@ -337,11 +563,20 @@ app.post('/api/trust/vote', (req, res) => {
 });
 
 // Admin: Clear all trust history
-app.post('/api/trust/clear', (req, res) => {
+app.post('/api/trust/clear', async (req, res) => {
     // In a real app, requireAdmin middleware here.
-    writeData(TRUST_FILE, []);
-    console.warn("[Admin] Trust history cleared.");
-    res.json({ success: true, message: "All trust scores cleared." });
+    try {
+        if (isConnected()) {
+            await TrustScore.deleteMany({});
+        } else {
+            await writeData(TRUST_FILE, []);
+        }
+        console.warn("[Admin] Trust history cleared.");
+        res.json({ success: true, message: "All trust scores cleared." });
+    } catch (error) {
+        console.error("[Admin] Error clearing trust history:", error);
+        res.status(500).json({ success: false, message: "Failed to clear trust history" });
+    }
 });
 
 // Cache for trust/all to improve performance
@@ -368,7 +603,7 @@ app.get('/api/trust/all', async (req, res) => {
         // 1. Read Local Trust Data (we'll merge with global, but global takes priority)
         let localScores = [];
         try {
-            localScores = readData(TRUST_FILE) || [];
+            localScores = await readData(TRUST_FILE) || [];
         } catch (e) {
             console.error('[Trust] Error reading local trust file:', e);
             localScores = [];
@@ -469,7 +704,7 @@ app.get('/api/trust/all', async (req, res) => {
                         // Update local file with merged global data (so it persists locally)
                         // CRITICAL: Use global vote counts (source of truth), but preserve merged voters
                         const scoresToSave = Array.from(mergedMap.values());
-                        writeData(TRUST_FILE, scoresToSave);
+                        await writeData(TRUST_FILE, scoresToSave);
                         console.log(`[Trust] Saved ${scoresToSave.length} entries to local file with global vote counts (source of truth)`);
                     }
                 } else {
@@ -576,7 +811,7 @@ app.get('/api/trust/all', async (req, res) => {
         console.error('[Trust] Error stack:', error.stack);
         // Fallback to local only - ensure we always return an array
         try {
-            const localScores = readData(TRUST_FILE) || [];
+            const localScores = await readData(TRUST_FILE) || [];
             res.json(localScores);
         } catch (fallbackError) {
             console.error('[Trust] Fallback also failed:', fallbackError);
@@ -586,43 +821,86 @@ app.get('/api/trust/all', async (req, res) => {
 });
 
 // Admin: Seed Trust Data (Restore from backup)
-app.post('/api/trust/seed', (req, res) => {
+app.post('/api/trust/seed', async (req, res) => {
     const data = req.body; // Expects { domain, safe, unsafe, voters }
     if (!data.domain) return res.status(400).json({ error: "Domain required" });
 
-    let scores = readData(TRUST_FILE);
-    let entry = scores.find(s => s.domain === data.domain);
+    const normalizedDomain = data.domain.toLowerCase().trim();
 
-    if (!entry) {
-        // Create new entry from seed
-        scores.push({
-            domain: data.domain,
-            safe: data.safe || 0,
-            unsafe: data.unsafe || 0,
-            voters: data.voters || {}
-        });
-        console.log(`[Trust] Restored/Seeded data for ${data.domain}`);
-    } else {
-        // Merge: Take max values to be safe
-        if ((data.safe + data.unsafe) > (entry.safe + entry.unsafe)) {
-            entry.safe = data.safe;
-            entry.unsafe = data.unsafe;
-            entry.voters = { ...entry.voters, ...data.voters }; // Merge voters
-            console.log(`[Trust] Updated data for ${data.domain} from seed`);
+    try {
+        if (isConnected()) {
+            const entry = await TrustScore.findOne({ domain: normalizedDomain });
+            
+            if (!entry) {
+                await TrustScore.create({
+                    domain: normalizedDomain,
+                    safe: data.safe || 0,
+                    unsafe: data.unsafe || 0,
+                    voters: data.voters || {}
+                });
+                console.log(`[Trust] Restored/Seeded data for ${normalizedDomain}`);
+            } else {
+                // Merge: Take max values to be safe
+                const currentTotal = (entry.safe || 0) + (entry.unsafe || 0);
+                const seedTotal = (data.safe || 0) + (data.unsafe || 0);
+                
+                if (seedTotal > currentTotal) {
+                    entry.safe = data.safe || 0;
+                    entry.unsafe = data.unsafe || 0;
+                    const votersObj = entry.voters instanceof Map 
+                        ? Object.fromEntries(entry.voters) 
+                        : (entry.voters || {});
+                    entry.voters = { ...votersObj, ...(data.voters || {}) };
+                    await entry.save();
+                    console.log(`[Trust] Updated data for ${normalizedDomain} from seed`);
+                }
+            }
+        } else {
+            let scores = await readData(TRUST_FILE);
+            let entry = scores.find(s => {
+                const domain = s.domain || '';
+                return domain.toLowerCase().trim() === normalizedDomain;
+            });
+
+            if (!entry) {
+                scores.push({
+                    domain: normalizedDomain,
+                    safe: data.safe || 0,
+                    unsafe: data.unsafe || 0,
+                    voters: data.voters || {}
+                });
+                console.log(`[Trust] Restored/Seeded data for ${normalizedDomain}`);
+            } else {
+                const currentTotal = (entry.safe || 0) + (entry.unsafe || 0);
+                const seedTotal = (data.safe || 0) + (data.unsafe || 0);
+                
+                if (seedTotal > currentTotal) {
+                    entry.safe = data.safe || 0;
+                    entry.unsafe = data.unsafe || 0;
+                    entry.voters = { ...entry.voters, ...(data.voters || {}) };
+                    console.log(`[Trust] Updated data for ${normalizedDomain} from seed`);
+                }
+            }
+
+            await writeData(TRUST_FILE, scores);
         }
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('[Trust] Error seeding data:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
-
-    writeData(TRUST_FILE, scores);
-    res.json({ success: true });
 });
 
 // Admin: Simulate Sync to Global Server
-app.post('/api/trust/sync', (req, res) => {
-    // 1. Read Local Trust Data
-    const localData = readData(TRUST_FILE);
+app.post('/api/trust/sync', async (req, res) => {
+    try {
+        // 1. Read Local Trust Data
+        const localData = await readData(TRUST_FILE);
 
-    // 2. Simulate Upload delay
-    setTimeout(() => {
+        // 2. Simulate Upload delay (async/await version)
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
         // 3. Update Sync Timestamp (stored in a separate file or metadata)
         const META_FILE = path.join(__dirname, 'data', 'server_meta.json');
         let meta = {};
@@ -633,7 +911,10 @@ app.post('/api/trust/sync', (req, res) => {
 
         console.log("[Sync] Trust scores synced to Global Server (Simulated).");
         res.json({ success: true, syncedCount: localData.length, timestamp: meta.lastTrustSync });
-    }, 1500);
+    } catch (error) {
+        console.error('[Sync] Error syncing trust scores:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 // Admin: Get Sync Status
