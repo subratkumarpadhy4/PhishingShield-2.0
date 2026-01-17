@@ -1039,6 +1039,57 @@ app.get("/api/reports", async (req, res) => {
     const { reporter } = req.query;
     let reports = await readData(REPORTS_FILE);
 
+    // --- GLOBAL SYNC (FETCH UPDATES) ---
+    // Ensure local server knows about global bans so banned.js doesn't auto-redirect
+    if (!process.env.RENDER) {
+        try {
+            // Fetch global reports with short timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
+
+            const globalRes = await fetch('https://phishingshield.onrender.com/api/reports', {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (globalRes.ok) {
+                const globalReports = await globalRes.json();
+                let changed = false;
+
+                globalReports.forEach(gReport => {
+                    // Match by ID unique or URL
+                    const localIdx = reports.findIndex(r =>
+                        (gReport.id && r.id === gReport.id) ||
+                        (r.url === gReport.url)
+                    );
+
+                    if (localIdx !== -1) {
+                        // Update existing report if status changed (e.g. pending -> banned)
+                        // This fixes the issue where local server still thinks site is pending
+                        if (reports[localIdx].status !== gReport.status) {
+                            reports[localIdx].status = gReport.status;
+                            reports[localIdx].lastUpdated = Date.now();
+                            changed = true;
+                            console.log(`[Sync] Updated status for ${r.url}: ${r.status} -> ${gReport.status}`);
+                        }
+                    } else if (gReport.status === 'banned') {
+                        // Add NEW banned sites from global (Crucial for protection)
+                        reports.push(gReport);
+                        changed = true;
+                    }
+                });
+
+                if (changed) {
+                    await writeData(REPORTS_FILE, reports);
+                    console.log('[Reports] Synced global updates to local database');
+                }
+            }
+        } catch (e) {
+            // console.warn('[Reports] Global sync skipped:', e.message);
+        }
+    }
+
+
     if (reporter && typeof reporter === 'string') {
         // OPTIMIZED MATCHING:
         // 1. Check strict 'reporterEmail' field (future proof)
