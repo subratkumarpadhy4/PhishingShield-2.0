@@ -436,7 +436,11 @@ app.post('/api/trust/vote', async (req, res) => {
 
     // Normalize domain (lowercase, trim)
     const normalizedDomain = domain.toLowerCase().trim();
-    console.log(`[Trust] Processing vote for ${normalizedDomain}: ${vote} (User: ${userId || 'Anon'})`);
+
+    // ANTI-DATA-LOSS: Use IP as fallback for anonymous voters so they are tracked in the map
+    const effectiveUserId = userId || `anon_${(req.ip || 'unknown').replace(/[^a-zA-Z0-9]/g, '')}`;
+
+    console.log(`[Trust] Processing vote for ${normalizedDomain}: ${vote} (User: ${effectiveUserId})`);
 
     try {
         let entry;
@@ -487,11 +491,9 @@ app.post('/api/trust/vote', async (req, res) => {
                 if (vote === 'safe') entry.safe++;
                 else if (vote === 'unsafe') entry.unsafe++;
 
-                // Track it
-                if (userId) {
-                    votersObj[userId] = vote;
-                    entry.voters = votersObj;
-                }
+                // Track it (EVERY vote is now tracked in the map)
+                votersObj[effectiveUserId] = vote;
+                entry.voters = votersObj;
                 shouldUpdate = true;
             }
 
@@ -532,7 +534,7 @@ app.post('/api/trust/vote', async (req, res) => {
                 if (vote === 'safe') entry.safe++;
                 else if (vote === 'unsafe') entry.unsafe++;
 
-                if (userId) entry.voters[userId] = vote;
+                entry.voters[effectiveUserId] = vote;
             }
 
             await writeData(TRUST_FILE, scores);
@@ -665,74 +667,49 @@ app.get('/api/trust/all', async (req, res) => {
                         console.log('[Trust] Global server returned empty array - will use local data if available');
                         // Empty global response - will fallback to local below
                     } else {
-                        // STEP 1: Add all global data first (GLOBAL IS SOURCE OF TRUTH)
+                        // GLOBAL DATA SYNC
                         globalScores.forEach(entry => {
                             if (!entry || !entry.domain) return;
-
-                            // HARD DELETE: Explicitly ignore aistudio.google.com as per user request
-                            if (entry.domain === 'aistudio.google.com' || entry.domain.toLowerCase() === 'aistudio.google.com') return;
-
                             const normalizedDomain = entry.domain.toLowerCase().trim();
 
-                            // Get vote counts from global entry
-                            let safeCount = entry.safe !== undefined ? entry.safe : 0;
-                            let unsafeCount = entry.unsafe !== undefined ? entry.unsafe : 0;
+                            // If global returns empty counts but local has data, we'll merge below.
+                            // But first, populate map with global data.
+                            const globalVoters = entry.voters || {};
+                            const globalSafe = entry.safe || 0;
+                            const globalUnsafe = entry.unsafe || 0;
 
-                            // If counts are 0 but voters exist, recalculate from voters
-                            if ((safeCount === 0 && unsafeCount === 0) && entry.voters && Object.keys(entry.voters).length > 0) {
-                                safeCount = Object.values(entry.voters).filter(v => v === 'safe').length;
-                                unsafeCount = Object.values(entry.voters).filter(v => v === 'unsafe').length;
-                                console.log(`[Trust] Recalculated votes for ${normalizedDomain}: ${safeCount} safe, ${unsafeCount} unsafe from voters`);
-                            }
-
-                            // GLOBAL DATA TAKES PRIORITY - overwrite whatever is in map
                             mergedMap.set(normalizedDomain, {
                                 domain: normalizedDomain,
-                                safe: safeCount,
-                                unsafe: unsafeCount,
-                                voters: entry.voters || {}
+                                safe: globalSafe,
+                                unsafe: globalUnsafe,
+                                voters: globalVoters
                             });
-                            console.log(`[Trust] Added/updated ${normalizedDomain} from global: ${safeCount} safe, ${unsafeCount} unsafe`);
                         });
 
-                        // STEP 2: Merge local voters into global data (for domains that exist in global)
-                        // CRITICAL: Global voters are source of truth, local voters are only added if not in global
+                        // STEP 2: Merge local data into global data
+                        // CRITICAL: Global data is the source of truth, but local data might have newer voters
                         localScores.forEach(localEntry => {
                             if (!localEntry || !localEntry.domain) return;
                             const normalizedDomain = localEntry.domain.toLowerCase().trim();
                             const globalEntry = mergedMap.get(normalizedDomain);
 
-                            if (globalEntry && localEntry.voters && Object.keys(localEntry.voters).length > 0) {
-                                // Start with global voters (source of truth)
-                                const mergedVoters = { ...(globalEntry.voters || {}) };
-                                // Only add local voters that don't exist in global (to avoid overwriting)
-                                Object.entries(localEntry.voters).forEach(([userId, vote]) => {
-                                    if (!mergedVoters[userId]) {
-                                        // Local has a voter that global doesn't - add it (might be unsynced)
-                                        mergedVoters[userId] = vote;
-                                    }
-                                    // If userId exists in both, trust global (it's the source of truth)
-                                });
+                            if (globalEntry) {
+                                // Merge voters maps
+                                const combinedVoters = { ...globalEntry.voters, ...localEntry.voters };
 
-                                const mergedSafe = Object.values(mergedVoters).filter(v => v === 'safe').length;
-                                const mergedUnsafe = Object.values(mergedVoters).filter(v => v === 'unsafe').length;
+                                // Recalculate counts based on combined map (Anti-Data-Loss)
+                                const recalculatedSafe = Object.values(combinedVoters).filter(v => v === 'safe').length;
+                                const recalculatedUnsafe = Object.values(combinedVoters).filter(v => v === 'unsafe').length;
 
                                 mergedMap.set(normalizedDomain, {
                                     domain: normalizedDomain,
-                                    safe: mergedSafe,
-                                    unsafe: mergedUnsafe,
-                                    voters: mergedVoters
+                                    safe: Math.max(recalculatedSafe, globalEntry.safe || 0, localEntry.safe || 0),
+                                    unsafe: Math.max(recalculatedUnsafe, globalEntry.unsafe || 0, localEntry.unsafe || 0),
+                                    voters: combinedVoters
                                 });
-                                console.log(`[Trust] Merged local voters for ${normalizedDomain}: ${mergedSafe}S, ${mergedUnsafe}U`);
                             } else {
-                                // If domain exists only locally but not globally, keep it!
-                                mergedMap.set(normalizedDomain, {
-                                    domain: normalizedDomain,
-                                    safe: localEntry.safe || 0,
-                                    unsafe: localEntry.unsafe || 0,
-                                    voters: localEntry.voters || {}
-                                });
-                                console.log(`[Trust] Preserved local-only entry for ${normalizedDomain}`);
+                                // Local only
+                                mergedMap.set(normalizedDomain, localEntry);
                             }
                         });
 
