@@ -277,6 +277,12 @@ app.get('/api/trust/score', async (req, res) => {
 
     // Wait for global data (with timeout) and merge before returning
     if (domainData) {
+        // Recalculate if counts are zero but voters exist
+        if ((domainData.safe === 0 && domainData.unsafe === 0) && domainData.voters && Object.keys(domainData.voters).length > 0) {
+            domainData.safe = Object.values(domainData.voters).filter(v => v === 'safe').length;
+            domainData.unsafe = Object.values(domainData.voters).filter(v => v === 'unsafe').length;
+            console.log(`[Trust] Recalculated counts for ${normalizedDomain}: ${domainData.safe}S, ${domainData.unsafe}U`);
+        }
         const localTotal = (domainData.safe || 0) + (domainData.unsafe || 0);
 
         // Wait for global data with timeout (max 1.5s wait)
@@ -713,8 +719,16 @@ app.get('/api/trust/all', async (req, res) => {
                                     voters: mergedVoters // Global voters + local-only voters, global counts stay the same
                                 });
                                 console.log(`[Trust] Merged local voters into global entry for ${normalizedDomain}`);
+                            } else {
+                                // If domain exists only locally but not globally, keep it!
+                                mergedMap.set(normalizedDomain, {
+                                    domain: normalizedDomain,
+                                    safe: localEntry.safe || 0,
+                                    unsafe: localEntry.unsafe || 0,
+                                    voters: localEntry.voters || {}
+                                });
+                                console.log(`[Trust] Preserved local-only entry for ${normalizedDomain}`);
                             }
-                            // If domain exists only locally but not globally, ignore it (global is source of truth)
                         });
 
                         // Update local file with merged global data (so it persists locally)
