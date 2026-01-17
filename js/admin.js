@@ -847,12 +847,27 @@ function loadDashboardData() {
 
                     // Update UI Variables
                     allReportsCache = reportsToKeep;
-                    renderReports(reportsToKeep);
 
                     btnDeleteAll.disabled = false;
                     btnDeleteAll.innerText = "🗑️ Delete All";
 
                     alert(`✅ Successful!\n\nDeleted: ${deleteIds.length}\nPreserved (Banned): ${reportsToKeep.length}`);
+
+                    // Smooth refresh: fetch fresh data from server to ensure sync
+                    fetch('https://phishingshield.onrender.com/api/reports')
+                        .then(res => res.json())
+                        .then(freshReports => {
+                            chrome.storage.local.set({ cachedGlobalReports: freshReports }, () => {
+                                allReportsCache = freshReports;
+                                renderReports(freshReports);
+                                console.log('[Admin] Reports refreshed after delete');
+                            });
+                        })
+                        .catch(err => {
+                            console.error('[Admin] Failed to refresh reports:', err);
+                            // Fallback: use local data
+                            renderReports(reportsToKeep);
+                        });
                 });
             });
         };
@@ -1502,8 +1517,24 @@ window.unbanSite = async function (url, reportId) {
                     });
 
                     alert(`✅ Site Unbanned\n\nUsers can now visit this site.\n\nNote: Other devices will sync within 10 seconds.`);
-                    loadDashboardData(); // Refresh UI
-                    loadBannedSites(); // Refresh banned sites table
+                    // Smooth refresh: fetch fresh data from server
+                    fetch('https://phishingshield.onrender.com/api/reports')
+                        .then(res => res.json())
+                        .then(freshReports => {
+                            chrome.storage.local.set({ cachedGlobalReports: freshReports }, () => {
+                                allReportsCache = freshReports;
+                                renderReports(freshReports);
+                                console.log('[Admin] Reports refreshed after unban');
+                            });
+                        })
+                        .catch(err => {
+                            console.error('[Admin] Failed to refresh reports:', err);
+                            // Fallback: just update local cache
+                            allReportsCache = allReportsCache.map(r =>
+                                r.id === reportId ? { ...r, status: 'pending' } : r
+                            );
+                            renderReports(allReportsCache);
+                        });
                 });
             });
         });
