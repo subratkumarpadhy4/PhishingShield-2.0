@@ -269,25 +269,57 @@ function submitReport(payload, sendResponse) {
         }
     });
 
-    // 2. Send to GLOBAL API (using global server exclusively)
-    fetch(GLOBAL_API, {
+    const tryGlobal = () => {
+        fetch(GLOBAL_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
+            .then(data => {
+                console.log("[PhishingShield] ✅ Report Synced to Global Server:", data);
+                if (sendResponse) sendResponse({ success: true, data: data });
+            })
+            .catch(err => {
+                console.warn("[PhishingShield] ⚠️ Global Sync Failed. Queuing report...", err);
+                // Queue for later
+                queueReportForSync(payload);
+                if (sendResponse) sendResponse({ success: true, queued: true }); // treat as success to client
+            });
+    };
+
+    // 2. Try LOCAL API First (Timeout 2s)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+    fetch(LOCAL_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: controller.signal
     })
         .then(res => {
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            clearTimeout(timeoutId);
+            if (!res.ok) throw new Error("Local API Error");
             return res.json();
         })
         .then(data => {
-            console.log("[PhishingShield] ✅ Report Synced to Global Server:", data);
+            console.log("[PhishingShield] ✅ Report Sent to LOCAL Server:", data);
             if (sendResponse) sendResponse({ success: true, data: data });
+
+            // Backup: Fire-and-forget to Global as well (Dual Write for consistency)
+            fetch(GLOBAL_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).catch(e => console.log("Global backup write failed (non-critical):", e));
         })
         .catch(err => {
-            console.warn("[PhishingShield] ⚠️ Global Sync Failed. Queuing report...", err);
-            // Queue for later
-            queueReportForSync(payload);
-            if (sendResponse) sendResponse({ success: true, queued: true }); // treat as success to client
+            console.log("[PhishingShield] Local Server Unreachable (or timeout). Falling back to Global...", err);
+            tryGlobal();
         });
 }
 
@@ -410,8 +442,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // 4. REPORT SITE (Async using Helper)
     if (request.type === "REPORT_SITE") {
-        chrome.storage.local.get(['currentUser'], (data) => {
-            const user = data.currentUser || {};
+        chrome.storage.local.get(['currentUser', 'adminUser'], (data) => {
+            const user = data.currentUser || data.adminUser || {};
             const reporterDisplay = (user.name || 'Anonymous') + (user.email ? ` (${user.email})` : '');
 
             const reportPayload = {
