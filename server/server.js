@@ -12,6 +12,9 @@ const jwt = require("jsonwebtoken");
 const { connectDB, isConnected, TrustScore, Report, User, AuditLog, AdminSession, DeletedUser } = require('./db');
 
 const app = express();
+console.log("-----------------------------------------");
+console.log("[DEBUG] MAIN SERVER STARTING - LOADED server.js");
+console.log("-----------------------------------------");
 const PORT = process.env.PORT || 3000;
 
 // Initialize MongoDB connection
@@ -52,6 +55,11 @@ app.use(
 // Handle preflight requests
 app.options("*", cors());
 
+app.use((req, res, next) => {
+    console.log(`[REQUEST] ${req.method} ${req.url}`);
+    next();
+});
+
 app.use(bodyParser.json());
 
 // PREVENT CRASHES: Global Error Handlers
@@ -75,7 +83,9 @@ if (!fs.existsSync(DELETED_USERS_FILE)) fs.writeFileSync(DELETED_USERS_FILE, JSO
 
 // --- Data Access Layer (MongoDB with JSON fallback) ---
 const readData = async (file) => {
+    console.log(`[DEBUG] readData called for: ${file}`);
     if (isConnected()) {
+        console.log(`[DEBUG] MongoDB is connected`);
         // Use MongoDB based on file type
         try {
             if (file === TRUST_FILE) {
@@ -93,7 +103,9 @@ const readData = async (file) => {
                     return rest;
                 });
             } else if (file === USERS_FILE) {
+                console.log(`[DEBUG] Fetching Users from MongoDB...`);
                 const docs = await User.find({}).lean();
+                console.log(`[DEBUG] Found ${docs.length} users`);
                 return docs.map(doc => {
                     const { _id, __v, createdAt, updatedAt, ...rest } = doc;
                     return rest;
@@ -115,9 +127,12 @@ const readData = async (file) => {
             console.error(`[MongoDB] Error reading ${file}:`, error.message);
             // Fallback to JSON
         }
+    } else {
+        console.log(`[DEBUG] MongoDB NOT connected`);
     }
-    
+
     // JSON fallback
+    console.log(`[DEBUG] Falling back to JSON for ${file}`);
     try {
         return JSON.parse(fs.readFileSync(file, 'utf8'));
     } catch (e) {
@@ -200,7 +215,7 @@ const writeData = async (file, data) => {
             // Fallback to JSON
         }
     }
-    
+
     // JSON fallback
     fs.writeFileSync(file, JSON.stringify(data, null, 2));
 };
@@ -260,103 +275,25 @@ app.get('/api/trust/score', async (req, res) => {
         return null;
     })() : Promise.resolve(null);
 
-        // Wait for global data (with timeout) and merge before returning
-        if (domainData) {
-            const localTotal = (domainData.safe || 0) + (domainData.unsafe || 0);
-            
-            // Wait for global data with timeout (max 1.5s wait)
-            try {
-                const globalData = await Promise.race([
-                    globalFetchPromise,
-                    new Promise(resolve => setTimeout(() => resolve(null), 1500))
-                ]);
-                
-                if (globalData && globalData.votes !== undefined) {
-                    // Use global data as source of truth (it has all votes from all laptops)
-                    const globalSafe = globalData.safe !== undefined ? globalData.safe : Math.round((globalData.score / 100) * globalData.votes);
-                    const globalUnsafe = globalData.unsafe !== undefined ? globalData.unsafe : (globalData.votes - globalSafe);
-                    const globalTotal = globalData.votes;
-                    
-                    // Merge voters: combine local and global voters (global takes priority for vote counts, but merge voters map)
-                    // Update MongoDB or JSON with global data (global is source of truth)
-                    if (isConnected()) {
-                        await TrustScore.findOneAndUpdate(
-                            { domain: normalizedDomain },
-                            {
-                                domain: normalizedDomain,
-                                safe: globalSafe,
-                                unsafe: globalUnsafe,
-                                voters: { ...(globalData.voters || domainData.voters || {}) },
-                                updatedAt: new Date()
-                            },
-                            { upsert: true, new: true }
-                        );
-                    } else {
-                        const scores = await readData(TRUST_FILE);
-                        const localIndex = scores.findIndex(s => {
-                            const domain = s.domain || '';
-                            return domain.toLowerCase().trim() === normalizedDomain;
-                        });
-                        const mergedVoters = { ...(globalData.voters || domainData.voters || {}) };
-                        
-                        if (localIndex !== -1) {
-                            scores[localIndex].safe = globalSafe;
-                            scores[localIndex].unsafe = globalUnsafe;
-                            scores[localIndex].voters = mergedVoters;
-                            await writeData(TRUST_FILE, scores);
-                        } else if (globalTotal > 0) {
-                            scores.push({
-                                domain: normalizedDomain,
-                                safe: globalSafe,
-                                unsafe: globalUnsafe,
-                                voters: mergedVoters
-                            });
-                            await writeData(TRUST_FILE, scores);
-                        }
-                    }
-                    
-                    const response = {
-                        score: globalData.score,
-                        votes: globalTotal,
-                        safe: globalSafe,
-                        unsafe: globalUnsafe,
-                        status: globalData.status || (globalData.score > 70 ? 'safe' : (globalData.score < 30 ? 'malicious' : 'suspect'))
-                    };
-                    
-                    trustScoreCache.set(normalizedDomain, { data: response, timestamp: Date.now() });
-                    return res.json(response);
-                }
-            } catch (e) {
-                console.warn(`[Trust] Global fetch error for ${normalizedDomain}: ${e.message} - using local data`);
-            }
-            
-            // Fallback to local data if global fetch fails or times out
-            const localScore = localTotal === 0 ? null : Math.round(((domainData.safe || 0) / localTotal) * 100);
-            const response = {
-                score: localScore,
-                votes: localTotal,
-                safe: domainData.safe || 0,
-                unsafe: domainData.unsafe || 0,
-                status: localScore === null ? 'unknown' : (localScore > 70 ? 'safe' : (localScore < 30 ? 'malicious' : 'suspect'))
-            };
+    // Wait for global data (with timeout) and merge before returning
+    if (domainData) {
+        const localTotal = (domainData.safe || 0) + (domainData.unsafe || 0);
 
-            trustScoreCache.set(normalizedDomain, { data: response, timestamp: Date.now() });
-            return res.json(response);
-        }
-
-        // No local data - wait for global (but with timeout)
+        // Wait for global data with timeout (max 1.5s wait)
         try {
             const globalData = await Promise.race([
                 globalFetchPromise,
                 new Promise(resolve => setTimeout(() => resolve(null), 1500))
             ]);
 
-            if (globalData && globalData.votes > 0) {
-                // Save global data to local cache for faster future access
+            if (globalData && globalData.votes !== undefined) {
+                // Use global data as source of truth (it has all votes from all laptops)
                 const globalSafe = globalData.safe !== undefined ? globalData.safe : Math.round((globalData.score / 100) * globalData.votes);
                 const globalUnsafe = globalData.unsafe !== undefined ? globalData.unsafe : (globalData.votes - globalSafe);
-                
-                // Save global data to local cache
+                const globalTotal = globalData.votes;
+
+                // Merge voters: combine local and global voters (global takes priority for vote counts, but merge voters map)
+                // Update MongoDB or JSON with global data (global is source of truth)
                 if (isConnected()) {
                     await TrustScore.findOneAndUpdate(
                         { domain: normalizedDomain },
@@ -364,47 +301,125 @@ app.get('/api/trust/score', async (req, res) => {
                             domain: normalizedDomain,
                             safe: globalSafe,
                             unsafe: globalUnsafe,
-                            voters: {},
+                            voters: { ...(globalData.voters || domainData.voters || {}) },
                             updatedAt: new Date()
                         },
-                        { upsert: true }
+                        { upsert: true, new: true }
                     );
                 } else {
                     const scores = await readData(TRUST_FILE);
-                    const exists = scores.find(s => {
+                    const localIndex = scores.findIndex(s => {
                         const domain = s.domain || '';
                         return domain.toLowerCase().trim() === normalizedDomain;
                     });
-                    if (!exists) {
+                    const mergedVoters = { ...(globalData.voters || domainData.voters || {}) };
+
+                    if (localIndex !== -1) {
+                        scores[localIndex].safe = globalSafe;
+                        scores[localIndex].unsafe = globalUnsafe;
+                        scores[localIndex].voters = mergedVoters;
+                        await writeData(TRUST_FILE, scores);
+                    } else if (globalTotal > 0) {
                         scores.push({
                             domain: normalizedDomain,
                             safe: globalSafe,
                             unsafe: globalUnsafe,
-                            voters: {}
+                            voters: mergedVoters
                         });
                         await writeData(TRUST_FILE, scores);
                     }
                 }
-                
+
                 const response = {
                     score: globalData.score,
-                    votes: globalData.votes,
+                    votes: globalTotal,
                     safe: globalSafe,
                     unsafe: globalUnsafe,
-                    status: globalData.status
+                    status: globalData.status || (globalData.score > 70 ? 'safe' : (globalData.score < 30 ? 'malicious' : 'suspect'))
                 };
-                
+
                 trustScoreCache.set(normalizedDomain, { data: response, timestamp: Date.now() });
                 return res.json(response);
             }
         } catch (e) {
-            console.warn(`[Trust] Global fetch error: ${e.message}`);
+            console.warn(`[Trust] Global fetch error for ${normalizedDomain}: ${e.message} - using local data`);
         }
 
-        // No data found
-        const noDataResponse = { score: null, votes: 0, safe: 0, unsafe: 0, status: 'unknown' };
-        trustScoreCache.set(normalizedDomain, { data: noDataResponse, timestamp: Date.now() });
-        return res.json(noDataResponse);
+        // Fallback to local data if global fetch fails or times out
+        const localScore = localTotal === 0 ? null : Math.round(((domainData.safe || 0) / localTotal) * 100);
+        const response = {
+            score: localScore,
+            votes: localTotal,
+            safe: domainData.safe || 0,
+            unsafe: domainData.unsafe || 0,
+            status: localScore === null ? 'unknown' : (localScore > 70 ? 'safe' : (localScore < 30 ? 'malicious' : 'suspect'))
+        };
+
+        trustScoreCache.set(normalizedDomain, { data: response, timestamp: Date.now() });
+        return res.json(response);
+    }
+
+    // No local data - wait for global (but with timeout)
+    try {
+        const globalData = await Promise.race([
+            globalFetchPromise,
+            new Promise(resolve => setTimeout(() => resolve(null), 1500))
+        ]);
+
+        if (globalData && globalData.votes > 0) {
+            // Save global data to local cache for faster future access
+            const globalSafe = globalData.safe !== undefined ? globalData.safe : Math.round((globalData.score / 100) * globalData.votes);
+            const globalUnsafe = globalData.unsafe !== undefined ? globalData.unsafe : (globalData.votes - globalSafe);
+
+            // Save global data to local cache
+            if (isConnected()) {
+                await TrustScore.findOneAndUpdate(
+                    { domain: normalizedDomain },
+                    {
+                        domain: normalizedDomain,
+                        safe: globalSafe,
+                        unsafe: globalUnsafe,
+                        voters: {},
+                        updatedAt: new Date()
+                    },
+                    { upsert: true }
+                );
+            } else {
+                const scores = await readData(TRUST_FILE);
+                const exists = scores.find(s => {
+                    const domain = s.domain || '';
+                    return domain.toLowerCase().trim() === normalizedDomain;
+                });
+                if (!exists) {
+                    scores.push({
+                        domain: normalizedDomain,
+                        safe: globalSafe,
+                        unsafe: globalUnsafe,
+                        voters: {}
+                    });
+                    await writeData(TRUST_FILE, scores);
+                }
+            }
+
+            const response = {
+                score: globalData.score,
+                votes: globalData.votes,
+                safe: globalSafe,
+                unsafe: globalUnsafe,
+                status: globalData.status
+            };
+
+            trustScoreCache.set(normalizedDomain, { data: response, timestamp: Date.now() });
+            return res.json(response);
+        }
+    } catch (e) {
+        console.warn(`[Trust] Global fetch error: ${e.message}`);
+    }
+
+    // No data found
+    const noDataResponse = { score: null, votes: 0, safe: 0, unsafe: 0, status: 'unknown' };
+    trustScoreCache.set(normalizedDomain, { data: noDataResponse, timestamp: Date.now() });
+    return res.json(noDataResponse);
 });
 
 app.post('/api/trust/vote', async (req, res) => {
@@ -423,7 +438,7 @@ app.post('/api/trust/vote', async (req, res) => {
         if (isConnected()) {
             // Use MongoDB
             entry = await TrustScore.findOne({ domain: normalizedDomain });
-            
+
             if (!entry) {
                 entry = new TrustScore({
                     domain: normalizedDomain,
@@ -435,10 +450,10 @@ app.post('/api/trust/vote', async (req, res) => {
 
             // Initialize voters object
             if (!entry.voters) entry.voters = {};
-            
+
             // Ensure voters is a plain object (not Map)
-            const votersObj = entry.voters instanceof Map 
-                ? Object.fromEntries(entry.voters) 
+            const votersObj = entry.voters instanceof Map
+                ? Object.fromEntries(entry.voters)
                 : (entry.voters || {});
 
             // ANONYMOUS MODE FALLBACK: If no userId, allow infinite votes (legacy behavior)
@@ -534,27 +549,27 @@ app.post('/api/trust/vote', async (req, res) => {
         console.log(`[Trust-Sync] [SEND] Forwarding vote to global server: ${normalizedDomain} = ${vote} (User: ${userId || 'Anon'})`);
         fetch('https://phishingshield.onrender.com/api/trust/vote', {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
             body: JSON.stringify({ domain: normalizedDomain, vote, userId })
         })
-        .then(async globalRes => {
-            if (globalRes.ok) {
-                const result = await globalRes.json().catch(() => ({}));
-                console.log(`[Trust-Sync] [SEND] ✓ Vote forwarded successfully to global server for ${normalizedDomain}`);
-                console.log(`[Trust-Sync] [SEND] Global server response:`, result);
-            } else {
-                const errorText = await globalRes.text().catch(() => 'Unable to read error');
-                console.error(`[Trust-Sync] [SEND] ✗ Global server returned ${globalRes.status} for ${normalizedDomain}`);
-                console.error(`[Trust-Sync] [SEND] Error response: ${errorText.substring(0, 200)}`);
-            }
-        })
-        .catch(e => {
-            console.error(`[Trust-Sync] [SEND] ✗ FAILED to forward vote to global server: ${e.message}`);
-            console.error(`[Trust-Sync] [SEND] Error details:`, e);
-        });
+            .then(async globalRes => {
+                if (globalRes.ok) {
+                    const result = await globalRes.json().catch(() => ({}));
+                    console.log(`[Trust-Sync] [SEND] ✓ Vote forwarded successfully to global server for ${normalizedDomain}`);
+                    console.log(`[Trust-Sync] [SEND] Global server response:`, result);
+                } else {
+                    const errorText = await globalRes.text().catch(() => 'Unable to read error');
+                    console.error(`[Trust-Sync] [SEND] ✗ Global server returned ${globalRes.status} for ${normalizedDomain}`);
+                    console.error(`[Trust-Sync] [SEND] Error response: ${errorText.substring(0, 200)}`);
+                }
+            })
+            .catch(e => {
+                console.error(`[Trust-Sync] [SEND] ✗ FAILED to forward vote to global server: ${e.message}`);
+                console.error(`[Trust-Sync] [SEND] Error details:`, e);
+            });
     } else {
         console.log(`[Trust-Sync] [SEND] Running on global server (RENDER=true), vote already saved globally`);
     }
@@ -595,7 +610,7 @@ app.get('/api/trust/all', async (req, res) => {
         // Don't use cache for admin portal - always fetch fresh to ensure sync
         // Cache only causes stale data issues across devices
         const useCache = false; // Disabled - always fetch fresh data
-        
+
         if (forceRefresh) {
             console.log('[Trust] Cache bypassed - forcing fresh data fetch');
         }
@@ -608,7 +623,7 @@ app.get('/api/trust/all', async (req, res) => {
             console.error('[Trust] Error reading local trust file:', e);
             localScores = [];
         }
-        
+
         // Start with empty map - GLOBAL data will populate it first (source of truth)
         const mergedMap = new Map();
 
@@ -619,11 +634,11 @@ app.get('/api/trust/all', async (req, res) => {
                 console.log('[Trust] [SYNC] Fetching global trust data from https://phishingshield.onrender.com/api/trust/all...');
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout (increased for reliability)
-                
+
                 const fetchStart = Date.now();
                 const globalResponse = await fetch('https://phishingshield.onrender.com/api/trust/all', {
                     signal: controller.signal,
-                    headers: { 
+                    headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     }
@@ -631,11 +646,11 @@ app.get('/api/trust/all', async (req, res) => {
                 clearTimeout(timeoutId);
                 const fetchDuration = Date.now() - fetchStart;
                 console.log(`[Trust] [SYNC] Global fetch completed in ${fetchDuration}ms with status ${globalResponse.status}`);
-                
+
                 if (globalResponse.ok) {
                     const globalScores = await globalResponse.json();
                     console.log(`[Trust] Successfully fetched ${globalScores ? globalScores.length : 0} global entries`);
-                    
+
                     if (!Array.isArray(globalScores)) {
                         console.warn('[Trust] Global server returned non-array data:', typeof globalScores, globalScores);
                         // If global returns wrong format, treat as empty and fallback to local
@@ -646,23 +661,23 @@ app.get('/api/trust/all', async (req, res) => {
                         // STEP 1: Add all global data first (GLOBAL IS SOURCE OF TRUTH)
                         globalScores.forEach(entry => {
                             if (!entry || !entry.domain) return;
-                            
+
                             // HARD DELETE: Explicitly ignore aistudio.google.com as per user request
                             if (entry.domain === 'aistudio.google.com' || entry.domain.toLowerCase() === 'aistudio.google.com') return;
-                            
+
                             const normalizedDomain = entry.domain.toLowerCase().trim();
-                            
+
                             // Get vote counts from global entry
                             let safeCount = entry.safe !== undefined ? entry.safe : 0;
                             let unsafeCount = entry.unsafe !== undefined ? entry.unsafe : 0;
-                            
+
                             // If counts are 0 but voters exist, recalculate from voters
                             if ((safeCount === 0 && unsafeCount === 0) && entry.voters && Object.keys(entry.voters).length > 0) {
                                 safeCount = Object.values(entry.voters).filter(v => v === 'safe').length;
                                 unsafeCount = Object.values(entry.voters).filter(v => v === 'unsafe').length;
                                 console.log(`[Trust] Recalculated votes for ${normalizedDomain}: ${safeCount} safe, ${unsafeCount} unsafe from voters`);
                             }
-                            
+
                             // GLOBAL DATA TAKES PRIORITY - overwrite whatever is in map
                             mergedMap.set(normalizedDomain, {
                                 domain: normalizedDomain,
@@ -672,14 +687,14 @@ app.get('/api/trust/all', async (req, res) => {
                             });
                             console.log(`[Trust] Added/updated ${normalizedDomain} from global: ${safeCount} safe, ${unsafeCount} unsafe`);
                         });
-                        
+
                         // STEP 2: Merge local voters into global data (for domains that exist in global)
                         // CRITICAL: Global voters are source of truth, local voters are only added if not in global
                         localScores.forEach(localEntry => {
                             if (!localEntry || !localEntry.domain) return;
                             const normalizedDomain = localEntry.domain.toLowerCase().trim();
                             const globalEntry = mergedMap.get(normalizedDomain);
-                            
+
                             if (globalEntry && localEntry.voters && Object.keys(localEntry.voters).length > 0) {
                                 // Start with global voters (source of truth)
                                 const mergedVoters = { ...(globalEntry.voters || {}) };
@@ -691,7 +706,7 @@ app.get('/api/trust/all', async (req, res) => {
                                     }
                                     // If userId exists in both, trust global (it's the source of truth)
                                 });
-                                
+
                                 mergedMap.set(normalizedDomain, {
                                     ...globalEntry,
                                     voters: mergedVoters // Global voters + local-only voters, global counts stay the same
@@ -700,7 +715,7 @@ app.get('/api/trust/all', async (req, res) => {
                             }
                             // If domain exists only locally but not globally, ignore it (global is source of truth)
                         });
-                        
+
                         // Update local file with merged global data (so it persists locally)
                         // CRITICAL: Use global vote counts (source of truth), but preserve merged voters
                         const scoresToSave = Array.from(mergedMap.values());
@@ -726,13 +741,13 @@ app.get('/api/trust/all', async (req, res) => {
                     const normalizedDomain = entry.domain.toLowerCase().trim();
                     let safeCount = entry.safe || 0;
                     let unsafeCount = entry.unsafe || 0;
-                    
+
                     // Recalculate if needed
                     if ((safeCount === 0 && unsafeCount === 0) && entry.voters && Object.keys(entry.voters).length > 0) {
                         safeCount = Object.values(entry.voters).filter(v => v === 'safe').length;
                         unsafeCount = Object.values(entry.voters).filter(v => v === 'unsafe').length;
                     }
-                    
+
                     mergedMap.set(normalizedDomain, {
                         domain: normalizedDomain,
                         safe: safeCount,
@@ -752,13 +767,13 @@ app.get('/api/trust/all', async (req, res) => {
                     const normalizedDomain = entry.domain.toLowerCase().trim();
                     let safeCount = entry.safe || 0;
                     let unsafeCount = entry.unsafe || 0;
-                    
+
                     // Recalculate if needed
                     if ((safeCount === 0 && unsafeCount === 0) && entry.voters && Object.keys(entry.voters).length > 0) {
                         safeCount = Object.values(entry.voters).filter(v => v === 'safe').length;
                         unsafeCount = Object.values(entry.voters).filter(v => v === 'unsafe').length;
                     }
-                    
+
                     mergedMap.set(normalizedDomain, {
                         domain: normalizedDomain,
                         safe: safeCount,
@@ -771,15 +786,15 @@ app.get('/api/trust/all', async (req, res) => {
 
         // Return merged data (global + local)
         const mergedScores = Array.from(mergedMap.values());
-        
+
         // Log summary of merged data
         const totalVotes = mergedScores.reduce((sum, e) => sum + (e.safe || 0) + (e.unsafe || 0), 0);
         console.log(`[Trust] [SYNC] Returning ${mergedScores.length} trust entries with ${totalVotes} total votes (merged global + local)`);
-        
+
         // Update cache (for future use, though we disabled it above)
         trustAllCache.data = mergedScores;
         trustAllCache.timestamp = now;
-        
+
         res.json(mergedScores);
 
         // AUTO-REPAIR / SYNC-UP (Background - don't block)
@@ -793,7 +808,7 @@ app.get('/api/trust/all', async (req, res) => {
                     const localDomain = (l.domain || '').toLowerCase().trim();
                     return !globalDomains.has(localDomain);
                 });
-                
+
                 if (missingInGlobal.length > 0) {
                     console.log(`[Trust-Sync] Found ${missingInGlobal.length} domains missing globally. Syncing...`);
                     missingInGlobal.forEach(item => {
@@ -801,7 +816,7 @@ app.get('/api/trust/all', async (req, res) => {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(item)
-                        }).catch(() => {});
+                        }).catch(() => { });
                     });
                 }
             });
@@ -830,7 +845,7 @@ app.post('/api/trust/seed', async (req, res) => {
     try {
         if (isConnected()) {
             const entry = await TrustScore.findOne({ domain: normalizedDomain });
-            
+
             if (!entry) {
                 await TrustScore.create({
                     domain: normalizedDomain,
@@ -843,12 +858,12 @@ app.post('/api/trust/seed', async (req, res) => {
                 // Merge: Take max values to be safe
                 const currentTotal = (entry.safe || 0) + (entry.unsafe || 0);
                 const seedTotal = (data.safe || 0) + (data.unsafe || 0);
-                
+
                 if (seedTotal > currentTotal) {
                     entry.safe = data.safe || 0;
                     entry.unsafe = data.unsafe || 0;
-                    const votersObj = entry.voters instanceof Map 
-                        ? Object.fromEntries(entry.voters) 
+                    const votersObj = entry.voters instanceof Map
+                        ? Object.fromEntries(entry.voters)
                         : (entry.voters || {});
                     entry.voters = { ...votersObj, ...(data.voters || {}) };
                     await entry.save();
@@ -873,7 +888,7 @@ app.post('/api/trust/seed', async (req, res) => {
             } else {
                 const currentTotal = (entry.safe || 0) + (entry.unsafe || 0);
                 const seedTotal = (data.safe || 0) + (data.unsafe || 0);
-                
+
                 if (seedTotal > currentTotal) {
                     entry.safe = data.safe || 0;
                     entry.unsafe = data.unsafe || 0;
@@ -884,7 +899,7 @@ app.post('/api/trust/seed', async (req, res) => {
 
             await writeData(TRUST_FILE, scores);
         }
-        
+
         res.json({ success: true });
     } catch (error) {
         console.error('[Trust] Error seeding data:', error);
@@ -900,7 +915,7 @@ app.post('/api/trust/sync', async (req, res) => {
 
         // 2. Simulate Upload delay (async/await version)
         await new Promise(resolve => setTimeout(resolve, 1500));
-        
+
         // 3. Update Sync Timestamp (stored in a separate file or metadata)
         const META_FILE = path.join(__dirname, 'data', 'server_meta.json');
         let meta = {};
@@ -1020,9 +1035,9 @@ app.post('/api/logs/clear', (req, res) => {
 // --- ROUTES: REPORTS ---
 
 // GET /api/reports
-app.get("/api/reports", (req, res) => {
+app.get("/api/reports", async (req, res) => {
     const { reporter } = req.query;
-    let reports = readData(REPORTS_FILE);
+    let reports = await readData(REPORTS_FILE);
 
     if (reporter && typeof reporter === 'string') {
         // OPTIMIZED MATCHING:
@@ -1089,12 +1104,7 @@ app.post("/api/reports", (req, res) => {
 
 // --- ROUTES: USERS & AUTH ---
 
-// GET /api/users
-app.get("/api/users", (req, res) => {
-    const users = readData(USERS_FILE);
-    // Return safe public info if needed, or full objects for this internal extension backend
-    res.json(users);
-});
+// Duplicate route removed
 
 
 
@@ -1274,22 +1284,26 @@ function generateAdminOTP() {
 }
 
 // Helper: Audit logging
-function logAdminAction(userId, action, ipAddress, success, details = {}) {
-    const logs = readData(AUDIT_LOG_FILE);
-    logs.push({
-        id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        userId,
-        action,
-        ipAddress,
-        userAgent: details.userAgent || "Unknown",
-        success,
-        details,
-        timestamp: new Date().toISOString(),
-    });
-    writeData(AUDIT_LOG_FILE, logs);
-    console.log(
-        `[AUDIT] ${action} - User: ${userId} - IP: ${ipAddress} - Success: ${success}`,
-    );
+async function logAdminAction(userId, action, ipAddress, success, details = {}) {
+    try {
+        const logs = (await readData(AUDIT_LOG_FILE)) || [];
+        logs.push({
+            id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            userId,
+            action,
+            ipAddress,
+            userAgent: details.userAgent || "Unknown",
+            success,
+            details,
+            timestamp: new Date().toISOString(),
+        });
+        await writeData(AUDIT_LOG_FILE, logs);
+        console.log(
+            `[AUDIT] ${action} - User: ${userId} - IP: ${ipAddress} - Success: ${success}`,
+        );
+    } catch (e) {
+        console.error("Audit Log Error:", e);
+    }
 }
 
 // Helper: Rate limiting check for admin
@@ -1455,11 +1469,11 @@ app.post("/api/verify-otp", (req, res) => {
 });
 
 // POST /api/users/sync (Create or Update User)
-app.post("/api/users/sync", (req, res) => {
+app.post("/api/users/sync", async (req, res) => {
     const userData = req.body;
     if (!userData.email) return res.status(400).json({ error: "Email required" });
 
-    const users = readData(USERS_FILE);
+    const users = await readData(USERS_FILE);
     const idx = users.findIndex((u) => u.email === userData.email);
 
     let finalUser;
@@ -1479,7 +1493,7 @@ app.post("/api/users/sync", (req, res) => {
         // 2. isPenalty = true: Override if it's a new event (clientUpdated > serverUpdated)
         // 3. XP increase: Standard gameplay progression (ONLY if timestamp is newer)
         // 4. Reject: Older timestamps or decreases without flags
-        
+
         if (userData.forceUpdate === true) {
             // Admin Force Update - ALWAYS accept (can increase or decrease XP)
             const adminEditTimestamp = clientUpdated || Date.now();
@@ -1503,11 +1517,11 @@ app.post("/api/users/sync", (req, res) => {
             const adminEditXP = users[idx]._adminEditXP;
             const timeSinceAdminEdit = adminEditTime > 0 ? (clientUpdated - adminEditTime) : Infinity;
             const minTimeAfterAdminEdit = 10 * 60 * 1000; // 10 minutes after admin edit
-            
+
             // CRITICAL: If admin recently edited and new XP would be higher than admin-set XP, reject it
             if (adminEditTime > 0 && adminEditXP !== undefined && userData.xp > adminEditXP && timeSinceAdminEdit < minTimeAfterAdminEdit) {
                 // This would revert an admin decrease - reject it
-                console.log(`[Sync] Rejected XP increase: Would revert admin edit (${adminEditXP} -> ${userData.xp}). Admin edited ${Math.round(timeSinceAdminEdit/1000)}s ago.`);
+                console.log(`[Sync] Rejected XP increase: Would revert admin edit (${adminEditXP} -> ${userData.xp}). Admin edited ${Math.round(timeSinceAdminEdit / 1000)}s ago.`);
             } else if (clientUpdated > serverUpdated) {
                 // Timestamp is newer and no admin edit conflict - accept increase
                 console.log(`[Sync] XP Increase: ${serverXP} -> ${userData.xp} (timestamp: ${clientUpdated} > ${serverUpdated})`);
@@ -1635,6 +1649,22 @@ app.post("/api/users/reset-password", (req, res) => {
 });
 
 // POST /api/users/delete
+app.get("/api/users", async (req, res) => {
+    console.log("[DEBUG] /api/users endpoint HIT");
+    try {
+        const users = await readData(USERS_FILE);
+        console.log(`[DEBUG] /api/users returning ${users ? users.length : 0} users`);
+        res.json(users || []);
+    } catch (error) {
+        console.error("Error fetching users:", error);
+        res.status(500).json({ error: "Failed to fetch users" });
+    }
+});
+
+app.get("/api/ping-server-js", (req, res) => {
+    res.send("PONG FROM SERVER.JS");
+});
+
 app.post("/api/users/delete", (req, res) => {
     const { email } = req.body;
 
@@ -1712,7 +1742,7 @@ app.post("/api/auth/admin/login", async (req, res) => {
     }
 
     // Find user
-    let users = readData(USERS_FILE);
+    let users = await readData(USERS_FILE);
     let user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
 
     if (!user) {
@@ -1775,7 +1805,8 @@ app.post("/api/auth/admin/login", async (req, res) => {
     );
 
     // Store admin session PERSISTENTLY
-    const sessions = getAdminSessions();
+    // Store admin session PERSISTENTLY
+    const sessions = await getAdminSessions();
     sessions[sessionId] = {
         userId: user.email,
         token: adminToken,
@@ -1783,7 +1814,7 @@ app.post("/api/auth/admin/login", async (req, res) => {
         createdAt: Date.now(),
         expiresAt: Date.now() + 10 * 24 * 60 * 60 * 1000, // 10 days
     };
-    saveAdminSessions(sessions);
+    await saveAdminSessions(sessions);
 
     logAdminAction(user.email, "admin_login_success", ip, true, {
         sessionId,
@@ -2315,7 +2346,7 @@ Provide comprehensive analysis.`;
 });
 
 // MIDDLEWARE: Check Admin Access
-const requireAdmin = (req, res, next) => {
+const requireAdmin = async (req, res, next) => {
     const authHeader = req.headers["authorization"];
     if (!authHeader)
         return res.status(401).json({ success: false, message: "Token required" });
@@ -2334,7 +2365,7 @@ const requireAdmin = (req, res, next) => {
 
         // Verify session exists in PERSISTENT store
         const sessionId = decoded.sessionId;
-        const sessions = getAdminSessions(); // Read from file
+        const sessions = await getAdminSessions(); // Read from file
 
         if (!sessions[sessionId]) {
             return res
@@ -2346,7 +2377,7 @@ const requireAdmin = (req, res, next) => {
         const session = sessions[sessionId];
         if (Date.now() > session.expiresAt) {
             delete sessions[sessionId];
-            saveAdminSessions(sessions);
+            await saveAdminSessions(sessions);
             return res
                 .status(401)
                 .json({ success: false, message: "Session expired" });
@@ -2375,8 +2406,8 @@ app.get("/api/auth/admin/verify", requireAdmin, (req, res) => {
 });
 
 // GET /api/admin/logs - Get audit logs (Admin Only)
-app.get("/api/admin/logs", requireAdmin, (req, res) => {
-    const logs = readData(AUDIT_LOG_FILE);
+app.get("/api/admin/logs", requireAdmin, async (req, res) => {
+    const logs = (await readData(AUDIT_LOG_FILE)) || [];
     // Return last 100 logs
     const recentLogs = logs.slice(-100).reverse();
     res.json({ success: true, logs: recentLogs });
@@ -2387,14 +2418,14 @@ app.get("/api/admin/logs", requireAdmin, (req, res) => {
 // (Duplicate Routes Removed)
 
 // POST /api/reports/update - Update report status (ban/ignore/pending)
-app.post("/api/reports/update", (req, res) => {
+app.post("/api/reports/update", async (req, res) => {
     const { id, status } = req.body; // status: 'banned', 'ignored', 'pending'
     if (!id || !status)
         return res
             .status(400)
             .json({ success: false, message: "ID and status required" });
 
-    const reports = readData(REPORTS_FILE) || [];
+    const reports = (await readData(REPORTS_FILE)) || [];
     const idx = reports.findIndex((r) => r.id === id);
 
     if (idx !== -1) {
@@ -2696,7 +2727,7 @@ app.get("/api/reports/global-sync", async (req, res) => {
 // --- NEW: Global User Sync Endpoint (Leaderboard) ---
 app.get("/api/users/global-sync", async (req, res) => {
     try {
-        const localUsers = readData(USERS_FILE) || [];
+        const localUsers = (await readData(USERS_FILE)) || [];
         // Ensure Deleted Users file exists
         if (!fs.existsSync(DELETED_USERS_FILE)) writeData(DELETED_USERS_FILE, []);
         const deletedUsers = readData(DELETED_USERS_FILE) || [];
@@ -2780,7 +2811,7 @@ app.get("/api/users/global-sync", async (req, res) => {
 
     } catch (error) {
         console.error("[User-Sync] Error:", error);
-        res.json(readData(USERS_FILE) || []);
+        res.json((await readData(USERS_FILE)) || []);
     }
 });
 
