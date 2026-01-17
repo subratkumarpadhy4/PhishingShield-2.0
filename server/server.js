@@ -1224,6 +1224,27 @@ app.put("/api/reports/:id", async (req, res) => {
     res.json({ success: true, report: reports[idx] });
 });
 
+// DELETE /api/reports - Clear all reports (Global Sync)
+app.delete("/api/reports", async (req, res) => {
+    const { timestamp } = req.body;
+    const deleteTime = timestamp || Date.now();
+
+    // Clear Local
+    await writeData(REPORTS_FILE, []);
+    console.log(`[Reports] Cleared all reports (Cmd Time: ${deleteTime})`);
+
+    // Forward to Global
+    if (!process.env.RENDER) {
+        fetch('https://phishingshield.onrender.com/api/reports', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ timestamp: deleteTime })
+        }).catch(e => console.warn(`[Report-Sync] Clear failed: ${e.message}`));
+    }
+
+    res.json({ success: true, message: "Reports cleared" });
+});
+
 
 // --- ROUTES: USERS & AUTH ---
 

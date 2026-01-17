@@ -116,6 +116,20 @@ function setupReportFilters() {
                 }, 2000);
             });
         });
+
+        // INJECT DELETE ALL BUTTON (Dynamic)
+        if (!document.getElementById('btn-clear-all-reports')) {
+            const clearBtn = document.createElement('button');
+            clearBtn.id = 'btn-clear-all-reports';
+            clearBtn.className = 'btn btn-outline';
+            clearBtn.style.color = '#dc3545';
+            clearBtn.style.borderColor = '#dc3545';
+            clearBtn.style.marginLeft = '10px';
+            clearBtn.innerHTML = '<i class="fas fa-trash"></i> Clear All';
+            clearBtn.addEventListener('click', handleClearReports);
+
+            refreshReportsBtn.parentNode.insertBefore(clearBtn, refreshReportsBtn.nextSibling);
+        }
     }
 
     // 3. Refresh Button (Banned Sites)
@@ -2481,6 +2495,27 @@ function checkTrustSyncStatus() {
                 statusEl.className = "badge";
                 statusEl.style.background = "#e2e8f0";
             }
+        });
+}
+
+function handleClearReports() {
+    if (!confirm("⚠️ DANGER: Delete ALL reports?\n\nThis will wipe all reports globally.\nGlobal Server will be synced.")) return;
+
+    fetch('http://localhost:3000/api/reports', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timestamp: Date.now() })
+    })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert("All reports deleted globally.");
+                loadDashboardData();
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Failed to delete reports.");
         });
 }
 
