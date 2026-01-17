@@ -2,7 +2,7 @@
 (function () {
     'use strict';
 
-    const API_BASE = "http://localhost:3000/api";
+    const API_BASE = "https://phishingshield.onrender.com/api";
     let currentSessionId = null;
 
     function showAlert(message, type = 'info') {

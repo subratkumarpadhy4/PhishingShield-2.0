@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (meInGlobal) {
                             const globalTime = Number(meInGlobal.lastUpdated) || 0;
                             const localTime = Number(res.lastXpUpdate) || 0;
-                            
+
                             // Only update if global is NEWER (prevents reverting admin edits)
                             if (globalTime > localTime) {
                                 console.log(`[Dashboard] Global is newer (${globalTime} > ${localTime}). Syncing XP: ${res.userXP} -> ${meInGlobal.xp}`);
@@ -246,8 +246,8 @@ function loadUserReports() {
             return;
         }
 
-        // Fetch reports for this user
-        fetch(`http://localhost:3000/api/reports?reporter=${encodeURIComponent(user.email)}`)
+        // Fetch reports for this user from global server
+        fetch(`https://phishingshield.onrender.com/api/reports?reporter=${encodeURIComponent(user.email)}`)
             .then(res => res.json())
             .then(reports => {
                 renderUserReportsTable(reports);
