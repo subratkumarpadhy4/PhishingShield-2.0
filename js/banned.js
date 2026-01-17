@@ -188,20 +188,35 @@
                                 filteredTokens.push(bypassToken);
                                 chrome.storage.local.set({ bypassTokens: filteredTokens }, function () {
                                     console.log('[PhishingShield] Bypass token stored for one-time use:', normalizedUrl);
-
-                                    // Notify background script to update blocklist (async, don't wait)
+                                    // Notify background script to update blocklist (exclude this URL)
                                     chrome.runtime.sendMessage({
                                         type: "UPDATE_BLOCKLIST",
                                         bypassUrl: normalizedUrl
-                                    }); // No callback - fire and forget
-
-                                    // Navigate IMMEDIATELY - don't wait for blocklist update
-                                    let target = blockedUrl;
-                                    if (!target.startsWith('http') && !target.startsWith('file')) {
-                                        target = 'https://' + target;
-                                    }
-                                    console.log('[PhishingShield] Navigating immediately to:', target);
-                                    window.location.href = target;
+                                    }, function (response) {
+                                        // Wait for blocklist to be updated before navigating
+                                        if (response && response.success) {
+                                            console.log('[PhishingShield] Blocklist updated, navigating to:', blockedUrl);
+                                            // Quick delay to ensure Chrome applies the rule change
+                                            setTimeout(function () {
+                                                // Ensure URL has protocol to avoid relative path (file not found) errors
+                                                let target = blockedUrl;
+                                                if (!target.startsWith('http') && !target.startsWith('file')) {
+                                                    target = 'https://' + target;
+                                                }
+                                                window.location.href = target;
+                                            }, 100); // Reduced from 1000ms to 100ms
+                                        } else {
+                                            // Fallback: try navigation anyway
+                                            console.warn('[PhishingShield] Blocklist update response unclear, attempting navigation');
+                                            setTimeout(function () {
+                                                let target = blockedUrl;
+                                                if (!target.startsWith('http') && !target.startsWith('file')) {
+                                                    target = 'https://' + target;
+                                                }
+                                                window.location.href = target;
+                                            }, 100); // Reduced from 1000ms to 100ms
+                                        }
+                                    });
                                 });
                             });
                         } else {
