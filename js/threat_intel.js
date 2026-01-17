@@ -81,12 +81,13 @@ const ThreatIntel = {
     },
 
     /**
-     * Get Community Trust Score
+     * Get Community Trust Score (from GLOBAL server for consistency)
      */
     getTrustScore: async function (url) {
         try {
             const domain = new URL(url).hostname;
-            const res = await fetch(`${this.backendUrl}/trust/score?domain=${domain}`);
+            // Fetch from GLOBAL server to show same scores as admin portal
+            const res = await fetch(`https://phishingshield.onrender.com/api/trust/score?domain=${domain}`);
             if (res.ok) return await res.json();
             return null;
         } catch (e) {
