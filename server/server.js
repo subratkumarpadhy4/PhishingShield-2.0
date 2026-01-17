@@ -714,11 +714,16 @@ app.get('/api/trust/all', async (req, res) => {
                                     // If userId exists in both, trust global (it's the source of truth)
                                 });
 
+                                const mergedSafe = Object.values(mergedVoters).filter(v => v === 'safe').length;
+                                const mergedUnsafe = Object.values(mergedVoters).filter(v => v === 'unsafe').length;
+
                                 mergedMap.set(normalizedDomain, {
-                                    ...globalEntry,
-                                    voters: mergedVoters // Global voters + local-only voters, global counts stay the same
+                                    domain: normalizedDomain,
+                                    safe: mergedSafe,
+                                    unsafe: mergedUnsafe,
+                                    voters: mergedVoters
                                 });
-                                console.log(`[Trust] Merged local voters into global entry for ${normalizedDomain}`);
+                                console.log(`[Trust] Merged local voters for ${normalizedDomain}: ${mergedSafe}S, ${mergedUnsafe}U`);
                             } else {
                                 // If domain exists only locally but not globally, keep it!
                                 mergedMap.set(normalizedDomain, {
