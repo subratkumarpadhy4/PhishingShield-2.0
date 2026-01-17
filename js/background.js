@@ -105,24 +105,24 @@ function createContextMenu() {
         return;
     }
 
-    // Remove all existing menus first to prevent duplicates
-    chrome.contextMenus.removeAll(() => {
+    // Attempt to create the menu item
+    // We do NOT remove it first, to avoid race conditions.
+    // If it exists, we catch the error.
+    chrome.contextMenus.create({
+        id: "report-to-phishingshield",
+        title: "Report to PhishingShield",
+        contexts: ["page", "link"]
+    }, () => {
         if (chrome.runtime.lastError) {
-            console.warn("[PhishingShield] Error removing old menus:", chrome.runtime.lastError.message);
-        }
-
-        // Now create the menu item
-        chrome.contextMenus.create({
-            id: "report-to-phishingshield",
-            title: "Report to PhishingShield",
-            contexts: ["page", "link", "selection"]
-        }, () => {
-            if (chrome.runtime.lastError) {
-                console.error("[PhishingShield] Context Menu Creation Error:", chrome.runtime.lastError.message);
+            const msg = chrome.runtime.lastError.message;
+            if (msg.includes("duplicate") || msg.includes("already exists")) {
+                console.log("[PhishingShield] Context menu already registered (Perfectly fine).");
             } else {
-                console.log("[PhishingShield] ✅ Context menu created successfully!");
+                console.error("[PhishingShield] Context Menu Creation Error:", msg);
             }
-        });
+        } else {
+            console.log("[PhishingShield] ✅ Context menu created successfully!");
+        }
     });
 }
 
@@ -253,7 +253,8 @@ chrome.runtime.onConnect.addListener((port) => {
 // -----------------------------------------------------------------------------
 // OFFLINE SYNC & REPORTING LOGIC
 // -----------------------------------------------------------------------------
-// API endpoints already defined at top of file (lines 9-10)
+const LOCAL_API = 'http://localhost:3000/api/reports';
+const GLOBAL_API = 'https://phishingshield.onrender.com/api/reports';
 
 /**
  * reliable report submission with offline queueing
@@ -269,7 +270,14 @@ function submitReport(payload, sendResponse) {
         }
     });
 
-    // 2. Send to GLOBAL API (using global server exclusively)
+    // 2. Send to LOCAL API (Best Effort for Local Admin Panel)
+    fetch(LOCAL_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).catch(() => console.log("[PhishingShield] Local API unreachable (ignoring)"));
+
+    // 3. Send to GLOBAL API (Critical)
     fetch(GLOBAL_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -456,32 +464,45 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return false; // Synchronous
     }
 
-    // 8. SCAN CONTENT (Use Global Server for AI)
+    // 8. SCAN CONTENT (Async Dual-Fetch: Local > Global)
     if (request.type === "SCAN_CONTENT") {
         const payload = {
             url: request.url,
             content: request.content
         };
 
-        console.log(`[PhishingShield] 🤖 Initiating AI Scan for ${payload.url.substring(0, 50)}...`);
+        const tryGlobalScan = () => {
+            fetch('https://phishingshield.onrender.com/api/ai/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+                .then(res => res.json())
+                .then(data => sendResponse(data))
+                .catch(err => {
+                    console.error("[PhishingShield] Global AI Scan Failed:", err);
+                    sendResponse({ success: false, error: err.message });
+                });
+        };
 
-        // Use Global Server for AI scanning
-        fetch('https://phishingshield.onrender.com/api/ai/scan', {
+        // Try Local First
+        console.log(`[PhishingShield] 🤖 Initiating AI Scan for ${payload.url.substring(0, 50)}...`);
+        fetch('http://localhost:3000/api/ai/scan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         })
             .then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                if (!res.ok) throw new Error(`Local HTTP ${res.status}`);
                 return res.json();
             })
             .then(data => {
-                console.log("[PhishingShield] ✅ AI Scan Success:", data);
+                console.log("[PhishingShield] ✅ Local AI Scan Success:", data);
                 sendResponse(data);
             })
             .catch(err => {
-                console.error("[PhishingShield] AI Scan Failed:", err);
-                sendResponse({ success: false, error: err.message });
+                console.log("[PhishingShield] ⚠️ Local AI Scan failed, failing over to Global...", err);
+                tryGlobalScan();
             });
 
         return true; // Keep channel open
