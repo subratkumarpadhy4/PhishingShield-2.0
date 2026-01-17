@@ -1719,9 +1719,22 @@ app.post("/api/users/sync", async (req, res) => {
         res.json({ success: true, user: finalUser });
 
     } else {
-        // ZOMBIE KILLER: User does not exist locally.
-        console.warn(`[Sync] Rejected non-existent user: ${userData.email}`);
-        res.status(404).json({ success: false, error: "USER_VIOLATION", message: "User does not exist. Please register." });
+        // AUTO-HEAL: User exists globally (client has session) but missing locally.
+        // Instead of killing the session, we recreate the user locally.
+        console.log(`[Sync] Auto-healing user: ${userData.email} (Missing locally but has valid session)`);
+        
+        const newUser = {
+            ...userData,
+            xp: userData.xp || 0,
+            level: userData.level || 1,
+            joined: userData.joined || Date.now(),
+            lastUpdated: Date.now()
+        };
+        
+        users.push(newUser);
+        writeData(USERS_FILE, users);
+        
+        res.json({ success: true, user: newUser });
     }
 });
 

@@ -6,7 +6,7 @@ let db = null; // No longer used
 console.log("[PhishingShield] Service Worker Starting... " + new Date().toISOString());
 
 // API Endpoints
-const LOCAL_API = "http://localhost:3000/api/reports";
+const LOCAL_API = "http://127.0.0.1:3000/api/reports";
 const GLOBAL_API = "https://phishingshield.onrender.com/api/reports";
 
 // -----------------------------------------------------------------------------
@@ -807,7 +807,7 @@ function updateBlocklistFromStorage(bypassUrl = null, callback = null, forceRefr
 
         // FETCH BANNED SITES FROM SERVER (GLOBAL PROTECTION)
         const API_GLOBAL = 'https://phishingshield.onrender.com/api/reports';
-        const API_LOCAL = 'http://localhost:3000/api/reports';
+        const API_LOCAL = 'http://127.0.0.1:3000/api/reports';
         const nowServer = Date.now();
 
         // Use cache if available and not expired, unless force refresh
@@ -1153,7 +1153,7 @@ function syncXPToServer(customData = {}) {
             };
 
             // Sync to server
-            fetch("http://localhost:3000/api/users/sync", {
+            fetch("http://127.0.0.1:3000/api/users/sync", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(userData)
@@ -1162,8 +1162,10 @@ function syncXPToServer(customData = {}) {
                     const data = await r.json();
 
                     // HANDLE DELETED USER (Force Logout)
-                    if (r.status === 410 || r.status === 404 || (data.error === "USER_DELETED") || (data.error === "USER_VIOLATION")) {
-                        console.warn("[PhishingShield] Account DELETED by Server. Logging out...");
+                    // [FIX] Removed 404 from logout trigger. If user is missing on server, we wait for auto-heal or ignore it.
+                    // Only logout if explicitly 410 (Gone) or USER_DELETED flag is present.
+                    if (r.status === 410 || (data.error === "USER_DELETED") || (data.error === "USER_VIOLATION")) {
+                        console.warn("[PhishingShield] Account DELETED by Server. Logging out... Status:", r.status, "Error:", data.error);
                         chrome.storage.local.remove(['currentUser', 'userXP', 'userLevel', 'pendingXPSync'], () => {
                             chrome.notifications.create({
                                 type: 'basic',
@@ -1243,7 +1245,7 @@ function syncReportsHeal() {
         const myReports = res.reportedSites || [];
         if (myReports.length === 0) return;
 
-        fetch('http://localhost:3000/api/reports')
+        fetch('http://127.0.0.1:3000/api/reports')
             .then(r => r.json())
             .then(serverReports => {
                 const serverUrls = new Set(serverReports.map(r => r.url));
@@ -1251,7 +1253,7 @@ function syncReportsHeal() {
                 myReports.forEach(localR => {
                     if (!serverUrls.has(localR.url)) {
                         console.warn(`[PhishingShield] Report missing on server (Wipe?): ${localR.url}. Re-uploading...`);
-                        fetch('http://localhost:3000/api/reports', {
+                        fetch('http://127.0.0.1:3000/api/reports', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(localR)

@@ -84,15 +84,40 @@ const ThreatIntel = {
      * Get Community Trust Score (from GLOBAL server for consistency)
      */
     getTrustScore: async function (url) {
+        let domain;
         try {
-            const domain = new URL(url).hostname;
-            // Fetch from GLOBAL server to show same scores as admin portal
-            const res = await fetch(`https://phishingshield.onrender.com/api/trust/score?domain=${domain}`);
-            if (res.ok) return await res.json();
-            return null;
+            domain = new URL(url).hostname;
         } catch (e) {
-            console.error("[ThreatIntel] Failed to get trust score", e);
             return null;
+        }
+
+        const fetchWithTimeout = async (api, timeoutMs) => {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const res = await fetch(api, { signal: controller.signal });
+                clearTimeout(id);
+                if (res.ok) return await res.json();
+                return null;
+            } catch (error) {
+                clearTimeout(id);
+                throw error;
+            }
+        };
+
+        try {
+            // Attempt 1: Global Server (Fast Timeout)
+            return await fetchWithTimeout(`https://phishingshield.onrender.com/api/trust/score?domain=${domain}`, 3000);
+        } catch (globalErr) {
+            console.warn("[ThreatIntel] Global fetch failed, trying local...", globalErr.message);
+            try {
+                // Attempt 2: Local Server (Fallback)
+                // Use 127.0.0.1 instead of localhost for Windows performance (avoids IPv6 lookup delay)
+                return await fetchWithTimeout(`http://127.0.0.1:3000/api/trust/score?domain=${domain}`, 2000);
+            } catch (localErr) {
+                console.error("[ThreatIntel] All fetch attempts failed.");
+                return null; // Triggers 'Offline' in popup.js
+            }
         }
     },
 

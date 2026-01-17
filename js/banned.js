@@ -34,7 +34,7 @@
             console.log('[PhishingShield] Checking if site is still banned:', url);
 
             // Query local server for current ban status
-            const response = await fetch('http://localhost:3000/api/reports');
+            const response = await fetch('http://127.0.0.1:3000/api/reports');
             if (!response.ok) {
                 console.warn('[PhishingShield] Could not check ban status (server offline?)');
                 return;

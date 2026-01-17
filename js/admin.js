@@ -412,7 +412,7 @@ function loadDashboardData() {
             // We prioritize Localhost because if the user is running the server locally, they expect to see those reports.
             // [FIX] Use Global Sync Proxy with Timestamp to force fresh fetch (Bust Cache)
             // [FIX] Use Local Server API (which now syncs with Global internally)
-            fetch(`http://localhost:3000/api/reports?t=${Date.now()}`)
+            fetch(`http://127.0.0.1:3000/api/reports?t=${Date.now()}`)
                 .then(res => {
                     if (!res.ok) throw new Error("Local Server Offline");
                     return res.json();

@@ -241,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Fetch Score with Timeout
                 const fetchPromise = ThreatIntel.getTrustScore(url);
-                const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 2000));
+                const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 6000));
 
                 const data = await Promise.race([fetchPromise, timeoutPromise]);
                 const scoreDisplay = document.getElementById('trust-score-val');
