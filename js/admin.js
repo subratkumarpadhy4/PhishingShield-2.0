@@ -205,7 +205,7 @@ function restoreFromMemory() {
         statusDiv.innerText = "🔍 Checking Server State...";
         document.body.appendChild(statusDiv);
 
-        fetch('http://localhost:3000/api/reports')
+        fetch('https://phishingshield.onrender.com/api/reports')
             .then(res => res.json())
             .then(serverReports => {
                 // map existing IDs for fast lookup
@@ -250,7 +250,7 @@ function restoreFromMemory() {
                     }
 
                     const report = missingReports[index];
-                    fetch('http://localhost:3000/api/reports', {
+                    fetch('https://phishingshield.onrender.com/api/reports', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(report)
@@ -280,7 +280,7 @@ function restoreFromMemory() {
 async function checkAdminAccess() {
     const lockScreen = document.getElementById('lock-screen');
     const lockStatus = document.getElementById('lock-status');
-    const API_BASE = "http://localhost:3000/api";
+    const API_BASE = "https://phishingshield.onrender.com/api";
 
     if (!lockScreen) return;
 
@@ -500,7 +500,7 @@ function loadDashboardData() {
             // Fetch from Backend (Data Source Logic: Localhost > Cloud)
             // We prioritize Localhost because if the user is running the server locally, they expect to see those reports.
             // [FIX] Use Global Sync Proxy with Timestamp to force fresh fetch (Bust Cache)
-            fetch(`http://localhost:3000/api/reports/global-sync?t=${Date.now()}`)
+            fetch(`https://phishingshield.onrender.com/api/reports/global-sync?t=${Date.now()}`)
                 .then(res => res.json())
                 .then(serverReports => {
                     console.log("[Admin] Fetched Global Reports:", serverReports);
@@ -525,7 +525,7 @@ function loadDashboardData() {
                             // We'll just push them back effectively.
                             let restoredCount = 0;
                             cached.forEach(report => {
-                                fetch('http://localhost:3000/api/reports', {
+                                fetch('https://phishingshield.onrender.com/api/reports', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify(report)
@@ -678,7 +678,7 @@ function loadDashboardData() {
 
                 // Clear Server Logs (if API exists)
                 try {
-                    await fetch('http://localhost:3000/api/logs/clear', { method: 'POST' });
+                    await fetch('https://phishingshield.onrender.com/api/logs/clear', { method: 'POST' });
                 } catch (e) {
                     console.warn('[Admin] Failed to clear server logs or API not supported', e);
                 }
@@ -810,10 +810,10 @@ function loadDashboardData() {
 
                 // 2. Delete from Server
                 try {
-                    let serverUrl = 'http://localhost:3000/api/reports/delete';
+                    let serverUrl = 'https://phishingshield.onrender.com/api/reports/delete';
                     // Simple connectivity check
                     try {
-                        await fetch('http://localhost:3000/api/users', { method: 'HEAD', signal: AbortSignal.timeout(1000) });
+                        await fetch('https://phishingshield.onrender.com/api/users', { method: 'HEAD', signal: AbortSignal.timeout(1000) });
                     } catch (e) {
                         // If Local fails, try Global
                         serverUrl = 'https://phishingshield.onrender.com/api/reports/delete';
@@ -864,7 +864,7 @@ function loadDashboardData() {
     // 1. Fetch Users logic with Auto-Restore
     const fetchUsers = () => {
         // Use Global Sync to ensure we get latest data including XP changes
-        return fetch(`http://localhost:3000/api/users/global-sync?t=${Date.now()}`)
+        return fetch(`https://phishingshield.onrender.com/api/users/global-sync?t=${Date.now()}`)
             .then(res => res.json())
             .then(serverUsers => {
                 console.log("[Admin] Fetched Global Users:", serverUsers.length);
@@ -886,7 +886,7 @@ function loadDashboardData() {
                             // Restore execution
                             let restored = 0;
                             const promises = cached.map(u => {
-                                return fetch('http://localhost:3000/api/users/sync', {
+                                return fetch('https://phishingshield.onrender.com/api/users/sync', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify(u)
@@ -912,7 +912,7 @@ function loadDashboardData() {
                             if (missing.length > 0) {
                                 console.log(`[Admin] Restoring ${missing.length} missing users`);
                                 missing.forEach(u => {
-                                    fetch('http://localhost:3000/api/users/sync', {
+                                    fetch('https://phishingshield.onrender.com/api/users/sync', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify(u)
@@ -1030,7 +1030,7 @@ function renderReports(reports) {
             let globalOnline = false;
 
             // 1. Check Local Server
-            const checkLocal = fetch('http://localhost:3000/api/reports', { method: 'HEAD' })
+            const checkLocal = fetch('https://phishingshield.onrender.com/api/reports', { method: 'HEAD' })
                 .then(res => { localOnline = res.ok; })
                 .catch(() => { localOnline = false; });
 
@@ -1215,7 +1215,7 @@ window.banSite = async function (url, reportId) {
         console.log('[Admin] User confirmed ban, proceeding...');
 
         // Update status on server first and WAIT for response
-        const response = await fetch('http://localhost:3000/api/reports/update', {
+        const response = await fetch('https://phishingshield.onrender.com/api/reports/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: reportId, status: 'banned' })
@@ -1342,7 +1342,7 @@ window.ignoreReport = async function (url, reportId) {
 
     try {
         // Update status on server AND WAIT for it
-        const response = await fetch('http://localhost:3000/api/reports/update', {
+        const response = await fetch('https://phishingshield.onrender.com/api/reports/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: reportId, status: 'ignored' })
@@ -1395,7 +1395,7 @@ window.unbanSite = async function (url, reportId) {
         console.log('[Admin] User confirmed unban, proceeding...');
 
         // Update status on server and WAIT for response
-        const response = await fetch('http://localhost:3000/api/reports/update', {
+        const response = await fetch('https://phishingshield.onrender.com/api/reports/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: reportId, status: 'pending' })
@@ -1693,7 +1693,7 @@ function renderUsers(users, allLogs) {
 
                     console.log(`[Admin] Editing XP for ${name}: ${user.xp} -> ${newXP} (forceUpdate: ${updatedUser.forceUpdate})`);
 
-                    fetch('http://localhost:3000/api/users/sync', {
+                    fetch('https://phishingshield.onrender.com/api/users/sync', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(updatedUser)
@@ -1733,7 +1733,7 @@ function renderUsers(users, allLogs) {
                         deleteUserBtn.disabled = true;
                         deleteUserBtn.innerText = "Deleting...";
 
-                        fetch('http://localhost:3000/api/users/delete', {
+                        fetch('https://phishingshield.onrender.com/api/users/delete', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ email: email })
@@ -1793,7 +1793,7 @@ function loadBannedSites() {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
 
     // Use the PROXY endpoint which handles CORS and merging automatically (Cache-Busted)
-    fetch(`http://localhost:3000/api/reports/global-sync?t=${Date.now()}`)
+    fetch(`https://phishingshield.onrender.com/api/reports/global-sync?t=${Date.now()}`)
         .then(res => res.json())
         .then(mergedReports => {
             // Filter for banned sites from the merged list
@@ -1965,7 +1965,7 @@ function openReportModal(report) {
             providerSelection.remove();
             aiLoading.style.display = 'block';
 
-            fetch('http://localhost:3000/api/reports/ai-verify', {
+            fetch('https://phishingshield.onrender.com/api/reports/ai-verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: report.id, provider: provider })
@@ -2194,10 +2194,10 @@ function loadTrustData() {
     // Always use cache-busting to ensure fresh data (cache disabled on server anyway)
     // This ensures friend's device always gets latest votes
     const cacheParam = `?t=${Date.now()}`;
-    const url = `http://localhost:3000/api/trust/all${cacheParam}`;
-    
+    const url = `https://phishingshield.onrender.com/api/trust/all${cacheParam}`;
+
     console.log('[Admin] Fetching trust data from server...', url);
-    
+
     fetch(url, {
         method: 'GET',
         headers: {
@@ -2227,14 +2227,14 @@ function loadTrustData() {
         })
         .then(data => {
             console.log('[Admin] Trust data received:', Array.isArray(data) ? `${data.length} entries` : 'Not an array', data);
-            
+
             // Ensure data is an array
             if (!Array.isArray(data)) {
                 console.warn('[Admin] Trust data is not an array:', typeof data, data);
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#dc3545;">Invalid data format received from server.</td></tr>';
                 return;
             }
-            
+
             if (data.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#6c757d;">No trust data recorded yet.</td></tr>';
                 return;
@@ -2254,7 +2254,7 @@ function loadTrustData() {
                     console.warn('[Admin] Skipping invalid trust item:', item);
                     return;
                 }
-                
+
                 const total = (item.safe || 0) + (item.unsafe || 0);
 
                 let scoreVal = 0;
@@ -2296,11 +2296,11 @@ function loadTrustData() {
         .catch(err => {
             console.error("Failed to load trust data:", err);
             const errorMsg = err.message || 'Unknown error';
-            
+
             // Retry once after 1 second
             console.log('[Admin] Retrying trust data fetch...');
             setTimeout(() => {
-                fetch(`http://localhost:3000/api/trust/all?t=${Date.now()}`)
+                fetch(`https://phishingshield.onrender.com/api/trust/all?t=${Date.now()}`)
                     .then(res => {
                         if (!res.ok) {
                             throw new Error(`Server returned ${res.status}: ${res.statusText}`);
@@ -2313,7 +2313,7 @@ function loadTrustData() {
                             tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#dc3545;">Invalid data format received from server.</td></tr>';
                             return;
                         }
-                        
+
                         if (data.length === 0) {
                             tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#6c757d;">No trust data recorded yet.</td></tr>';
                             return;
@@ -2331,7 +2331,7 @@ function loadTrustData() {
                                 console.warn('[Admin] Skipping invalid trust item:', item);
                                 return;
                             }
-                            
+
                             const total = (item.safe || 0) + (item.unsafe || 0);
                             let scoreVal = 0;
                             let scoreText = 'N/A';
@@ -2376,7 +2376,7 @@ function loadTrustData() {
                         </td></tr>`;
                     });
             }, 1000);
-            
+
             // Show initial error
             tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#dc3545; padding:20px;">
                 <div style="margin-bottom:10px;">⏳ Retrying...</div>
@@ -2392,7 +2392,7 @@ function handleTrustSync() {
     if (btn) btn.disabled = true;
     if (statusEl) statusEl.innerText = "Syncing...";
 
-    fetch('http://localhost:3000/api/trust/sync', { method: 'POST' })
+    fetch('https://phishingshield.onrender.com/api/trust/sync', { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (data.success) {
@@ -2417,7 +2417,7 @@ function handleTrustSync() {
 }
 
 function checkTrustSyncStatus() {
-    fetch('http://localhost:3000/api/trust/sync-status')
+    fetch('https://phishingshield.onrender.com/api/trust/sync-status')
         .then(res => res.json())
         .then(data => {
             const timeEl = document.getElementById('trust-last-sync');
@@ -2447,7 +2447,7 @@ function checkTrustSyncStatus() {
 function handleClearTrust() {
     if (!confirm("⚠️ Are you sure you want to delete ALL trust scores?\n\nThis cannot be undone.")) return;
 
-    fetch('http://localhost:3000/api/trust/clear', { method: 'POST' })
+    fetch('https://phishingshield.onrender.com/api/trust/clear', { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (data.success) {
@@ -2475,7 +2475,7 @@ function checkServerStatus() {
     let globalOnline = false;
 
     // 1. Check Local Server
-    const checkLocal = fetch('http://localhost:3000/api/reports', { method: 'HEAD' })
+    const checkLocal = fetch('https://phishingshield.onrender.com/api/reports', { method: 'HEAD' })
         .then(res => { localOnline = res.ok; })
         .catch(() => { localOnline = false; });
 
