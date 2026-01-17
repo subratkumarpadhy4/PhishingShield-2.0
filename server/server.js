@@ -1196,6 +1196,35 @@ app.post("/api/reports", async (req, res) => {
     res.status(201).json({ message: "Report logged", report });
 });
 
+// PUT /api/reports/:id - Update existing report (e.g. AI Analysis Sync)
+app.put("/api/reports/:id", async (req, res) => {
+    const { id } = req.params;
+    const updates = req.body;
+
+    let reports = await readData(REPORTS_FILE);
+    const idx = reports.findIndex(r => r.id === id);
+
+    if (idx === -1) return res.status(404).json({ error: "Report not found" });
+
+    // Merge updates
+    reports[idx] = { ...reports[idx], ...updates, lastUpdated: Date.now() };
+
+    await writeData(REPORTS_FILE, reports);
+    console.log(`[Report] Updated report ${id}`);
+
+    // Forward to Global if Local
+    if (!process.env.RENDER) {
+        fetch(`https://phishingshield.onrender.com/api/reports/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates)
+        }).catch(e => console.warn(`[Report-Sync] Update fwd failed: ${e.message}`));
+    }
+
+    res.json({ success: true, report: reports[idx] });
+});
+
+
 // --- ROUTES: USERS & AUTH ---
 
 // Duplicate route removed
@@ -2166,7 +2195,7 @@ app.post("/api/reports/ai-verify", async (req, res) => {
         console.log("[AI-Verify] Received request for Report ID:", id);
 
         // FIX: Read reports from file instead of assuming global variable
-        const reports = readData(REPORTS_FILE);
+        const reports = await readData(REPORTS_FILE);
 
         let reportIndex = reports.findIndex((r) => r.id === id);
 
@@ -2429,7 +2458,18 @@ Provide comprehensive analysis.`;
         };
 
         // FIX: Save using writeData
-        writeData(REPORTS_FILE, reports);
+        await writeData(REPORTS_FILE, reports);
+
+        // SYNC ANALYSIS TO GLOBAL SERVER (So user sees it)
+        if (!process.env.RENDER) {
+            const globalUpdate = { aiAnalysis: reports[reportIndex].aiAnalysis };
+            console.log(`[AI-Sync] Pushing analysis for ${report.id} to Global Server...`);
+            fetch(`https://phishingshield.onrender.com/api/reports/${report.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(globalUpdate)
+            }).catch(e => console.warn(`[AI-Sync] Failed to push analysis to global: ${e.message}`));
+        }
 
         console.log(`[AI-Verify] Analyzed ${url} -> ${aiSuggestion} (${aiScore})`);
         res.json({ success: true, aiAnalysis: reports[reportIndex].aiAnalysis });
