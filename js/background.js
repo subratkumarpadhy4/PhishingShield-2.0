@@ -269,25 +269,43 @@ function submitReport(payload, sendResponse) {
         }
     });
 
-    // 2. Send to GLOBAL API (using global server exclusively)
-    fetch(GLOBAL_API, {
+    // 2. Try LOCAL server first (for instant admin visibility), fallback to GLOBAL
+    fetch(LOCAL_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(2000) // 2 second timeout
     })
         .then(res => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             return res.json();
         })
         .then(data => {
-            console.log("[PhishingShield] ✅ Report Synced to Global Server:", data);
+            console.log("[PhishingShield] ✅ Report sent to LOCAL server (instant admin visibility):", data);
             if (sendResponse) sendResponse({ success: true, data: data });
         })
         .catch(err => {
-            console.warn("[PhishingShield] ⚠️ Global Sync Failed. Queuing report...", err);
-            // Queue for later
-            queueReportForSync(payload);
-            if (sendResponse) sendResponse({ success: true, queued: true }); // treat as success to client
+            console.warn("[PhishingShield] ⚠️ Local server unavailable, trying GLOBAL...", err.message);
+            // Fallback to GLOBAL server
+            fetch(GLOBAL_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+                .then(res => {
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.json();
+                })
+                .then(data => {
+                    console.log("[PhishingShield] ✅ Report Synced to Global Server:", data);
+                    if (sendResponse) sendResponse({ success: true, data: data });
+                })
+                .catch(err => {
+                    console.warn("[PhishingShield] ⚠️ Global Sync Failed. Queuing report...", err);
+                    // Queue for later
+                    queueReportForSync(payload);
+                    if (sendResponse) sendResponse({ success: true, queued: true });
+                });
         });
 }
 

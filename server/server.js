@@ -1168,18 +1168,7 @@ app.post("/api/reports", async (req, res) => {
 
     const reports = await readData(REPORTS_FILE);
 
-    // IDEMPOTENCY CHECK: Prevent duplicates from SAME USER only
-    // Allow multiple users to report the same URL (different perspectives)
-    const existing = reports.find(r =>
-        (newReport.id && r.id === newReport.id) ||
-        (r.url === newReport.url && r.reporter === newReport.reporter && r.status === 'pending')
-    );
-
-    if (existing) {
-        console.log(`[Report] Skipped duplicate from same user: ${newReport.url} by ${newReport.reporter}`);
-        return res.status(200).json({ message: "You already reported this URL", report: existing });
-    }
-
+    // NO DUPLICATE CHECKING - Accept all reports
     reports.push(report);
     await writeData(REPORTS_FILE, reports);
 
