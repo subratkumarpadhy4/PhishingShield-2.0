@@ -2122,8 +2122,8 @@ app.post("/api/reports/ai-verify", async (req, res) => {
         const { id } = req.body;
         console.log("[AI-Verify] Received request for Report ID:", id);
 
-        // FIX: Read reports from file instead of assuming global variable
-        const reports = readData(REPORTS_FILE);
+        // FIX: Read reports from file (await is required as readData is async)
+        const reports = await readData(REPORTS_FILE);
 
         let reportIndex = reports.findIndex((r) => r.id === id);
 
@@ -2385,8 +2385,8 @@ Provide comprehensive analysis.`;
             },
         };
 
-        // FIX: Save using writeData
-        writeData(REPORTS_FILE, reports);
+        // FIX: Save using writeData (await for safety)
+        await writeData(REPORTS_FILE, reports);
 
         console.log(`[AI-Verify] Analyzed ${url} -> ${aiSuggestion} (${aiScore})`);
         res.json({ success: true, aiAnalysis: reports[reportIndex].aiAnalysis });
