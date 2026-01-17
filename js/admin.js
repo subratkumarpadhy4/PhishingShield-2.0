@@ -500,8 +500,12 @@ function loadDashboardData() {
             // Fetch from Backend (Data Source Logic: Localhost > Cloud)
             // We prioritize Localhost because if the user is running the server locally, they expect to see those reports.
             // [FIX] Use Global Sync Proxy with Timestamp to force fresh fetch (Bust Cache)
-            fetch(`https://phishingshield.onrender.com/api/reports/global-sync?t=${Date.now()}`)
-                .then(res => res.json())
+            // [FIX] Use Local Server API (which now syncs with Global internally)
+            fetch(`http://localhost:3000/api/reports?t=${Date.now()}`)
+                .then(res => {
+                    if (!res.ok) throw new Error("Local Server Offline");
+                    return res.json();
+                })
                 .then(serverReports => {
                     console.log("[Admin] Fetched Global Reports:", serverReports);
                     console.log("[Admin] Number of reports:", Array.isArray(serverReports) ? serverReports.length : 'Not an array');
@@ -2225,7 +2229,8 @@ function loadTrustData() {
     // Always use cache-busting to ensure fresh data (cache disabled on server anyway)
     // This ensures friend's device always gets latest votes
     const cacheParam = `?t=${Date.now()}`;
-    const url = `https://phishingshield.onrender.com/api/trust/all${cacheParam}`;
+    // [FIX] Admin Portal -> Local Server (which merges Global internally)
+    const url = `http://localhost:3000/api/trust/all${cacheParam}`;
 
     console.log('[Admin] Fetching trust data from server...', url);
 
@@ -2423,7 +2428,9 @@ function handleTrustSync() {
     if (btn) btn.disabled = true;
     if (statusEl) statusEl.innerText = "Syncing...";
 
-    fetch('https://phishingshield.onrender.com/api/trust/sync', { method: 'POST' })
+    // [FIX] Admin Portal -> Local Server -> Global Server
+    // We must talk to Local Server because that is where the pending votes are!
+    fetch('http://localhost:3000/api/trust/sync', { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (data.success) {
@@ -2448,7 +2455,8 @@ function handleTrustSync() {
 }
 
 function checkTrustSyncStatus() {
-    fetch('https://phishingshield.onrender.com/api/trust/sync-status')
+    // [FIX] Check Local Server's sync status
+    fetch('http://localhost:3000/api/trust/sync-status')
         .then(res => res.json())
         .then(data => {
             const timeEl = document.getElementById('trust-last-sync');
@@ -2478,7 +2486,7 @@ function checkTrustSyncStatus() {
 function handleClearTrust() {
     if (!confirm("⚠️ Are you sure you want to delete ALL trust scores?\n\nThis cannot be undone.")) return;
 
-    fetch('https://phishingshield.onrender.com/api/trust/clear', { method: 'POST' })
+    fetch('http://localhost:3000/api/trust/clear', { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (data.success) {

@@ -704,12 +704,17 @@ app.get('/api/trust/all', async (req, res) => {
                                         // Local has a voter that global doesn't - add it (might be unsynced)
                                         mergedVoters[userId] = vote;
                                     }
-                                    // If userId exists in both, trust global (it's the source of truth)
                                 });
+
+                                // RECALCULATE COUNTS based on merged voters (Essential so local votes show up)
+                                const safeCount = Object.values(mergedVoters).filter(v => v === 'safe').length;
+                                const unsafeCount = Object.values(mergedVoters).filter(v => v === 'unsafe').length;
 
                                 mergedMap.set(normalizedDomain, {
                                     ...globalEntry,
-                                    voters: mergedVoters // Global voters + local-only voters, global counts stay the same
+                                    safe: safeCount,
+                                    unsafe: unsafeCount,
+                                    voters: mergedVoters
                                 });
                                 console.log(`[Trust] Merged local voters into global entry for ${normalizedDomain}`);
                             }
@@ -907,30 +912,68 @@ app.post('/api/trust/seed', async (req, res) => {
     }
 });
 
-// Admin: Simulate Sync to Global Server
+// Admin: Sync to Global Server (Real Implementation)
 app.post('/api/trust/sync', async (req, res) => {
     try {
+        if (process.env.RENDER) {
+            return res.json({ success: true, message: "Already on global server" });
+        }
+
         // 1. Read Local Trust Data
         const localData = await readData(TRUST_FILE);
+        let syncedCount = 0;
+        let errors = 0;
 
-        // 2. Simulate Upload delay (async/await version)
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        console.log(`[Sync] Starting sync of ${localData.length} trust entries to Global...`);
 
-        // 3. Update Sync Timestamp (stored in a separate file or metadata)
+        // 2. Push each entry to Global Server
+        // We use 'seed' endpoint as it handles merging logic safely
+        // Using sequential loop to avoid overwhelming server or hitting rate limits
+        for (const entry of localData) {
+            if (!entry.domain) continue;
+
+            try {
+                const response = await fetch('https://phishingshield.onrender.com/api/trust/seed', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(entry)
+                });
+
+                if (response.ok) syncedCount++;
+                else {
+                    errors++;
+                    console.warn(`[Sync] Failed to sync ${entry.domain}: ${response.status}`);
+                }
+            } catch (err) {
+                errors++;
+                console.warn(`[Sync] Network error for ${entry.domain}: ${err.message}`);
+            }
+        }
+
+        // 3. Update Sync Timestamp
         const META_FILE = path.join(__dirname, 'data', 'server_meta.json');
         let meta = {};
-        if (fs.existsSync(META_FILE)) meta = JSON.parse(fs.readFileSync(META_FILE));
+        if (fs.existsSync(META_FILE)) {
+            try { meta = JSON.parse(fs.readFileSync(META_FILE)); } catch (e) { }
+        }
 
         meta.lastTrustSync = Date.now();
         fs.writeFileSync(META_FILE, JSON.stringify(meta, null, 2));
 
-        console.log("[Sync] Trust scores synced to Global Server (Simulated).");
-        res.json({ success: true, syncedCount: localData.length, timestamp: meta.lastTrustSync });
+        console.log(`[Sync] Completed. Success: ${syncedCount}, Errors: ${errors}`);
+        res.json({
+            success: true,
+            syncedCount,
+            errors,
+            timestamp: meta.lastTrustSync
+        });
+
     } catch (error) {
         console.error('[Sync] Error syncing trust scores:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
 
 // Admin: Get Sync Status
 app.get('/api/trust/sync-status', (req, res) => {
