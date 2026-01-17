@@ -2392,7 +2392,7 @@ Provide comprehensive analysis.`;
         res.json({ success: true, aiAnalysis: reports[reportIndex].aiAnalysis });
     } catch (error) {
         console.error("[AI-Verify] Error:", error);
-        res.status(500).json({ success: false, error: "Internal Server Error during AI Analysis" });
+        res.status(500).json({ success: false, error: "AI Analysis Error: " + error.message });
     }
 });
 
