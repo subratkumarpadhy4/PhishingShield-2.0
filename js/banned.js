@@ -140,16 +140,12 @@
                 if (confirm('⚠️ FINAL WARNING\n\nThis site has been banned by PhishingShield administrators.\n\nProceeding may result in:\n• Identity theft\n• Financial loss\n• Malware infection\n• Data breach\n\nAre you absolutely sure you want to continue?')) {
                     console.log('[PhishingShield] User confirmed, attempting navigation...');
 
-                    // APPLY PENALTY HERE (User Requested)
+                    // APPLY PENALTY HERE (User Requested) - Fire and forget, don't wait
                     console.log('[PhishingShield] Applying 500 XP penalty for proceeding to banned site');
                     chrome.runtime.sendMessage({
                         type: 'ADD_XP',
                         amount: -500
-                    }, function (response) {
-                        if (response && response.success) {
-                            console.log('[PhishingShield] ✅ 500 XP penalty applied');
-                        }
-                    });
+                    }); // No callback - async, don't wait
 
                     if (blockedUrl && blockedUrl !== 'Unknown URL') {
                         // Normalize URL for consistent matching
@@ -200,7 +196,7 @@
                                         // Wait for blocklist to be updated before navigating
                                         if (response && response.success) {
                                             console.log('[PhishingShield] Blocklist updated, navigating to:', blockedUrl);
-                                            // Increase delay to 1000ms to ensure Chrome applies the rule change
+                                            // Quick delay to ensure Chrome applies the rule change
                                             setTimeout(function () {
                                                 // Ensure URL has protocol to avoid relative path (file not found) errors
                                                 let target = blockedUrl;
@@ -208,7 +204,7 @@
                                                     target = 'https://' + target;
                                                 }
                                                 window.location.href = target;
-                                            }, 1000);
+                                            }, 100); // Reduced from 1000ms to 100ms
                                         } else {
                                             // Fallback: try navigation anyway
                                             console.warn('[PhishingShield] Blocklist update response unclear, attempting navigation');
@@ -218,7 +214,7 @@
                                                     target = 'https://' + target;
                                                 }
                                                 window.location.href = target;
-                                            }, 1000);
+                                            }, 100); // Reduced from 1000ms to 100ms
                                         }
                                     });
                                 });
