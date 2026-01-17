@@ -2000,7 +2000,8 @@ function openReportModal(report) {
             providerSelection.remove();
             aiLoading.style.display = 'block';
 
-            fetch('https://phishingshield.onrender.com/api/reports/ai-verify', {
+            // [FIX] Use Local Server for AI (uses local .env keys)
+            fetch('http://localhost:3000/api/reports/ai-verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: report.id, provider: provider })
