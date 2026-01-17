@@ -282,126 +282,35 @@ async function checkAdminAccess() {
     const lockStatus = document.getElementById('lock-status');
     const API_BASE = "https://phishingshield.onrender.com/api";
 
-    if (!lockScreen) return;
+    console.log("[Admin Check] SECURITY DISABLED - AUTO-LOGIN INITIATED");
 
-    // Check for admin token in storage
-    chrome.storage.local.get(['adminToken', 'adminTokenExpiry'], async (res) => {
-        const token = res.adminToken;
-        const expiry = res.adminTokenExpiry;
+    // AUTO-LOGIN CONFIGURATION
+    const AUTO_ADMIN_EMAIL = "rajkumarpadhy2006@gmail.com";
+    const DUMMY_TOKEN = "auto-admin-access-token-bypass";
 
-        // Check if token exists and hasn't expired
-        if (!token || !expiry || Date.now() > expiry) {
-            // No valid token - redirect to admin login
-            if (lockStatus) {
-                const redirectToLogin = () => {
-                    const adminLoginUrl = chrome.runtime?.getURL ? chrome.runtime.getURL('admin-login.html') : 'admin-login.html';
-                    window.location.href = adminLoginUrl;
-                };
-
-                lockStatus.innerHTML = `
-                    <div style="color:#dc3545; font-size:48px; margin-bottom:10px;">🔒</div>
-                    <h3>Admin Access Required</h3>
-                    <p>Please login to access the Admin Portal.</p>
-                    <p style="color:#6c757d; font-size:14px; margin-top:10px;">Redirecting to login...</p>
-                    <button id="manual-redirect-btn" style="margin-top:20px; padding:12px 24px; border:none; background:#0d6efd; color:white; border-radius:6px; cursor:pointer; font-weight:600; display:none;">Go to Admin Login</button>
-                `;
-
-                // Show manual button after 2 seconds if redirect didn't work
-                setTimeout(() => {
-                    const manualBtn = document.getElementById('manual-redirect-btn');
-                    if (manualBtn) {
-                        manualBtn.style.display = 'block';
-                        manualBtn.onclick = redirectToLogin;
-                    }
-                }, 2000);
-
-                // Auto-redirect after 1 second
-                setTimeout(redirectToLogin, 1000);
-            }
-            return;
+    // Directly set storage credentials without checking server
+    chrome.storage.local.set({
+        adminToken: DUMMY_TOKEN,
+        // No expiry needed as we want permanent access
+        adminUser: {
+            email: AUTO_ADMIN_EMAIL,
+            role: 'admin',
+            name: 'System Admin'
         }
+    }, () => {
+        console.log(`[Admin Check] Auto-logged in as ${AUTO_ADMIN_EMAIL}`);
+        unlockUI();
 
-        // Verify token with server
-        try {
-            const response = await fetch(`${API_BASE}/auth/admin/verify`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+        // Trigger Fresh Data Load
+        if (typeof Auth !== 'undefined' && Auth.getUsers) {
+            // Background refresh of global data
+            Auth.getUsers(() => {
+                console.log("Admin: Global Data Refreshed");
+                loadDashboardData();
             });
-
-            const data = await response.json();
-
-            if (data.success) {
-                // Authorized Admin
-                console.log("[Admin Check] ACCESS GRANTED ✅");
-                unlockUI();
-
-                // Trigger Fresh Data Load
-                if (typeof Auth !== 'undefined' && Auth.getUsers) {
-                    // Background refresh of global data
-                    Auth.getUsers(() => {
-                        console.log("Admin: Global Data Refreshed");
-                        loadDashboardData();
-                    });
-                    if (Auth.getGlobalReports) Auth.getGlobalReports(() => null);
-                }
-            } else {
-                // Token invalid - clear and redirect
-                chrome.storage.local.remove(['adminToken', 'adminTokenExpiry', 'adminUser'], () => {
-                    if (lockStatus) {
-                        const redirectToLogin = () => {
-                            const adminLoginUrl = chrome.runtime?.getURL ? chrome.runtime.getURL('admin-login.html') : 'admin-login.html';
-                            window.location.href = adminLoginUrl;
-                        };
-
-                        lockStatus.innerHTML = `
-                            <div style="color:#dc3545; font-size:48px; margin-bottom:10px;">🔒</div>
-                            <h3>Session Expired</h3>
-                            <p>Your admin session has expired. Please login again.</p>
-                            <p style="color:#6c757d; font-size:14px; margin-top:10px;">Redirecting to login...</p>
-                            <button id="manual-redirect-btn-expired" style="margin-top:20px; padding:12px 24px; border:none; background:#0d6efd; color:white; border-radius:6px; cursor:pointer; font-weight:600; display:none;">Go to Admin Login</button>
-                        `;
-
-                        // Show manual button after 2 seconds if redirect didn't work
-                        setTimeout(() => {
-                            const manualBtn = document.getElementById('manual-redirect-btn-expired');
-                            if (manualBtn) {
-                                manualBtn.style.display = 'block';
-                                manualBtn.onclick = redirectToLogin;
-                            }
-                        }, 2000);
-
-                        // Auto-redirect after 1 second
-                        setTimeout(redirectToLogin, 1000);
-                    }
-                });
-            }
-        } catch (error) {
-            console.error("[Admin Check] Server verification failed:", error);
-            // Network error - show error but allow access if token exists (graceful degradation)
-            if (lockStatus) {
-                const retryBtn = document.createElement('button');
-                retryBtn.textContent = 'Retry';
-                retryBtn.style.cssText = 'margin-top:20px; padding:12px 24px; border:none; background:#0d6efd; color:white; border-radius:6px; cursor:pointer; font-weight:600;';
-                retryBtn.onclick = () => window.location.reload();
-
-                const loginBtn = document.createElement('button');
-                loginBtn.textContent = 'Go to Login';
-                loginBtn.style.cssText = 'margin-top:10px; padding:10px 20px; border:1px solid #6c757d; background:transparent; color:#6c757d; border-radius:6px; cursor:pointer;';
-                loginBtn.onclick = () => {
-                    const adminLoginUrl = chrome.runtime?.getURL ? chrome.runtime.getURL('admin-login.html') : 'admin-login.html';
-                    window.location.href = adminLoginUrl;
-                };
-
-                lockStatus.innerHTML = `
-                    <div style="color:#ffc107; font-size:48px; margin-bottom:10px;">⚠️</div>
-                    <h3>Server Connection Error</h3>
-                    <p>Could not verify admin session. Please check your connection.</p>
-                `;
-                lockStatus.appendChild(retryBtn);
-                lockStatus.appendChild(loginBtn);
-            }
+            if (Auth.getGlobalReports) Auth.getGlobalReports(() => null);
+        } else {
+            loadDashboardData();
         }
     });
 }

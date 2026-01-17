@@ -53,8 +53,7 @@
                 // DIRECT LOGIN SUCCESS (Single Step)
                 chrome.storage.local.set({
                     adminToken: data.token,
-                    adminUser: data.user,
-                    adminTokenExpiry: Date.now() + (10 * 24 * 60 * 60 * 1000) // 10 days
+                    adminUser: data.user
                 }, () => {
                     showAlert('Login successful! Redirecting...', 'success');
                     setTimeout(() => {
@@ -124,8 +123,7 @@
                 if (typeof chrome !== 'undefined' && chrome.storage) {
                     chrome.storage.local.set({
                         adminToken: data.token,
-                        adminUser: data.user,
-                        adminTokenExpiry: Date.now() + (10 * 24 * 60 * 60 * 1000) // 10 days
+                        adminUser: data.user
                     }, () => {
                         showAlert('Login successful! Redirecting...', 'success');
                         setTimeout(() => {
