@@ -422,6 +422,40 @@ app.get('/api/trust/score', async (req, res) => {
     return res.json(noDataResponse);
 });
 
+// Get user's vote status for a domain
+app.get('/api/trust/user-vote', async (req, res) => {
+    const { domain, userId } = req.query;
+
+    if (!domain || !userId) {
+        return res.status(400).json({ error: "Domain and userId required" });
+    }
+
+    const normalizedDomain = domain.toLowerCase().trim();
+
+    try {
+        let entry;
+
+        if (isConnected()) {
+            entry = await TrustScore.findOne({ domain: normalizedDomain });
+        } else {
+            const scores = await readData(TRUST_FILE);
+            entry = scores.find(s => {
+                const d = s.domain || '';
+                return d.toLowerCase().trim() === normalizedDomain;
+            });
+        }
+
+        if (entry && entry.voters && entry.voters[userId]) {
+            return res.json({ userVote: entry.voters[userId] }); // 'safe' or 'unsafe'
+        } else {
+            return res.json({ userVote: null }); // No vote yet
+        }
+    } catch (error) {
+        console.error('[Trust] Error checking user vote:', error);
+        return res.status(500).json({ error: "Failed to check vote status" });
+    }
+});
+
 app.post('/api/trust/vote', async (req, res) => {
     // userId is recommended to limit spam
     const { domain, vote, userId } = req.body; // vote: 'safe' or 'unsafe'
@@ -456,14 +490,21 @@ app.post('/api/trust/vote', async (req, res) => {
                 ? Object.fromEntries(entry.voters)
                 : (entry.voters || {});
 
+            // DEBUG: Log current voters state
+            console.log(`[Trust] Current voters for ${normalizedDomain}:`, JSON.stringify(votersObj));
+            console.log(`[Trust] Checking if user ${userId} has voted before...`);
+
             // ANONYMOUS MODE FALLBACK: If no userId, allow infinite votes (legacy behavior)
             if (userId && votersObj[userId]) {
                 const previousVote = votersObj[userId];
+                console.log(`[Trust] User ${userId} HAS voted before: ${previousVote}`);
 
                 if (previousVote === vote) {
+                    console.log(`[Trust] DUPLICATE VOTE BLOCKED: User ${userId} already voted ${vote} for ${normalizedDomain}`);
                     return res.json({ success: true, message: "You have already voted this way." });
                 } else {
                     // Switch vote
+                    console.log(`[Trust] SWITCHING vote for ${userId}: ${previousVote} -> ${vote}`);
                     if (previousVote === 'safe') entry.safe = Math.max(0, entry.safe - 1);
                     else entry.unsafe = Math.max(0, entry.unsafe - 1);
 
@@ -477,6 +518,7 @@ app.post('/api/trust/vote', async (req, res) => {
                 }
             } else {
                 // New Vote
+                console.log(`[Trust] NEW VOTE from ${userId || 'Anonymous'}: ${vote} for ${normalizedDomain}`);
                 if (vote === 'safe') entry.safe++;
                 else if (vote === 'unsafe') entry.unsafe++;
 
@@ -484,6 +526,7 @@ app.post('/api/trust/vote', async (req, res) => {
                 if (userId) {
                     votersObj[userId] = vote;
                     entry.voters = votersObj;
+                    console.log(`[Trust] Recorded voter: ${userId} = ${vote}`);
                 }
                 shouldUpdate = true;
             }

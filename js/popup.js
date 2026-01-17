@@ -265,9 +265,49 @@ document.addEventListener('DOMContentLoaded', () => {
                     scoreDisplay.textContent = "No Data";
                 }
 
-                // Bind Vote Buttons
+                // Bind Vote Buttons with User Vote Status
                 const btnSafe = document.getElementById('btn-vote-safe');
                 const btnUnsafe = document.getElementById('btn-vote-unsafe');
+
+                // Check if user has voted before and style buttons accordingly
+                chrome.storage.local.get(['currentUser'], async (userData) => {
+                    const userId = userData.currentUser ? userData.currentUser.email : null;
+
+                    if (btnSafe && btnUnsafe && userId) {
+                        try {
+                            // Fetch user's vote status from server
+                            const hostname = new URL(url).hostname;
+                            const voteCheckRes = await fetch(`http://localhost:3000/api/trust/user-vote?domain=${hostname}&userId=${encodeURIComponent(userId)}`);
+
+                            if (voteCheckRes.ok) {
+                                const voteData = await voteCheckRes.json();
+
+                                // Style buttons based on user's previous vote
+                                if (voteData.userVote === 'safe') {
+                                    btnSafe.style.background = '#28a745'; // Green
+                                    btnSafe.style.color = 'white';
+                                    btnSafe.style.fontWeight = 'bold';
+                                    btnUnsafe.style.background = '#f8f9fa'; // White/Light gray
+                                    btnUnsafe.style.color = '#212529';
+                                } else if (voteData.userVote === 'unsafe') {
+                                    btnUnsafe.style.background = '#dc3545'; // Red
+                                    btnUnsafe.style.color = 'white';
+                                    btnUnsafe.style.fontWeight = 'bold';
+                                    btnSafe.style.background = '#f8f9fa'; // White/Light gray
+                                    btnSafe.style.color = '#212529';
+                                } else {
+                                    // No vote - default white/light styling
+                                    btnSafe.style.background = '#f8f9fa';
+                                    btnSafe.style.color = '#212529';
+                                    btnUnsafe.style.background = '#f8f9fa';
+                                    btnUnsafe.style.color = '#212529';
+                                }
+                            }
+                        } catch (e) {
+                            console.error('[Popup] Failed to check user vote status:', e);
+                        }
+                    }
+                });
 
                 if (btnSafe) {
                     btnSafe.onclick = async () => {

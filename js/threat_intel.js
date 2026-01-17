@@ -81,7 +81,7 @@ const ThreatIntel = {
     },
 
     /**
-     * Get Community Trust Score (from GLOBAL server for consistency)
+     * Get Community Trust Score (from LOCAL server to match admin portal)
      */
     getTrustScore: async function (url) {
         let domain;
