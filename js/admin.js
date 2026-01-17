@@ -1,5 +1,6 @@
 // REPORTS FILTER STATE
 let allReportsCache = [];
+let cachedUsersList = []; // Added for name lookup
 let currentReportFilter = 'all';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -969,6 +970,7 @@ function loadDashboardData() {
 
     // Execute
     fetchUsers().then(users => {
+        cachedUsersList = users || []; // STORE FOR NAME LOOKUP
         // Continue with processData
         chrome.storage.local.get(['reports'], r => {
             // We use the existing processData flow but pass our smart user list
@@ -1141,13 +1143,31 @@ function renderReports(reports) {
         `;
 
         // Parse reporter to separate Name and Email if possible for better display
+        // Parse reporter to separate Name and Email for better display
         let reporterDisplay = r.reporter || 'Anonymous';
-        // If format is "Name (email)", we can bold the name
+        let displayEmail = '';
+        let displayName = reporterDisplay;
+
+        // Extract Email if present
         if (reporterDisplay.includes('(')) {
             const parts = reporterDisplay.split('(');
-            const name = parts[0].trim();
-            const email = '(' + parts[1]; // keep the email part
-            reporterDisplay = `<strong>${escapeHtml(name)}</strong> <span style="font-size:12px; color:#6c757d;">${escapeHtml(email)}</span>`;
+            displayName = parts[0].trim();
+            displayEmail = parts[1].replace(')', '').trim();
+        } else if (reporterDisplay.includes('@')) {
+            displayEmail = reporterDisplay; // Fallback if just email
+        }
+
+        // SMART LOOKUP: Check if we have the real user name in our list
+        if (displayEmail && typeof cachedUsersList !== 'undefined' && cachedUsersList.length > 0) {
+            const realUser = cachedUsersList.find(u => u.email === displayEmail);
+            if (realUser && realUser.name) {
+                displayName = realUser.name;
+            }
+        }
+
+        // Final Formatting
+        if (displayEmail) {
+            reporterDisplay = `<strong>${escapeHtml(displayName)}</strong> <br><span style="font-size:11px; color:#64748b;">${escapeHtml(displayEmail)}</span>`;
         } else {
             reporterDisplay = escapeHtml(reporterDisplay);
         }
