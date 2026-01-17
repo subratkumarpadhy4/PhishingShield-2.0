@@ -5,6 +5,10 @@ let db = null; // No longer used
 
 console.log("[PhishingShield] Service Worker Starting... " + new Date().toISOString());
 
+// API Endpoints
+const LOCAL_API = "http://localhost:3000/api/reports";
+const GLOBAL_API = "https://phishingshield.onrender.com/api/reports";
+
 // -----------------------------------------------------------------------------
 // TRUSTED EXTENSIONS WHITELIST (Tier 1: Trusted)
 // -----------------------------------------------------------------------------
@@ -784,7 +788,7 @@ function updateBlocklistFromStorage(bypassUrl = null, callback = null, forceRefr
                 const rHostname = normalizeUrl(r.hostname || '');
                 return rUrl === normalizedUrl || rHostname === normalizedUrl;
             });
-            
+
             if (!alreadyBanned) {
                 try {
                     const hostname = new URL(url).hostname;
@@ -858,7 +862,7 @@ function updateBlocklistFromStorage(bypassUrl = null, callback = null, forceRefr
                     const normalized = normalizeUrl(url);
                     return !unbannedUrls.has(normalized);
                 });
-                
+
                 if (cleanedBlacklist.length !== blacklist.length) {
                     console.log(`[PhishingShield] Cleaning blacklist: removed ${blacklist.length - cleanedBlacklist.length} unbanned URLs`);
                     chrome.storage.local.set({ blacklist: cleanedBlacklist });
@@ -891,13 +895,13 @@ function processBlocklist(serverReports, banned, bypassTokens, callback) {
     // Index by both URL and hostname for flexible matching
     const serverReportsByUrl = new Map();
     const serverReportsByHostname = new Map();
-    
+
     serverReports.forEach(r => {
         const urlKey = normalizeUrl(r.url);
         if (!serverReportsByUrl.has(urlKey)) {
             serverReportsByUrl.set(urlKey, r);
         }
-        
+
         // Also index by hostname
         try {
             const hostname = r.hostname || new URL(r.url).hostname;
@@ -914,50 +918,50 @@ function processBlocklist(serverReports, banned, bypassTokens, callback) {
     const findServerReport = (bannedItem) => {
         const urlKey = normalizeUrl(bannedItem.url);
         const hostnameKey = normalizeUrl(bannedItem.hostname || '');
-        
+
         // Check by URL first
         let serverReport = serverReportsByUrl.get(urlKey);
         if (serverReport) return serverReport;
-        
+
         // Check by hostname
         if (hostnameKey) {
             serverReport = serverReportsByHostname.get(hostnameKey);
             if (serverReport) return serverReport;
         }
-        
+
         // Also check if any server report's URL/hostname matches this banned item's URL/hostname
         for (const r of serverReports) {
             const rUrlKey = normalizeUrl(r.url);
             const rHostnameKey = normalizeUrl(r.hostname || '');
-            
-            if (rUrlKey === urlKey || rUrlKey === hostnameKey || 
+
+            if (rUrlKey === urlKey || rUrlKey === hostnameKey ||
                 (hostnameKey && rHostnameKey === hostnameKey) ||
                 (hostnameKey && rHostnameKey === urlKey)) {
                 return r;
             }
         }
-        
+
         return null;
     };
 
     // Merge local and server banned sites (deduplicate by URL)
     // BUT: Remove any local banned sites that are explicitly unbanned on server
     const bannedMap = new Map();
-    
+
     // First, add local banned sites, but check server status
     banned.forEach(r => {
         const serverReport = findServerReport(r);
-        
+
         // If server has this URL and it's NOT banned, skip it (it's been unbanned)
         if (serverReport && serverReport.status !== 'banned') {
             console.log(`[PhishingShield] Skipping ${r.url} - server status is '${serverReport.status}' (unbanned)`);
             return; // Skip this banned entry
         }
-        
+
         const key = normalizeUrl(r.url);
         bannedMap.set(key, r);
     });
-    
+
     // Then add server banned sites
     serverBanned.forEach(r => {
         const key = normalizeUrl(r.url);
@@ -968,7 +972,7 @@ function processBlocklist(serverReports, banned, bypassTokens, callback) {
             bannedMap.set(key, r);
         }
     });
-    
+
     banned = Array.from(bannedMap.values());
 
     // Filter out URLs that have active bypass tokens
@@ -1141,7 +1145,7 @@ function syncXPToServer(customData = {}) {
             // This prevents accidental overwrites of admin edits
             // Only use Date.now() if we're sure this is a fresh update
             const syncTimestamp = res.lastXpUpdate || (res.pendingXPSync ? Date.now() : Date.now() - 60000); // If no timestamp, use 1 min ago
-            
+
             const userData = {
                 ...res.currentUser,
                 xp: res.userXP,
@@ -1189,7 +1193,7 @@ function syncXPToServer(customData = {}) {
                         if (data.user) {
                             const serverTime = Number(data.user.lastUpdated) || 0;
                             const localTime = Number(res.lastXpUpdate) || 0;
-                            
+
                             // Always update if server timestamp is newer OR if server XP is different (admin edit)
                             // This ensures admin edits propagate to client even if client sent old XP
                             if (serverTime > localTime || data.user.xp !== res.userXP) {
