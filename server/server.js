@@ -1115,8 +1115,9 @@ app.get("/api/reports", async (req, res) => {
                             changed = true;
                             console.log(`[Sync] Updated status for ${r.url}: ${r.status} -> ${gReport.status}`);
                         }
-                    } else if (gReport.status === 'banned') {
-                        // Add NEW banned sites from global (Crucial for protection)
+                    } else {
+                        // Add ANY new report from global (Pending, Banned, Ignored)
+                        // This allows Admin to see pending reports submitted by users to Global
                         reports.push(gReport);
                         changed = true;
                     }
