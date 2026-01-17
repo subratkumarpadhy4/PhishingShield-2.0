@@ -286,7 +286,8 @@ app.get('/api/trust/score', async (req, res) => {
                 new Promise(resolve => setTimeout(() => resolve(null), 1500))
             ]);
 
-            if (globalData && globalData.votes !== undefined) {
+            // Only use global data if it has MORE votes than local (or local is empty)
+            if (globalData && globalData.votes !== undefined && (globalData.votes > localTotal)) {
                 // Use global data as source of truth (it has all votes from all laptops)
                 const globalSafe = globalData.safe !== undefined ? globalData.safe : Math.round((globalData.score / 100) * globalData.votes);
                 const globalUnsafe = globalData.unsafe !== undefined ? globalData.unsafe : (globalData.votes - globalSafe);
