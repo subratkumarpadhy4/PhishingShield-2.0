@@ -1168,16 +1168,16 @@ app.post("/api/reports", async (req, res) => {
 
     const reports = await readData(REPORTS_FILE);
 
-    // IDEMPOTENCY CHECK: Prevent duplicates
-    // Check by ID (if provided) or strict URL match for pending reports
+    // IDEMPOTENCY CHECK: Prevent duplicates from SAME USER only
+    // Allow multiple users to report the same URL (different perspectives)
     const existing = reports.find(r =>
         (newReport.id && r.id === newReport.id) ||
-        (r.url === newReport.url && r.status === 'pending')
+        (r.url === newReport.url && r.reporter === newReport.reporter && r.status === 'pending')
     );
 
     if (existing) {
-        console.log(`[Report] Skipped duplicate: ${newReport.url}`);
-        return res.status(200).json({ message: "Report already exists", report: existing });
+        console.log(`[Report] Skipped duplicate from same user: ${newReport.url} by ${newReport.reporter}`);
+        return res.status(200).json({ message: "You already reported this URL", report: existing });
     }
 
     reports.push(report);
