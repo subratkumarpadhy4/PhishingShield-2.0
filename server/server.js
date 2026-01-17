@@ -2061,8 +2061,8 @@ app.post("/api/auth/admin/verify-mfa", (req, res) => {
             ipAddress: ip,
             sessionId: sessionId,
         },
-        JWT_SECRET,
-        {}, // No expiry
+        JWT_SECRET
+        // No options = no expiry
     );
 
     // Store admin session PERSISTENTLY
