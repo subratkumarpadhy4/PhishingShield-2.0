@@ -607,7 +607,10 @@ function loadDashboardData() {
                                     mergedReports.push(localR);
                                 } else {
                                     // Report exists on both - server status takes precedence
-                                    // Server already has the correct status, so we keep it
+                                    // FIX: If server lacks reporter name but local has it, use local
+                                    if ((!serverReport.reporter || serverReport.reporter === 'Anonymous') && localR.reporter && localR.reporter !== 'Anonymous') {
+                                        serverReport.reporter = localR.reporter;
+                                    }
                                 }
                             });
 
