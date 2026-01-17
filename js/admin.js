@@ -1271,14 +1271,33 @@ window.banSite = async function (url, reportId) {
                         console.error('[Admin] Error sending UPDATE_BLOCKLIST:', chrome.runtime.lastError);
                     }
 
-                    // Also trigger immediate sync for other instances
-                    chrome.runtime.sendMessage({ type: "FORCE_BLOCKLIST_SYNC" }, () => {
-                        console.log('[Admin] Force sync triggered');
-                    });
+                    // Trigger sync in background (non-blocking)
+                    chrome.runtime.sendMessage({ type: "FORCE_BLOCKLIST_SYNC" });
 
-                    alert(`✅ Site Banned Successfully!\n\n${hostname} is now blocked globally.\n\nAll users across all devices will see a warning page when visiting this site.`);
-                    loadDashboardData(); // Refresh UI
-                    loadBannedSites(); // Refresh banned sites table
+                    // Instant UI feedback - update the report status immediately
+                    const reportRow = document.querySelector(`[data-report-id="${reportId}"]`);
+                    if (reportRow) {
+                        const statusCell = reportRow.querySelector('.status-cell');
+                        if (statusCell) {
+                            statusCell.innerHTML = '<span class="badge" style="background:#dc3545; color:#fff;">🚫 BANNED</span>';
+                        }
+                    }
+
+                    // Show non-blocking success message
+                    console.log(`✅ Site Banned: ${hostname}`);
+
+                    // Optional: Show toast notification instead of blocking alert
+                    const toast = document.createElement('div');
+                    toast.style.cssText = 'position:fixed; top:20px; right:20px; background:#198754; color:white; padding:15px 20px; border-radius:8px; z-index:9999; box-shadow:0 4px 12px rgba(0,0,0,0.3); animation:slideIn 0.3s;';
+                    toast.innerHTML = `✅ <strong>${hostname}</strong> banned successfully!`;
+                    document.body.appendChild(toast);
+                    setTimeout(() => toast.remove(), 3000);
+
+                    // Refresh data in background (non-blocking)
+                    setTimeout(() => {
+                        loadDashboardData();
+                        loadBannedSites();
+                    }, 100);
                 });
             });
         });
@@ -1319,8 +1338,15 @@ window.ignoreReport = async function (url, reportId) {
             reports[reportIndex].status = 'ignored';
             reports[reportIndex].ignoredAt = Date.now();
             chrome.storage.local.set({ reportedSites: reports }, () => {
-                alert(`✓ Report Ignored\n\nThis site has been marked as safe.`);
-                loadDashboardData();
+                // Instant UI feedback with toast
+                const toast = document.createElement('div');
+                toast.style.cssText = 'position:fixed; top:20px; right:20px; background:#6c757d; color:white; padding:15px 20px; border-radius:8px; z-index:9999; box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+                toast.innerHTML = `✓ Report marked as <strong>safe</strong>`;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 2000);
+
+                // Refresh in background
+                setTimeout(() => loadDashboardData(), 100);
             });
         }
     });
@@ -1453,25 +1479,31 @@ window.unbanSite = async function (url, reportId) {
                         console.log('[Admin] Force sync triggered');
                     });
 
-                    alert(`✅ Site Unbanned\n\nUsers can now visit this site.\n\nNote: Other devices will sync within 10 seconds.`);
-                    // Smooth refresh: fetch fresh data from server
-                    fetch('https://phishingshield.onrender.com/api/reports')
-                        .then(res => res.json())
-                        .then(freshReports => {
-                            chrome.storage.local.set({ cachedGlobalReports: freshReports }, () => {
-                                allReportsCache = freshReports;
-                                renderReports(freshReports);
-                                console.log('[Admin] Reports refreshed after unban');
+                    // Instant toast notification
+                    const toast = document.createElement('div');
+                    toast.style.cssText = 'position:fixed; top:20px; right:20px; background:#198754; color:white; padding:15px 20px; border-radius:8px; z-index:9999; box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+                    toast.innerHTML = `✅ Site <strong>unbanned</strong> - users can now visit`;
+                    document.body.appendChild(toast);
+                    setTimeout(() => toast.remove(), 3000);
+
+                    // Refresh in background (non-blocking)
+                    setTimeout(() => {
+                        fetch('https://phishingshield.onrender.com/api/reports')
+                            .then(res => res.json())
+                            .then(freshReports => {
+                                chrome.storage.local.set({ cachedGlobalReports: freshReports }, () => {
+                                    allReportsCache = freshReports;
+                                    renderReports(freshReports);
+                                });
+                            })
+                            .catch(() => {
+                                // Fallback: just update local cache
+                                allReportsCache = allReportsCache.map(r =>
+                                    r.id === reportId ? { ...r, status: 'pending' } : r
+                                );
+                                renderReports(allReportsCache);
                             });
-                        })
-                        .catch(err => {
-                            console.error('[Admin] Failed to refresh reports:', err);
-                            // Fallback: just update local cache
-                            allReportsCache = allReportsCache.map(r =>
-                                r.id === reportId ? { ...r, status: 'pending' } : r
-                            );
-                            renderReports(allReportsCache);
-                        });
+                    }, 100);
                 });
             });
         });
