@@ -1057,7 +1057,7 @@ app.get("/api/reports", async (req, res) => {
 });
 
 // POST /api/reports
-app.post("/api/reports", (req, res) => {
+app.post("/api/reports", async (req, res) => {
     const newReport = req.body;
     if (!newReport.url) return res.status(400).json({ error: "Missing URL" });
 
@@ -1071,7 +1071,7 @@ app.post("/api/reports", (req, res) => {
         ...newReport,
     };
 
-    const reports = readData(REPORTS_FILE);
+    const reports = await readData(REPORTS_FILE);
 
     // IDEMPOTENCY CHECK: Prevent duplicates
     // Check by ID (if provided) or strict URL match for pending reports
@@ -1086,7 +1086,7 @@ app.post("/api/reports", (req, res) => {
     }
 
     reports.push(report);
-    writeData(REPORTS_FILE, reports);
+    await writeData(REPORTS_FILE, reports);
 
     console.log(`[Report] ${report.url} by ${report.reporter}`);
 
@@ -2456,12 +2456,12 @@ app.post("/api/reports/update", async (req, res) => {
 });
 
 // POST /api/reports/delete - Bulk Delete Reports
-app.post("/api/reports/delete", (req, res) => {
+app.post("/api/reports/delete", async (req, res) => {
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids))
         return res.status(400).json({ success: false, message: "IDs array required" });
 
-    let reports = readData(REPORTS_FILE) || [];
+    let reports = (await readData(REPORTS_FILE)) || [];
     const initialLen = reports.length;
 
     // Filter out reports whose IDs are in the deletion list
@@ -2470,7 +2470,7 @@ app.post("/api/reports/delete", (req, res) => {
     reports = reports.filter(r => !ids.includes(r.id));
 
     if (reports.length !== initialLen) {
-        writeData(REPORTS_FILE, reports);
+        await writeData(REPORTS_FILE, reports);
         console.log(`[Report] Deleted ${initialLen - reports.length} reports.`);
 
         // --- GLOBAL SYNC ---
