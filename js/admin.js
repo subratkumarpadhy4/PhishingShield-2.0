@@ -2140,7 +2140,7 @@ function loadTrustData() {
     // Always use cache-busting to ensure fresh data (cache disabled on server anyway)
     // This ensures friend's device always gets latest votes
     const cacheParam = `?t=${Date.now()}`;
-    const url = `https://phishingshield.onrender.com/api/trust/all${cacheParam}`;
+    const url = `http://localhost:3000/api/trust/all${cacheParam}`;
 
     console.log('[Admin] Fetching trust data from server...', url);
 
