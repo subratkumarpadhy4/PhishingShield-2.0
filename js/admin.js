@@ -300,12 +300,11 @@ async function checkAdminAccess() {
     if (!lockScreen) return;
 
     // Check for admin token in storage
-    chrome.storage.local.get(['adminToken', 'adminTokenExpiry'], async (res) => {
+    chrome.storage.local.get(['adminToken'], async (res) => {
         const token = res.adminToken;
-        const expiry = res.adminTokenExpiry;
 
-        // Check if token exists and hasn't expired
-        if (!token || !expiry || Date.now() > expiry) {
+        // Check if token exists (no expiry check)
+        if (!token) {
             // No valid token - redirect to admin login
             if (lockStatus) {
                 const redirectToLogin = () => {
