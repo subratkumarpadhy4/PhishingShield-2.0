@@ -1142,7 +1142,8 @@ window.banSite = async function (url, reportId) {
         console.log('[Admin] User confirmed ban, proceeding...');
 
         // Update status on server first and WAIT for response
-        const response = await fetch('https://phishingshield.onrender.com/api/reports/update', {
+        // Use LOCAL server first
+        const response = await fetch('http://localhost:3000/api/reports/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: reportId, status: 'banned' })
@@ -1269,7 +1270,8 @@ window.ignoreReport = async function (url, reportId) {
 
     try {
         // Update status on server AND WAIT for it
-        const response = await fetch('https://phishingshield.onrender.com/api/reports/update', {
+        // Use LOCAL server first
+        const response = await fetch('http://localhost:3000/api/reports/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: reportId, status: 'ignored' })
@@ -1322,7 +1324,8 @@ window.unbanSite = async function (url, reportId) {
         console.log('[Admin] User confirmed unban, proceeding...');
 
         // Update status on server and WAIT for response
-        const response = await fetch('https://phishingshield.onrender.com/api/reports/update', {
+        // Use LOCAL server first
+        const response = await fetch('http://localhost:3000/api/reports/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: reportId, status: 'pending' })
