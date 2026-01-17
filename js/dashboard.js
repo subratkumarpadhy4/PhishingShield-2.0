@@ -292,14 +292,25 @@ function renderUserReportsTable(reports) {
             else if (suggestion === 'CAUTION') color = '#d97706';
             else if (suggestion === 'SAFE') color = '#166534';
 
-            // Truncate long reasons
-            const shortReason = reason.length > 80 ? reason.substring(0, 80) + '...' : reason;
-
+            // Show compact verification badge + View Details button
             analysisHtml = `
                 <div style="font-size:12px;">
-                    <div style="margin-bottom:4px;"><strong>Verfication:</strong> <span style="color:${color}; font-weight:bold;">${suggestion}</span> (${score}/100)</div>
-                    <div style="color:#475569; font-style:italic; line-height:1.4;">"${shortReason}"</div>
-                    ${reason.length > 80 ? `<div class="view-analysis-btn" style="color:${color}; cursor:pointer; font-size:11px; margin-top:2px; text-decoration:underline;">View Full Analysis</div>` : ''}
+                    <div style="margin-bottom:6px;">
+                        <strong>Verfication:</strong> <span style="color:${color}; font-weight:bold;">${suggestion}</span> (${score}/100)
+                    </div>
+                    <button class="view-details-btn" style="
+                        padding: 6px 12px;
+                        background: ${color};
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 11px;
+                        font-weight: 600;
+                        transition: opacity 0.2s;
+                    " onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                        📄 View Details
+                    </button>
                 </div>
              `;
         }
@@ -314,7 +325,7 @@ function renderUserReportsTable(reports) {
         `;
 
         // Attach Listener Programmatically (CSP Safe)
-        const viewBtn = tr.querySelector('.view-analysis-btn');
+        const viewBtn = tr.querySelector('.view-details-btn');
         if (viewBtn && r.aiAnalysis && r.aiAnalysis.reason) {
             viewBtn.addEventListener('click', () => {
                 showAnalysisModal(r.aiAnalysis);
