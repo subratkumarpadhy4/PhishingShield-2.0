@@ -948,11 +948,9 @@ function renderTable(log) {
 async function fetchLogTrustScores(entries) {
     if (typeof ThreatIntel === 'undefined') return;
 
-    for (const entry of entries) {
+    // Fetch ALL scores in PARALLEL for speed
+    const fetchPromises = entries.map(async (entry) => {
         try {
-            // Check cache or fetch
-            // We use the same service but we need to be careful not to spam.
-            // For now, sequential is safer for the demo server.
             const data = await ThreatIntel.getTrustScore("http://" + entry.hostname);
             const el = document.getElementById(entry.elementId);
 
@@ -968,9 +966,12 @@ async function fetchLogTrustScores(entries) {
                 el.innerHTML = `<span style="color:#adb5bd; font-size:11px;">N/A</span>`;
             }
         } catch (e) {
-            // Silent fail
+            // Silent fail - element might not exist or network error
         }
-    }
+    });
+
+    // Wait for all fetches to complete in parallel
+    await Promise.all(fetchPromises);
 }
 
 
