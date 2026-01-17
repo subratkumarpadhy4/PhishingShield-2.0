@@ -407,11 +407,14 @@ function loadDashboardData() {
             // --- Populate Reports Table ---
             // --- Populate Reports Table ---
             // Fetch from Backend (Data Source Logic: Localhost > Cloud)
-            // We prioritize Localhost because if the user is running the server locally, they expect to see those reports.
-            // [FIX] Use Global Sync Proxy with Timestamp to force fresh fetch (Bust Cache)
-            fetch(`https://phishingshield.onrender.com/api/reports/global-sync?t=${Date.now()}`)
+            // Use LOCAL server first with timeout to prevent hanging
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+            fetch(`http://localhost:3000/api/reports?t=${Date.now()}`, { signal: controller.signal })
                 .then(res => res.json())
                 .then(serverReports => {
+                    clearTimeout(timeoutId);
                     console.log("[Admin] Fetched Global Reports:", serverReports);
                     console.log("[Admin] Number of reports:", Array.isArray(serverReports) ? serverReports.length : 'Not an array');
 
