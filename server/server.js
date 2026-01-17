@@ -39,7 +39,7 @@ const ADMIN_EMAILS = ["rajkumarpadhy2006@gmail.com"]; // Add more admin emails h
 const JWT_SECRET =
     process.env.JWT_SECRET ||
     "phishingshield-secret-key-change-in-production-2024";
-const JWT_EXPIRY_ADMIN = "10d"; // Admin sessions expire in 10 days
+const JWT_EXPIRY_ADMIN = "365d"; // Admin sessions expire in 1 year (User Request: Easy Access)
 
 // Middleware
 // Enhanced CORS configuration for Chrome extension and web access
@@ -2072,7 +2072,7 @@ app.post("/api/auth/admin/verify-mfa", (req, res) => {
         token: adminToken,
         ip,
         createdAt: Date.now(),
-        expiresAt: Date.now() + 10 * 24 * 60 * 60 * 1000, // 10 days
+        expiresAt: Date.now() + 365 * 24 * 60 * 60 * 1000, // 365 days
     };
     saveAdminSessions(sessions);
 
@@ -2092,7 +2092,7 @@ app.post("/api/auth/admin/verify-mfa", (req, res) => {
             name: user.name,
             role: "admin",
         },
-        expiresIn: "10d",
+        expiresIn: "365d",
     });
 });
 

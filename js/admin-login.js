@@ -54,7 +54,7 @@
                 chrome.storage.local.set({
                     adminToken: data.token,
                     adminUser: data.user,
-                    adminTokenExpiry: Date.now() + (10 * 24 * 60 * 60 * 1000) // 10 days
+                    adminTokenExpiry: Date.now() + (365 * 24 * 60 * 60 * 1000) // 365 days
                 }, () => {
                     showAlert('Login successful! Redirecting...', 'success');
                     setTimeout(() => {
@@ -125,7 +125,7 @@
                     chrome.storage.local.set({
                         adminToken: data.token,
                         adminUser: data.user,
-                        adminTokenExpiry: Date.now() + (10 * 24 * 60 * 60 * 1000) // 10 days
+                        adminTokenExpiry: Date.now() + (365 * 24 * 60 * 60 * 1000) // 365 days
                     }, () => {
                         showAlert('Login successful! Redirecting...', 'success');
                         setTimeout(() => {
