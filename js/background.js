@@ -1191,9 +1191,12 @@ function syncXPToServer(customData = {}) {
                             const serverTime = Number(data.user.lastUpdated) || 0;
                             const localTime = Number(res.lastXpUpdate) || 0;
 
+                            // PENALTY PROTECTION: If we just applied a penalty, don't let server overwrite it
+                            const isPenaltySync = customData.isPenalty === true;
+
                             // Always update if server timestamp is newer OR if server XP is different (admin edit)
-                            // This ensures admin edits propagate to client even if client sent old XP
-                            if (serverTime > localTime || data.user.xp !== res.userXP) {
+                            // BUT: Skip if this is a penalty sync (local is authoritative for penalties)
+                            if (!isPenaltySync && (serverTime > localTime || data.user.xp !== res.userXP)) {
                                 if (serverTime > localTime) {
                                     console.log(`[PhishingShield] 📥 Server is newer (${serverTime} > ${localTime}). Updating local XP: ${res.userXP} -> ${data.user.xp}`);
                                 } else {
@@ -1215,6 +1218,8 @@ function syncXPToServer(customData = {}) {
                                         });
                                     });
                                 });
+                            } else if (isPenaltySync) {
+                                console.log(`[PhishingShield] 🛡️ Penalty sync - keeping local XP (${res.userXP}) and ignoring server response`);
                             } else {
                                 console.log(`[PhishingShield] Local is newer (${localTime} >= ${serverTime}) and XP matches. Keeping local XP: ${res.userXP}`);
                             }
