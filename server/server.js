@@ -1126,6 +1126,7 @@ app.post("/api/reports", async (req, res) => {
 
     // IDEMPOTENCY CHECK: Prevent duplicates
     // Check by ID (if provided) or strict URL match for pending reports
+    /* Duplicate Check Disabled by User Request - Allow multiple reports per URL
     const existing = reports.find(r =>
         (newReport.id && r.id === newReport.id) ||
         (r.url === newReport.url && r.status === 'pending')
@@ -1135,6 +1136,7 @@ app.post("/api/reports", async (req, res) => {
         console.log(`[Report] Skipped duplicate: ${newReport.url}`);
         return res.status(200).json({ message: "Report already exists", report: existing });
     }
+    */
 
     reports.push(report);
     await writeData(REPORTS_FILE, reports);
