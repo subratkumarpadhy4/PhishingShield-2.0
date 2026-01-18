@@ -1626,9 +1626,9 @@ app.post("/api/users/sync", async (req, res) => {
             users[idx]._adminEdit = true;
             users[idx]._adminEditTime = adminEditTimestamp;
             users[idx]._adminEditXP = userData.xp; // Store the admin-set XP value
-        } else if ((userData.isPenalty === true || String(userData.isPenalty) === "true") && clientUpdated > serverUpdated) {
-            // Penalty System - Only if it's a new event (prevents replay attacks)
-            console.log(`[Sync] Penalty Applied: Overwriting XP for ${userData.email} (${serverXP} -> ${userData.xp})`);
+        } else if ((userData.isPenalty === true || String(userData.isPenalty) === "true") && clientUpdated >= serverUpdated) {
+            // Penalty System - Only if it's a new or immediate event
+            console.log(`[Sync] Penalty Applied: Overwriting XP for ${userData.email} (${serverXP} -> ${userData.xp}). timestamps: C${clientUpdated} >= S${serverUpdated}`);
             users[idx].xp = userData.xp;
             users[idx].level = userData.level;
             users[idx].lastUpdated = clientUpdated || Date.now();

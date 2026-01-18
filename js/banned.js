@@ -152,11 +152,19 @@ var API_BASE = window.API_BASE;
 
                     // APPLY PENALTY HERE (User Requested)
                     console.log('[PhishingShield] Applying 500 XP penalty for proceeding to banned site');
+
+                    // Visual Feedback for User
+                    const btn = document.getElementById('proceed-anyway-btn');
+                    if (btn) btn.innerText = "Processing penalty...";
+
                     chrome.runtime.sendMessage({
                         type: 'ADD_XP',
                         amount: -500
                     }, function (response) {
-                        if (response && response.success) {
+                        if (chrome.runtime.lastError) {
+                            console.error("Penalty Message Failed:", chrome.runtime.lastError);
+                            alert("Extension Error: Please reload the extension.");
+                        } else if (response && response.success) {
                             console.log('[PhishingShield] ✅ 500 XP penalty applied');
                         }
                     });

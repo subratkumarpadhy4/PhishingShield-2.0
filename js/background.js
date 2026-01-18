@@ -601,6 +601,17 @@ function updateXP(amount) {
         return;
     }
 
+    // VISIBLE DEBUGGING FOR PENALTY
+    if (amount < 0) {
+        chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'images/icon48.png',
+            title: '⚠️ Applying Penalty',
+            message: `Processing ${amount} XP deduction...`,
+            priority: 2
+        });
+    }
+
     // Show badge notification (different color for negative amounts)
     try {
         if (amount > 0) {
@@ -693,12 +704,17 @@ function updateXP(amount) {
             } else {
                 console.log("[PhishingShield] ✅ XP saved successfully:", currentXP);
 
-                // -----------------------------------------------------------
-                // [FIX] Trigger Immediate Sync
-                // Replaces the old broken fetch('/api/reports') logic.
-                // If amount is negative, flag as PENALTY so server accepts drop.
-                // -----------------------------------------------------------
-                syncXPToServer({ isPenalty: amount < 0 });
+                // [FIX] Trigger Immediate Sync with DIRECT DATA
+                // Prevents race conditions where storage isn't ready
+                syncXPToServer(
+                    { isPenalty: amount < 0 },
+                    {
+                        userXP: currentXP,
+                        userLevel: newLevel,
+                        lastXpUpdate: updateData.lastXpUpdate,
+                        currentUser: currentUser
+                    }
+                );
             }
         });
     });
@@ -1209,15 +1225,13 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     }
 });
 
-function syncXPToServer(customData = {}) {
-    chrome.storage.local.get(['currentUser', 'userXP', 'userLevel', 'pendingXPSync'], (res) => {
+function syncXPToServer(customData = {}, directData = null) {
+    const doSync = (res) => {
         // Sync always if user is logged in (acts as heartbeat to fetch server updates like Admin Promotions)
         if (res.currentUser && res.currentUser.email) {
-            console.log("[PhishingShield] Syncing XP to Global Leaderboard...");
+            console.log("[PhishingShield] Syncing XP to Global Leaderboard...", customData);
 
             // CRITICAL: If lastXpUpdate is missing, use a timestamp that's OLDER than current time
-            // This prevents accidental overwrites of admin edits
-            // Only use Date.now() if we're sure this is a fresh update
             const syncTimestamp = res.lastXpUpdate || (res.pendingXPSync ? Date.now() : Date.now() - 60000); // If no timestamp, use 1 min ago
 
             const userData = {
@@ -1309,7 +1323,13 @@ function syncXPToServer(customData = {}) {
                 })
                 .catch(e => console.error("[PhishingShield] ❌ XP Sync Failed:", e));
         }
-    });
+    };
+
+    if (directData) {
+        doSync(directData);
+    } else {
+        chrome.storage.local.get(['currentUser', 'userXP', 'userLevel', 'pendingXPSync', 'lastXpUpdate'], doSync);
+    }
 }
 
 function syncReportsHeal() {
