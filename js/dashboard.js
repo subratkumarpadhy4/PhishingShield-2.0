@@ -254,11 +254,50 @@ document.addEventListener('DOMContentLoaded', () => {
 function loadUserReports() {
     chrome.storage.local.get(['currentUser'], (data) => {
         const user = data.currentUser;
+
+        // Better Feedback for Guest/Logged Out State
         if (!user || !user.email) {
+            console.warn("[Dashboard] loadUserReports: No currentUser found.");
             const tbody = document.getElementById('user-reports-body');
-            if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Please log in (Guest Mode doesn\'t save reports).</td></tr>';
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" style="text-align:center; padding:30px; color:#64748b;">
+                            <div style="font-size:16px; margin-bottom:10px;">👤 <strong>Guest Mode Active</strong></div>
+                            <div>Please <a href="login.html" style="color:#2563eb;">Log In</a> to save and track your reports.</div>
+                        </td>
+                    </tr>
+                `;
+            }
             return;
         }
+
+        // --- SYNC CHECK: Verify Background Script Sees Us ---
+        chrome.runtime.sendMessage({ type: "GET_DEBUG_IDENTITY" }, (response) => {
+            // If response is missing or mismatch
+            if (chrome.runtime.lastError || !response || !response.currentUser || response.currentUser.email !== user.email) {
+                console.warn("[Dashboard] Extension Sync Mismatch! Background script needs reload.");
+                const alertArea = document.getElementById('user-reports-alert');
+                if (!alertArea) {
+                    const container = document.querySelector('#view-reports .card-body') || document.getElementById('user-reports-body').parentElement.parentElement;
+                    if (container) {
+                        const div = document.createElement('div');
+                        div.id = 'user-reports-alert';
+                        div.style.cssText = "background:#fff3cd; color:#856404; padding:15px; margin-bottom:20px; border-radius:8px; border:1px solid #ffeeba; text-align:center; font-size:14px;";
+                        div.innerHTML = `
+                            <div style="font-weight:bold; font-size:15px; margin-bottom:5px;">⚠️ Extension Update Required</div>
+                            <div>The extension needs a quick refresh to recognize your login session for reports.</div>
+                            <button id="reload-ext-btn" style="margin-top:10px; cursor:pointer; background:#856404; color:white; border:none; padding:8px 16px; border-radius:6px; font-weight:600;">Fix Now (Reload Extension)</button>
+                        `;
+                        container.insertBefore(div, container.firstChild);
+
+                        document.getElementById('reload-ext-btn').onclick = () => {
+                            chrome.runtime.reload();
+                        };
+                    }
+                }
+            }
+        });
 
         // Fetch reports for this user from global server
         console.log(`[Dashboard] Loading reports for: ${user.email} from ${API_BASE}/reports`);

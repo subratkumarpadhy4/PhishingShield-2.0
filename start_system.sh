@@ -2,7 +2,18 @@
 echo "🛡️  Starting PhishingShield Ecosystem..."
 echo "-------------------------------------"
 
-# 1. Wake up the Global Server (Cloud)
+# 1. Enter Server Directory
+cd server
+
+# 2. Check for dependencies & Install if missing
+if [ ! -d "node_modules" ]; then
+    echo "📦 Dependencies missing. Installing now..."
+    echo "   (This may take a minute for the first run)"
+    npm install
+    echo "✅ Dependencies installed!"
+fi
+
+# 3. Wake up the Global Server (Cloud)
 echo "🌍 Connecting to Global Cloud Server..."
 status_code=$(curl --write-out %{http_code} --silent --output /dev/null https://phishingshield.onrender.com/api/reports)
 
@@ -13,13 +24,11 @@ else
   curl -s -o /dev/null https://phishingshield.onrender.com/api/reports
 fi
 
-# 2. Start the Local Server
+# 4. Start the Local Server
 echo "-------------------------------------"
 echo "💻 Starting Local Server (localhost:3000)..."
 echo "   All bans & XP will be synced to Global Cloud."
 echo "-------------------------------------"
-
-cd server
 
 # Start Keep-Alive in background
 echo "💓 Starting Global Keep-Alive Daemon..."

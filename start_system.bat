@@ -2,7 +2,18 @@
 echo 🛡️  Starting PhishingShield Ecosystem...
 echo -------------------------------------
 
-REM 1. Wake up the Global Server (Cloud)
+REM 1. Enter Server Directory
+cd server
+
+REM 2. Check for dependencies & Install if missing
+if not exist node_modules (
+    echo 📦 Dependencies missing. Installing now...
+    echo    (This may take a minute for the first run)
+    call npm install
+    echo ✅ Dependencies installed!
+)
+
+REM 3. Wake up the Global Server (Cloud)
 echo 🌍 Connecting to Global Cloud Server...
 curl -I https://phishingshield.onrender.com/api/reports >nul 2>&1
 if %errorlevel% equ 0 (
@@ -12,13 +23,11 @@ if %errorlevel% equ 0 (
   curl -s -o nul https://phishingshield.onrender.com/api/reports
 )
 
-REM 2. Start the Local Server
+REM 4. Start the Local Server
 echo -------------------------------------
 echo 💻 Starting Local Server (localhost:3000)...
 echo    All bans ^& XP will be synced to Global Cloud.
 echo -------------------------------------
-
-cd server
 
 REM Check if port 3000 is in use and kill it
 echo 🧹 Cleaning up port 3000...

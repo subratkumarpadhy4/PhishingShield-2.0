@@ -42,42 +42,85 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Helper for beautiful toasts
+// Helper for beautiful toasts (Premium Glassmorphism Design)
 function showToast(icon, title, text, color1, color2) {
+    // Remove existing toast if any
+    const existingToast = document.getElementById('phishingshield-toast');
+    if (existingToast) existingToast.remove();
+
     const toast = document.createElement('div');
+    toast.id = 'phishingshield-toast';
     toast.innerHTML = `
-        <div style="font-size: 24px;">${icon}</div>
-        <div style="font-weight: bold; margin-top: 5px;">${title}</div>
-        <div style="margin-top:2px;">${text.replace(/\n/g, '<br>')}</div>
-    `;
-    toast.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        left: 20px;
-        background: linear-gradient(135deg, ${color1}, ${color2});
-        color: white;
-        padding: 15px 25px;
-        border-radius: 12px;
-        box-shadow: 0 4px 15px rgba(0,0,0, 0.2);
-        z-index: 2147483647;
-        text-align: center;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        animation: slideUp 0.5s ease-out;
-        min-width: 200px;
+        <div style="
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            width: 40px; 
+            height: 40px; 
+            background: rgba(255, 255, 255, 0.2); 
+            border-radius: 50%; 
+            font-size: 20px; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        ">${icon}</div>
+        <div style="flex: 1;">
+            <div style="font-weight: 700; font-size: 15px; margin-bottom: 3px; letter-spacing: 0.3px;">${title}</div>
+            <div style="font-size: 13px; opacity: 0.9; line-height: 1.4;">${text.replace(/\n/g, '<br>')}</div>
+        </div>
     `;
 
-    // Slide Up Animation
-    const style = document.createElement('style');
-    style.innerHTML = `@keyframes slideUp { from { transform: translateY(100px); opacity:0; } to { transform: translateY(0); opacity:1; } }`;
-    document.head.appendChild(style);
+    // Dynamic Gradient based on input colors, but with glass feel
+    // color1 is usually the main color (e.g. #198754 for success)
+    const bgGradient = `linear-gradient(135deg, ${color1}dd, ${color2}dd)`;
+
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 30px;
+        left: 30px;
+        background: ${bgGradient};
+        color: white;
+        padding: 16px 20px;
+        border-radius: 16px;
+        box-shadow: 
+            0 10px 30px rgba(0, 0, 0, 0.25), 
+            0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        z-index: 2147483647;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        min-width: 300px;
+        max-width: 400px;
+        transform: translateY(100px) scale(0.9);
+        opacity: 0;
+        animation: ps-toast-in 0.5s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+    `;
+
+    // Add Keyframes unique to this toast
+    if (!document.getElementById('ps-toast-style')) {
+        const style = document.createElement('style');
+        style.id = 'ps-toast-style';
+        style.innerHTML = `
+            @keyframes ps-toast-in { 
+                to { transform: translateY(0) scale(1); opacity: 1; } 
+            }
+            @keyframes ps-toast-out { 
+                to { transform: translateY(20px) scale(0.95); opacity: 0; } 
+            }
+        `;
+        document.head.appendChild(style);
+    }
 
     document.body.appendChild(toast);
 
-    // Remove after 4 seconds
+    // Remove after 5 seconds
     setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transition = 'opacity 0.5s';
-        setTimeout(() => toast.remove(), 500);
-    }, 4000);
+        toast.style.animation = 'ps-toast-out 0.4s cubic-bezier(0.19, 1, 0.22, 1) forwards';
+        setTimeout(() => toast.remove(), 400);
+    }, 5000);
 }
 
 // SERVICE WORKER KEEP-ALIVE (Robust Connection)

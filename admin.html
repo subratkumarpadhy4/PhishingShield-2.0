@@ -631,9 +631,13 @@
             <div class="table-container">
                 <div class="section-header">
                     <h3>CrowdShield - Reported Phishing Sites</h3>
-                    <button class="btn btn-outline" id="btn-refresh-reports">Refresh List</button>
-                    <button class="btn btn-outline" id="btn-delete-all-reports"
-                        style="color: #dc3545; border-color: #dc3545; margin-left: 10px;">Delete All</button>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <input type="text" id="reports-search" placeholder="Search reports..." 
+                            style="padding:8px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:13px; width:200px;">
+                        <button class="btn btn-outline" id="btn-refresh-reports">Refresh List</button>
+                        <button class="btn btn-outline" id="btn-delete-all-reports"
+                            style="color: #dc3545; border-color: #dc3545;">Delete All</button>
+                    </div>
                 </div>
                 <p style="margin-bottom:20px; color:#6c757d;">User-submitted reports. Verify and ban malicious domains.
                 </p>
@@ -671,7 +675,9 @@
             <div class="table-container">
                 <div class="section-header">
                     <h3>Community Trust Manager</h3>
-                    <div style="display:flex; gap:10px;">
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <input type="text" id="trust-search" placeholder="Search domains..." 
+                            style="padding:8px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:13px; width:200px;">
                         <button class="btn btn-outline" id="btn-sync-trust" title="Push local data to Global Server">
                             ☁️ Sync to Global
                         </button>

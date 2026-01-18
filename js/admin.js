@@ -71,7 +71,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // 6. Setup Report Filter Handlers (Safely attached)
     setupReportFilters();
 
-    // 7. Keep-Alive Service (Robust)
+    // 7. Setup Trust Filter Handlers
+    setupTrustFilters();
+
+    // 8. Keep-Alive Service (Robust)
     connectKeepAlive();
 });
 
@@ -89,59 +92,115 @@ function connectKeepAlive() {
     }
 }
 
+// TRUST FILTER LOGIC
+// TRUST FILTER LOGIC
+function setupTrustFilters() {
+    const searchInput = document.getElementById('trust-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+
+            if (window.trustDataCache) {
+                const filtered = window.trustDataCache.filter(item => {
+                    return !query ||
+                        (item.domain && item.domain.toLowerCase().includes(query)) ||
+                        (item.url && item.url.toLowerCase().includes(query)) ||
+                        (item.reporter && item.reporter.toLowerCase().includes(query)); // Added per request
+                });
+                renderTrustTable(filtered);
+            }
+        });
+    }
+}
+
 function setupReportFilters() {
-    // 1. Filter Tabs
+    // 1. Search Logic
+    const searchInput = document.getElementById('reports-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            const currentReports = allReportsCache || [];
+
+            // Apply Filters (Search + Status)
+            const filtered = currentReports.filter(r => {
+                const matchesSearch = !query ||
+                    (r.url && r.url.toLowerCase().includes(query)) ||
+                    (r.hostname && r.hostname.toLowerCase().includes(query)) || // Added Hostname
+                    (r.reporter && r.reporter.toLowerCase().includes(query)) ||
+                    (r.reporterName && r.reporterName.toLowerCase().includes(query)) ||
+                    (r.reporterEmail && r.reporterEmail.toLowerCase().includes(query));
+
+                const matchesStatus = currentReportFilter === 'all' || r.status === currentReportFilter;
+
+                return matchesSearch && matchesStatus;
+            });
+
+            renderReports(filtered);
+        });
+    }
+
+    // 2. Filter Tabs
     const filters = ['all', 'pending', 'banned', 'ignored'];
     filters.forEach(status => {
         const btn = document.getElementById(`filter-${status}`);
         if (btn) {
-            // Remove any existing inline onclick to be safe (though JS override usually wins)
             btn.onclick = null;
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
-                setReportFilter(status);
+                setReportFilter(status); // This sets the global currentReportFilter
+
+                // Trigger search input event to re-apply both filters
+                if (searchInput) {
+                    searchInput.dispatchEvent(new Event('input'));
+                } else {
+                    // Fallback if no search input
+                    // Logic handled inside setReportFilter usually, but here we want to ensure combined logic
+                    // Actually setReportFilter will be updated to handle search query if we pass it, 
+                    // or we just trust the search listener to fire if we trigger it.
+                    // Let's rely on re-rendering:
+
+                    // IMPORTANT: The existing setReportFilter probably just renders based on status.
+                    // We need to make sure it respects the search query currently in the box.
+
+                    const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+                    const filtered = allReportsCache.filter(r => {
+                        const matchesSearch = !query ||
+                            (r.url && r.url.toLowerCase().includes(query)) ||
+                            (r.reporter && r.reporter.toLowerCase().includes(query));
+                        const matchesStatus = status === 'all' || r.status === status;
+                        return matchesSearch && matchesStatus;
+                    });
+                    renderReports(filtered);
+                }
             });
         }
     });
 
-    // 2. Refresh Button (Reports)
+    // 3. Refresh Button
     const refreshReportsBtn = document.getElementById('btn-refresh-reports');
     if (refreshReportsBtn) {
-        refreshReportsBtn.onclick = null; // Clear existing
+        refreshReportsBtn.onclick = null;
         refreshReportsBtn.addEventListener('click', (e) => {
             e.preventDefault();
             const originalText = refreshReportsBtn.innerText;
             refreshReportsBtn.innerText = "Refreshing...";
             refreshReportsBtn.disabled = true;
 
-            // Clear cache to force fresh fetch from server
+            // Clear cache
             allReportsCache = [];
+
+            // Clear search input to prevent stale filters
+            const searchInput = document.getElementById('reports-search');
+            if (searchInput) searchInput.value = '';
+
             chrome.storage.local.set({ cachedGlobalReports: [] }, () => {
                 console.log('[Admin] Cache cleared, reloading reports...');
-                // Force reload dashboard data which will fetch fresh from server
                 loadDashboardData();
-
-                // Revert UI after a delay (simulating async completion for UI feedback)
                 setTimeout(() => {
                     refreshReportsBtn.innerText = originalText;
                     refreshReportsBtn.disabled = false;
                 }, 2000);
             });
-        });
-    }
-
-    // 3. Refresh Button (Banned Sites)
-    const refreshBannedBtn = document.getElementById('btn-refresh-banned');
-    if (refreshBannedBtn) {
-        refreshBannedBtn.onclick = null;
-        refreshBannedBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            // Assuming loadBannedSites() is global or available
-            if (typeof loadBannedSites === 'function') {
-                loadBannedSites();
-            } else {
-                console.warn('[Admin] loadBannedSites is not defined');
-            }
         });
     }
 }
@@ -466,6 +525,7 @@ function loadDashboardData() {
                             });
 
                             // Use Cached data for NOW so UI looks instant
+                            allReportsCache = cached;
                             renderReports(cached);
 
                         } else if (serverReports.length >= cached.length) {
@@ -517,6 +577,7 @@ function loadDashboardData() {
                             });
 
                             mergedReports.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                            allReportsCache = mergedReports;
                             renderReports(mergedReports);
                         } else {
                             // Edge Case: Server has SOME data but less than cache? 
@@ -564,6 +625,7 @@ function loadDashboardData() {
                                 }
                             });
                             chrome.storage.local.set({ cachedGlobalReports: mergedCache });
+                            allReportsCache = mergedCache;
                             renderReports(mergedCache);
                         }
                     });
@@ -575,8 +637,10 @@ function loadDashboardData() {
                         const cached = c.cachedGlobalReports || [];
                         if (cached.length > 0) {
                             console.log("[Admin] Using Offline Cache");
+                            allReportsCache = cached;
                             renderReports(cached);
                         } else {
+                            allReportsCache = reports;
                             renderReports(reports); // Fallback to local user reports
                         }
                     });
@@ -914,14 +978,8 @@ function renderReports(reports) {
     }
     tbody.innerHTML = '';
 
-    // Update Cache if new data provided
-    if (reports) {
-        allReportsCache = Array.isArray(reports) ? reports : [];
-        console.log('[Admin] renderReports called with', allReportsCache.length, 'reports');
-    }
-
-    // Use Cache
-    let dataToRender = allReportsCache || [];
+    // Use Cache or provided reports (but do NOT overwrite cache implicitly)
+    let dataToRender = reports || allReportsCache || [];
 
     // Filter out invalid reports
     dataToRender = dataToRender.filter(r => r && (r.url || r.hostname));
@@ -2248,8 +2306,7 @@ function loadTrustData() {
 
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Fetching data...</td></tr>';
 
-    // Always use cache-busting to ensure fresh data (cache disabled on server anyway)
-    // This ensures friend's device always gets latest votes
+    // Always use cache-busting to ensure fresh data
     const cacheParam = `?t=${Date.now()}`;
     const url = `${API_BASE}/trust/all${cacheParam}`;
 
@@ -2262,33 +2319,15 @@ function loadTrustData() {
         }
     })
         .then(res => {
-            if (!res) {
-                throw new Error('No response from server');
-            }
-            console.log('[Admin] Trust fetch response status:', res.status, res.statusText);
-            if (!res.ok) {
-                // Try to get error message from response
-                return res.text().then(text => {
-                    console.error('[Admin] Server error response:', text);
-                    throw new Error(`Server returned ${res.status}: ${res.statusText}`);
-                });
-            }
-            const contentType = res.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                return res.text().then(text => {
-                    console.error('[Admin] Non-JSON response:', text.substring(0, 200));
-                    throw new Error(`Server returned non-JSON: ${contentType}`);
-                });
-            }
+            if (!res) throw new Error('No response from server');
+            if (!res.ok) return res.text().then(t => { throw new Error(t) });
             return res.json();
         })
         .then(data => {
-            console.log('[Admin] Trust data received:', Array.isArray(data) ? `${data.length} entries` : 'Not an array', data);
+            console.log('[Admin] Trust data received:', Array.isArray(data) ? `${data.length} entries` : 'Not an array');
 
-            // Ensure data is an array
             if (!Array.isArray(data)) {
-                console.warn('[Admin] Trust data is not an array:', typeof data, data);
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#dc3545;">Invalid data format received from server.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#dc3545;">Invalid data format.</td></tr>';
                 return;
             }
 
@@ -2297,149 +2336,78 @@ function loadTrustData() {
                 return;
             }
 
-            tbody.innerHTML = '';
+            // CACHE DATA FOR SEARCH
+            window.trustDataCache = data;
 
-            // Sort by Total Votes (Impact) descending
-            data.sort((a, b) => {
-                const aTotal = (a.safe || 0) + (a.unsafe || 0);
-                const bTotal = (b.safe || 0) + (b.unsafe || 0);
-                return bTotal - aTotal;
-            });
-
-            data.forEach(item => {
-                if (!item || !item.domain) {
-                    console.warn('[Admin] Skipping invalid trust item:', item);
-                    return;
-                }
-
-                const total = (item.safe || 0) + (item.unsafe || 0);
-
-                let scoreVal = 0;
-                let scoreText = 'N/A';
-                let barColor = '#e2e8f0'; // Gray for empty
-
-                if (total > 0) {
-                    scoreVal = Math.round((item.safe / total) * 100);
-                    scoreText = scoreVal + '%';
-                    barColor = scoreVal >= 70 ? '#10b981' : (scoreVal > 30 ? '#f59e0b' : '#ef4444');
-                }
-
-                let statusBadge = '';
-                if (total === 0) statusBadge = '<span class="badge" style="background:#f1f5f9; color:#64748b">NO DATA</span>';
-                else if (scoreVal >= 70) statusBadge = '<span class="badge" style="background:#dcfce7; color:#166534">SAFE</span>';
-                else if (scoreVal <= 30) statusBadge = '<span class="badge" style="background:#fee2e2; color:#991b1b">MALICIOUS</span>';
-                else statusBadge = '<span class="badge" style="background:#fff7ed; color:#9a3412">SUSPICIOUS</span>';
-
-                // Progress Bar for visual score
-                const progressBar = `
-                    <div style="width:100px; height:6px; background:#e2e8f0; border-radius:3px; overflow:hidden; display:inline-block; vertical-align:middle; margin-right:8px;">
-                        <div style="width:${total === 0 ? 0 : scoreVal}%; height:100%; background:${barColor}"></div>
-                    </div>
-                    <span style="font-weight:bold; font-size:12px;">${scoreText}</span>
-                `;
-
-                // Get voter details
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td style="font-weight:600; color:#1e293b;">${item.domain}</td>
-                    <td>${progressBar}</td>
-                    <td style="color:#166534;">+${item.safe || 0}</td>
-                    <td style="color:#dc3545;">-${item.unsafe || 0}</td>
-                    <td>${statusBadge} <span style="font-size:11px; color:#64748b; margin-left:5px;">(${total} votes)</span></td>
-                `;
-                tbody.appendChild(tr);
-            });
+            // Render Initial View
+            renderTrustTable(data);
         })
         .catch(err => {
             console.error("Failed to load trust data:", err);
-            const errorMsg = err.message || 'Unknown error';
-
-            // Retry once after 1 second
-            console.log('[Admin] Retrying trust data fetch...');
-            setTimeout(() => {
-                fetch(`https://phishingshield.onrender.com/api/trust/all?t=${Date.now()}`)
-                    .then(res => {
-                        if (!res.ok) {
-                            throw new Error(`Server returned ${res.status}: ${res.statusText}`);
-                        }
-                        return res.json();
-                    })
-                    .then(data => {
-                        if (!Array.isArray(data)) {
-                            console.warn('[Admin] Retry: Trust data is not an array:', typeof data);
-                            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#dc3545;">Invalid data format received from server.</td></tr>';
-                            return;
-                        }
-
-                        if (data.length === 0) {
-                            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#6c757d;">No trust data recorded yet.</td></tr>';
-                            return;
-                        }
-
-                        tbody.innerHTML = '';
-                        data.sort((a, b) => {
-                            const aTotal = (a.safe || 0) + (a.unsafe || 0);
-                            const bTotal = (b.safe || 0) + (b.unsafe || 0);
-                            return bTotal - aTotal;
-                        });
-
-                        data.forEach(item => {
-                            if (!item || !item.domain) {
-                                console.warn('[Admin] Skipping invalid trust item:', item);
-                                return;
-                            }
-
-                            const total = (item.safe || 0) + (item.unsafe || 0);
-                            let scoreVal = 0;
-                            let scoreText = 'N/A';
-                            let barColor = '#e2e8f0';
-
-                            if (total > 0) {
-                                scoreVal = Math.round((item.safe / total) * 100);
-                                scoreText = scoreVal + '%';
-                                barColor = scoreVal >= 70 ? '#10b981' : (scoreVal > 30 ? '#f59e0b' : '#ef4444');
-                            }
-
-                            let statusBadge = '';
-                            if (total === 0) statusBadge = '<span class="badge" style="background:#f1f5f9; color:#64748b">NO DATA</span>';
-                            else if (scoreVal >= 70) statusBadge = '<span class="badge" style="background:#dcfce7; color:#166534">SAFE</span>';
-                            else if (scoreVal <= 30) statusBadge = '<span class="badge" style="background:#fee2e2; color:#991b1b">MALICIOUS</span>';
-                            else statusBadge = '<span class="badge" style="background:#fff7ed; color:#9a3412">SUSPICIOUS</span>';
-
-                            const progressBar = `
-                                <div style="width:100px; height:6px; background:#e2e8f0; border-radius:3px; overflow:hidden; display:inline-block; vertical-align:middle; margin-right:8px;">
-                                    <div style="width:${total === 0 ? 0 : scoreVal}%; height:100%; background:${barColor}"></div>
-                                </div>
-                                <span style="font-weight:bold; font-size:12px;">${scoreText}</span>
-                            `;
-
-                            const tr = document.createElement('tr');
-                            tr.innerHTML = `
-                                <td style="font-weight:600; color:#1e293b;">${item.domain}</td>
-                                <td>${progressBar}</td>
-                                <td style="color:#166534;">+${item.safe || 0}</td>
-                                <td style="color:#dc3545;">-${item.unsafe || 0}</td>
-                                <td>${statusBadge} <span style="font-size:11px; color:#64748b; margin-left:5px;">(${total} votes)</span></td>
-                            `;
-                            tbody.appendChild(tr);
-                        });
-                    })
-                    .catch(retryErr => {
-                        console.error('[Admin] Retry also failed:', retryErr);
-                        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#dc3545; padding:20px;">
-                            <div style="margin-bottom:10px;">❌ Error loading trust data</div>
-                            <div style="font-size:12px; color:#6c757d;">${errorMsg}</div>
-                            <div style="font-size:11px; color:#adb5bd; margin-top:8px;">Retry failed. Check server logs.</div>
-                        </td></tr>`;
-                    });
-            }, 1000);
-
-            // Show initial error
             tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#dc3545; padding:20px;">
-                <div style="margin-bottom:10px;">⏳ Retrying...</div>
-                <div style="font-size:12px; color:#6c757d;">${errorMsg}</div>
+                <div style="margin-bottom:10px;">❌ Error loading trust data</div>
+                <div style="font-size:12px; color:#6c757d;">${err.message}</div>
             </td></tr>`;
         });
+}
+
+function renderTrustTable(data) {
+    const tbody = document.querySelector('#trust-table tbody');
+    if (!tbody) return;
+
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#6c757d;">No matching domains found.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '';
+
+    // Sort by Total Votes (Impact) descending
+    // Create a copy to avoid mutating cache if passed directly
+    const sortedData = [...data].sort((a, b) => {
+        const aTotal = (a.safe || 0) + (a.unsafe || 0);
+        const bTotal = (b.safe || 0) + (b.unsafe || 0);
+        return bTotal - aTotal;
+    });
+
+    sortedData.forEach(item => {
+        if (!item || !item.domain) return;
+
+        const total = (item.safe || 0) + (item.unsafe || 0);
+
+        let scoreVal = 0;
+        let scoreText = 'N/A';
+        let barColor = '#e2e8f0';
+
+        if (total > 0) {
+            scoreVal = Math.round((item.safe / total) * 100);
+            scoreText = scoreVal + '%';
+            barColor = scoreVal >= 70 ? '#10b981' : (scoreVal > 30 ? '#f59e0b' : '#ef4444');
+        }
+
+        let statusBadge = '';
+        if (total === 0) statusBadge = '<span class="badge" style="background:#f1f5f9; color:#64748b">NO DATA</span>';
+        else if (scoreVal >= 70) statusBadge = '<span class="badge" style="background:#dcfce7; color:#166534">SAFE</span>';
+        else if (scoreVal <= 30) statusBadge = '<span class="badge" style="background:#fee2e2; color:#991b1b">MALICIOUS</span>';
+        else statusBadge = '<span class="badge" style="background:#fff7ed; color:#9a3412">SUSPICIOUS</span>';
+
+        const progressBar = `
+            <div style="width:100px; height:6px; background:#e2e8f0; border-radius:3px; overflow:hidden; display:inline-block; vertical-align:middle; margin-right:8px;">
+                <div style="width:${total === 0 ? 0 : scoreVal}%; height:100%; background:${barColor}"></div>
+            </div>
+            <span style="font-weight:bold; font-size:12px;">${scoreText}</span>
+        `;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="font-weight:600; color:#1e293b;">${item.domain}</td>
+            <td>${progressBar}</td>
+            <td style="color:#166534;">+${item.safe || 0}</td>
+            <td style="color:#dc3545;">-${item.unsafe || 0}</td>
+            <td>${statusBadge} <span style="font-size:11px; color:#64748b; margin-left:5px;">(${total} votes)</span></td>
+        `;
+        tbody.appendChild(tr);
+    });
 }
 
 function handleTrustSync() {

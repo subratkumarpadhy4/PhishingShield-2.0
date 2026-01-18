@@ -150,25 +150,38 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
         }
 
         chrome.storage.local.get(['currentUser', 'adminUser', 'users'], (data) => {
-            const user = data.currentUser || data.adminUser || {};
-            let reporterEmail = user.email || 'Anonymous';
-            let reporterName = user.name || (user.email ? 'User' : 'Anonymous');
+            // --- ROBUST USER IDENTITY RETRIEVAL ---
+            let reporterEmail = 'Anonymous';
+            let reporterName = 'Anonymous';
 
-            // --- IMPROVEMENT: Double check 'users' cache if name is generic ---
-            if (reporterEmail !== 'Anonymous' && reporterName === 'User') {
+            // 1. Check currentUser (Primary)
+            if (data.currentUser && data.currentUser.email) {
+                reporterEmail = data.currentUser.email;
+                reporterName = data.currentUser.name || 'User';
+            }
+            // 2. Check adminUser (Secondary)
+            else if (data.adminUser && data.adminUser.email) {
+                reporterEmail = data.adminUser.email;
+                reporterName = data.adminUser.name || 'Admin';
+            }
+
+            // 3. Fallback: Check 'users' cache if we have an email but generic name
+            if (reporterEmail !== 'Anonymous' && (reporterName === 'User' || reporterName === 'Admin')) {
                 const cachedUsers = data.users || [];
                 const found = cachedUsers.find(u => u.email === reporterEmail);
                 if (found && found.name) {
                     reporterName = found.name;
-                    console.log(`[PhishingShield] Found name in cache for ${reporterEmail}: ${reporterName}`);
+                    console.log(`[PhishingShield] Found better name in cache for ${reporterEmail}: ${reporterName}`);
                 }
             }
 
             // Display string for legacy compatibility
-            const reporterDisplay = `${reporterName} (${reporterEmail})`;
+            const reporterDisplay = (reporterEmail !== 'Anonymous')
+                ? `${reporterName} (${reporterEmail})`
+                : 'Anonymous';
 
             console.log(`[PhishingShield] 🚩 Reporting as: ${reporterDisplay}`);
-            console.log(`[PhishingShield] Account Status: ${user.email ? 'LOGGED_IN' : 'GUEST'}`);
+            console.log(`[PhishingShield] Account Status: ${reporterEmail !== 'Anonymous' ? 'LOGGED_IN' : 'GUEST'}`);
 
             let hostname;
             try {
@@ -460,11 +473,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // 4. REPORT SITE (Async using Helper)
     if (request.type === "REPORT_SITE") {
-        chrome.storage.local.get(['currentUser', 'adminUser'], (data) => {
-            const user = data.currentUser || data.adminUser || {};
-            const reporterEmail = user.email || 'Anonymous';
-            const reporterName = user.name || (user.email ? 'User' : 'Anonymous');
-            const reporterDisplay = `${reporterName} (${reporterEmail})`;
+        chrome.storage.local.get(['currentUser', 'adminUser', 'users'], (data) => {
+            // --- ROBUST USER IDENTITY RETRIEVAL (MATCHING CONTEXT MENU) ---
+            let reporterEmail = 'Anonymous';
+            let reporterName = 'Anonymous';
+
+            if (data.currentUser && data.currentUser.email) {
+                reporterEmail = data.currentUser.email;
+                reporterName = data.currentUser.name || 'User';
+            } else if (data.adminUser && data.adminUser.email) {
+                reporterEmail = data.adminUser.email;
+                reporterName = data.adminUser.name || 'Admin';
+            }
+
+            if (reporterEmail !== 'Anonymous' && (reporterName === 'User' || reporterName === 'Admin')) {
+                const cachedUsers = data.users || [];
+                const found = cachedUsers.find(u => u.email === reporterEmail);
+                if (found && found.name) reporterName = found.name;
+            }
+
+            const reporterDisplay = (reporterEmail !== 'Anonymous')
+                ? `${reporterName} (${reporterEmail})`
+                : 'Anonymous';
 
             const reportPayload = {
                 id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
@@ -480,6 +510,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             submitReport(reportPayload, sendResponse);
         });
         return true; // Keep channel open
+    }
+
+    // NEW: Debug Identity Handler
+    if (request.type === "GET_DEBUG_IDENTITY") {
+        chrome.storage.local.get(['currentUser'], (data) => {
+            sendResponse({
+                currentUser: data.currentUser,
+                serviceWorkerActive: true
+            });
+        });
+        return true;
     }
 
     // 5. UPDATE BLOCKLIST
