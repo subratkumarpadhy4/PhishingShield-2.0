@@ -1,6 +1,6 @@
 // Use existing API config if available (e.g., from auth.js), otherwise define it
 if (typeof window.DEV_MODE === 'undefined') {
-    window.DEV_MODE = false;
+    window.DEV_MODE = true;
 }
 if (typeof window.API_BASE === 'undefined') {
     window.API_BASE = window.DEV_MODE ? "http://localhost:3000/api" : "https://phishingshield.onrender.com/api";
@@ -1957,24 +1957,36 @@ function openReportModal(report) {
 
         // Handler function for running analysis with selected provider
         const runAnalysis = (provider) => {
+            console.log('[Admin] Starting AI analysis with provider:', provider);
+            console.log('[Admin] Report data:', { id: report.id, url: report.url });
+
             providerSelection.remove();
             aiLoading.style.display = 'block';
+
+            const requestPayload = {
+                id: report.id,
+                url: report.url,  // Add URL as fallback for server lookup
+                provider: provider
+            };
+
+            console.log('[Admin] Sending AI verification request:', requestPayload);
 
             fetch(`${API_BASE}/reports/ai-verify`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    id: report.id,
-                    url: report.url,  // Add URL as fallback for server lookup
-                    provider: provider
-                })
+                body: JSON.stringify(requestPayload)
             })
-                .then(res => res.json())
+                .then(res => {
+                    console.log('[Admin] AI analysis response status:', res.status);
+                    return res.json();
+                })
                 .then(data => {
+                    console.log('[Admin] AI analysis response data:', data);
                     aiLoading.style.display = 'none';
                     aiAction.style.display = 'block';
 
                     if (data.success && data.aiAnalysis) {
+                        console.log('[Admin] AI analysis successful:', data.aiAnalysis);
                         report.aiAnalysis = data.aiAnalysis;
                         renderAIResult(report.aiAnalysis);
                         btnRunAI.innerHTML = '<i class="fas fa-check"></i> Analysis Updated';
@@ -1982,13 +1994,15 @@ function openReportModal(report) {
                             btnRunAI.innerHTML = '<i class="fas fa-sync"></i> Re-Analyze (AI)';
                         }, 2000);
                     } else {
-                        alert("AI Analysis Failed: " + (data.error || 'Unknown Error'));
+                        console.error('[Admin] AI analysis failed:', data);
+                        alert("AI Analysis Failed: " + (data.error || data.message || 'Unknown Error'));
                     }
                 })
                 .catch(err => {
+                    console.error('[Admin] AI analysis network error:', err);
                     aiLoading.style.display = 'none';
                     aiAction.style.display = 'block';
-                    alert("Network Error during AI Scan.");
+                    alert("Network Error during AI Scan: " + err.message);
                 });
         };
 

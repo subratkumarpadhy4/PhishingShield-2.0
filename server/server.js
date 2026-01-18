@@ -61,6 +61,8 @@ const DELETED_USERS_FILE = path.join(__dirname, 'data', 'deleted_users.json'); /
 const AUDIT_LOG_FILE = path.join(__dirname, 'data', 'audit_logs.json');
 const TRUST_FILE = path.join(__dirname, 'data', 'trust_scores.json');
 
+
+console.log("Groq Key Status:", process.env.GROQ_API_KEY ? "Found" : "Not Found");
 console.log("Gemini Key Status:", process.env.GEMINI_API_KEY ? "Found" : "Not Found");
 
 // Admin Configuration (Server-Side Only)
@@ -2248,8 +2250,12 @@ app.post("/api/reports/ai-verify", async (req, res) => {
         let aiSuggestion = "IGNORE";
         let aiReason = "No obvious threats detected.";
 
-        if (process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY) {
+        console.log("[AI-Verify] Checking API keys...");
+        console.log("[AI-Verify] GROQ_API_KEY exists:", !!process.env.GROQ_API_KEY);
+        console.log("[AI-Verify] GEMINI_API_KEY exists:", !!process.env.GEMINI_API_KEY);
 
+        if (process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY) {
+            console.log("[AI-Verify] API keys found, proceeding with AI analysis");
             // --- FETCH PAGE CONTEXT (Shared) ---
             let pageContext = "";
             try {
@@ -2294,9 +2300,11 @@ Provide comprehensive analysis.`;
 
             // Get user's provider choice from request (if specified)
             const requestedProvider = req.body.provider ? req.body.provider.toUpperCase() : null;
+            console.log("[AI-Verify] Requested provider:", requestedProvider);
 
             // 1. TRY GROQ (if requested or as fallback)
             if ((requestedProvider === 'GROQ' || !requestedProvider) && process.env.GROQ_API_KEY) {
+                console.log("[AI-Verify] Attempting Groq analysis...");
                 try {
                     const Groq = require("groq-sdk");
                     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -2316,6 +2324,8 @@ Provide comprehensive analysis.`;
                     console.error(`[AI-Verify] Groq Error (Falling back to Gemini):`, e.message);
                     // Continue to Gemini fallback even if Groq was requested
                 }
+            } else {
+                console.log("[AI-Verify] Skipping Groq (requested:", requestedProvider, ", key exists:", !!process.env.GROQ_API_KEY, ")");
             }
 
             // 2. TRY GEMINI (if requested or as fallback)

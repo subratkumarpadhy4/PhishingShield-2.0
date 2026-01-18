@@ -5,7 +5,7 @@
  */
 
 if (typeof window.DEV_MODE === 'undefined') {
-    window.DEV_MODE = false;
+    window.DEV_MODE = true;
 }
 var DEV_MODE = window.DEV_MODE;
 const GLOBAL_API = "https://phishingshield.onrender.com/api";

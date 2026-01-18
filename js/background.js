@@ -6,7 +6,7 @@ let db = null; // No longer used
 console.log("[PhishingShield] Service Worker Starting... " + new Date().toISOString());
 
 // API Endpoints
-const DEV_MODE = false;
+const DEV_MODE = true;
 const API_BASE = DEV_MODE ? "http://localhost:3000/api" : "https://phishingshield.onrender.com/api";
 const LOCAL_API = "http://localhost:3000/api/reports";
 const GLOBAL_API = "https://phishingshield.onrender.com/api/reports";
