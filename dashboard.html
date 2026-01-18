@@ -646,6 +646,23 @@
                 font-weight: bold;
                 color: #334155;
             }
+
+            .print-table th {
+                background-color: #f1f5f9;
+                font-weight: bold;
+                color: #334155;
+            }
+        }
+
+        /* --- UTILS --- */
+        .rotating {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
@@ -823,7 +840,13 @@
 
         <!-- TAB: THREATS ENCOUNTERED -->
         <div id="tab-threats" class="tab-content">
-            <h2 class="section-title">🛡️ Threats Encountered</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 class="section-title" style="margin: 0;">🛡️ Threats Encountered</h2>
+                <button id="refresh-threats" title="Refresh Threats"
+                    style="background: white; border: 1px solid var(--border-color); color: var(--secondary); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; display: flex; align-items: center; gap: 6px;">
+                    <span class="icon">🔄</span> Refresh
+                </button>
+            </div>
 
             <div class="stat-card"
                 style="margin-bottom: 24px; flex-direction: row; justify-content: space-between; align-items: center;">
@@ -863,7 +886,13 @@
 
         <!-- TAB: LEADERBOARD -->
         <div id="tab-leaderboard" class="tab-content">
-            <h2 class="section-title">🏆 Top Defenders</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 class="section-title" style="margin: 0;">🏆 Top Defenders</h2>
+                <button id="refresh-leaderboard" title="Refresh Leaderboard"
+                    style="background: white; border: 1px solid var(--border-color); color: var(--secondary); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; display: flex; align-items: center; gap: 6px;">
+                    <span class="icon">🔄</span> Refresh
+                </button>
+            </div>
             <div class="stat-card" style="padding: 0; overflow: hidden;">
                 <div id="leaderboard-list" style="padding: 20px;">Loading...</div>
             </div>

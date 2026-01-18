@@ -235,6 +235,90 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- HELPER: Handle Refresh Button State ---
+    const handleRefresh = async (btn, actionFn) => {
+        if (!btn || btn.disabled) return;
+
+        // 1. Start Spin
+        btn.disabled = true;
+
+        // Use innerHTML to keep structure
+        btn.innerHTML = `<span class="icon rotating">🔄</span> Refreshing...`;
+        btn.style.color = 'var(--primary)';
+
+        try {
+            // 2. Execute Action (min 800ms for visual feel)
+            const start = Date.now();
+            await actionFn();
+            const elapsed = Date.now() - start;
+            if (elapsed < 800) await new Promise(r => setTimeout(r, 800 - elapsed));
+
+            // 3. Success Feedback
+            btn.innerHTML = `✅ Updated`;
+            btn.style.color = 'var(--success)';
+            btn.style.borderColor = 'var(--success)';
+
+        } catch (e) {
+            console.error("Refresh Error:", e);
+            btn.innerHTML = `❌ Error`;
+            btn.style.color = 'var(--danger)';
+        } finally {
+            // 4. Reset after delay
+            setTimeout(() => {
+                btn.innerHTML = `<span class="icon">🔄</span> Refresh`;
+                btn.style.color = 'var(--secondary)';
+                btn.style.borderColor = 'var(--border-color)';
+                btn.disabled = false;
+            }, 1500);
+        }
+    };
+
+    // LISTENER: Leaderboard Refresh
+    const refreshLeaderboardBtn = document.getElementById('refresh-leaderboard');
+    if (refreshLeaderboardBtn) {
+        refreshLeaderboardBtn.addEventListener('click', () => {
+            handleRefresh(refreshLeaderboardBtn, () => {
+                return new Promise((resolve) => {
+                    // Timeout safety for network requests
+                    let done = false;
+                    const safeResolve = () => { if (!done) { done = true; resolve(); } };
+                    setTimeout(() => safeResolve(), 5000); // Max 5s wait
+
+                    if (typeof Auth !== 'undefined' && Auth.getUsers) {
+                        Auth.getUsers((users) => {
+                            if (users && users.length) {
+                                renderLeaderboard(users);
+                                chrome.storage.local.set({ users: users });
+                            }
+                            safeResolve();
+                        });
+                    } else {
+                        // Fallback
+                        chrome.storage.local.get(['users'], (res) => {
+                            renderLeaderboard(res.users || []);
+                            safeResolve();
+                        });
+                    }
+                });
+            });
+        });
+    }
+
+    // LISTENER: Threats Refresh
+    const refreshThreatsBtn = document.getElementById('refresh-threats');
+    if (refreshThreatsBtn) {
+        refreshThreatsBtn.addEventListener('click', () => {
+            handleRefresh(refreshThreatsBtn, () => {
+                return new Promise((resolve) => {
+                    chrome.storage.local.get(['visitLog'], (res) => {
+                        renderUserThreatsTable(res.visitLog || []);
+                        resolve();
+                    });
+                });
+            });
+        });
+    }
+
     // LISTENER: Tab Click (Specific for Reports to auto-load)
     const reportsTabLink = document.querySelector('[data-tab="tab-reports"]');
     if (reportsTabLink) {

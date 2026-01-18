@@ -2272,7 +2272,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Force refresh by clearing cache
             refreshTrustBtn.dataset.forceRefresh = 'true';
             loadTrustData();
-            checkTrustSyncStatus();
             // Reset flag after a delay
             setTimeout(() => {
                 refreshTrustBtn.dataset.forceRefresh = 'false';
@@ -2280,10 +2279,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const syncTrustBtn = document.getElementById('btn-sync-trust');
-    if (syncTrustBtn) {
-        syncTrustBtn.addEventListener('click', handleTrustSync);
-    }
+
 
     const clearTrustBtn = document.getElementById('btn-clear-trust');
     if (clearTrustBtn) {
@@ -2297,7 +2293,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Always reload data when tab is clicked to ensure fresh global sync
             console.log('[Admin] Community Trust tab clicked - loading fresh data...');
             loadTrustData();
-            checkTrustSyncStatus();
             trustDataLoaded = true;
         });
     }
@@ -2413,64 +2408,8 @@ function renderTrustTable(data) {
     });
 }
 
-function handleTrustSync() {
-    const btn = document.getElementById('btn-sync-trust');
-    const statusEl = document.getElementById('trust-sync-status');
-
-    if (btn) btn.disabled = true;
-    if (statusEl) statusEl.innerText = "Syncing...";
-
-    fetch(`${API_BASE}/trust/sync`, { method: 'POST' })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                if (statusEl) {
-                    statusEl.innerText = "Synced";
-                    statusEl.className = "badge badge-active";
-                }
-                checkTrustSyncStatus(); // Update timestamp
-                alert(`Successfully synced ${data.syncedCount} records to Global Server.`);
-            }
-        })
-        .catch(err => {
-            if (statusEl) {
-                statusEl.innerText = "Failed";
-                statusEl.className = "badge badge-admin";
-            }
-            alert("Sync failed. Local server may be offline relative to Global.");
-        })
-        .finally(() => {
-            if (btn) btn.disabled = false;
-        });
-}
-
-function checkTrustSyncStatus() {
-    fetch('https://phishingshield.onrender.com/api/trust/sync-status')
-        .then(res => res.json())
-        .then(data => {
-            const timeEl = document.getElementById('trust-last-sync');
-            const statusEl = document.getElementById('trust-sync-status');
-
-            if (data.lastSync) {
-                const date = new Date(data.lastSync).toLocaleString();
-                if (timeEl) timeEl.innerText = `Last: ${date}`;
-                if (statusEl) {
-                    statusEl.innerText = "Online";
-                    statusEl.className = "badge badge-active";
-                }
-            } else {
-                if (statusEl) statusEl.innerText = "Pending Upload";
-            }
-        })
-        .catch(() => {
-            const statusEl = document.getElementById('trust-sync-status');
-            if (statusEl) {
-                statusEl.innerText = "Offline";
-                statusEl.className = "badge";
-                statusEl.style.background = "#e2e8f0";
-            }
-        });
-}
+// function handleTrustSync() Removed (Auto-sync enabled)
+// function checkTrustSyncStatus() Removed (Auto-sync enabled)
 
 function handleClearTrust() {
     if (!confirm("⚠️ Are you sure you want to delete ALL trust scores?\n\nThis cannot be undone.")) return;
