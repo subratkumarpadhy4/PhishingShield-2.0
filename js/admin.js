@@ -1,7 +1,10 @@
 // Use existing API config if available (e.g., from auth.js), otherwise define it
 if (typeof window.DEV_MODE === 'undefined') {
-    window.DEV_MODE = true;
+    window.DEV_MODE = true; // FORCE LOCALHOST
 }
+// Force it again just to be sure
+window.DEV_MODE = true;
+
 if (typeof window.API_BASE === 'undefined') {
     window.API_BASE = window.DEV_MODE ? "http://localhost:3000/api" : "https://phishingshield.onrender.com/api";
 }
@@ -867,7 +870,7 @@ function loadDashboardData() {
     // 1. Fetch Users logic with Auto-Restore
     const fetchUsers = () => {
         // Use Global Sync to ensure we get latest data including XP changes
-        return fetch(`https://phishingshield.onrender.com/api/users/global-sync?t=${Date.now()}`)
+        return fetch(`${API_BASE}/users/global-sync?t=${Date.now()}`)
             .then(res => res.json())
             .then(serverUsers => {
                 console.log("[Admin] Fetched Global Users:", serverUsers.length);
@@ -1772,7 +1775,7 @@ function renderUsers(users, allLogs) {
                         deleteUserBtn.disabled = true;
                         deleteUserBtn.innerText = "Deleting...";
 
-                        fetch('https://phishingshield.onrender.com/api/users/delete', {
+                        fetch(`${API_BASE}/users/delete`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ email: email })
@@ -1832,7 +1835,7 @@ function loadBannedSites() {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
 
     // Use the PROXY endpoint which handles CORS and merging automatically (Cache-Busted)
-    fetch(`https://phishingshield.onrender.com/api/reports/global-sync?t=${Date.now()}`)
+    fetch(`${API_BASE}/reports/global-sync?t=${Date.now()}`)
         .then(res => res.json())
         .then(mergedReports => {
             // Filter for banned sites from the merged list

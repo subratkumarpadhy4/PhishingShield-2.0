@@ -1246,7 +1246,9 @@ function syncXPToServer(customData = {}) {
                                 type: 'basic',
                                 iconUrl: 'images/icon48.png',
                                 title: '🚨 Account Deleted',
-                                message: 'Your account has been removed by the administrator. You have been logged out.'
+                                message: 'Your account has been removed by the administrator. You have been logged out.',
+                                priority: 2,
+                                requireInteraction: true
                             });
                             // Broadcast logout
                             chrome.tabs.query({}, (tabs) => {

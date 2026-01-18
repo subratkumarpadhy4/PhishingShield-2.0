@@ -1720,10 +1720,10 @@ app.post("/api/users/create", async (req, res) => {
 
     // Global Sync (Forward)
     try {
-        fetch('https://phishingshield.onrender.com/api/users/sync', {
+        fetch('https://phishingshield.onrender.com/api/users/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(userData)
+            body: JSON.stringify(finalUser)
         }).catch(() => { });
     } catch (e) { }
 
@@ -1792,7 +1792,17 @@ app.post("/api/users/delete", async (req, res) => {
     users = users.filter((u) => u.email.trim().toLowerCase() !== targetEmail);
 
     if (users.length !== initialLen) {
-        await writeData(USERS_FILE, users);
+        // DIRECT MONGODB DELETE (Fixes persistence issue)
+        if (isConnected()) {
+            try {
+                await User.deleteOne({ email: targetEmail });
+                console.log(`[MongoDB] Removed user document: ${targetEmail}`);
+            } catch (e) {
+                console.error(`[MongoDB] Delete failed: ${e.message}`);
+            }
+        }
+
+        await writeData(USERS_FILE, users); // Keep JSON in sync (if used)
 
         // --- ADD TO DELETED LIST (Tombstone Record) ---
         // This stops 'Global Sync' from re-importing this user if the global delete fails
