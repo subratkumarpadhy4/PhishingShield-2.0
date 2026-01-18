@@ -1102,7 +1102,25 @@ function renderReports(reports) {
         const modalBtn = tr.querySelector('.action-open-modal');
         if (modalBtn) {
             modalBtn.addEventListener('click', () => {
-                const report = allReportsCache.find(x => x.id === (modalBtn.dataset.id || '')) || r;
+                const reportId = modalBtn.dataset.id || '';
+                console.log('[Admin] Looking for report with ID:', reportId);
+                console.log('[Admin] Cache size:', allReportsCache.length);
+
+                // Try to find in cache first
+                let report = allReportsCache.find(x => x.id === reportId);
+
+                // Fallback: if not found in cache, try the original report object
+                if (!report && r && r.id === reportId) {
+                    console.log('[Admin] Report not in cache, using original object');
+                    report = r;
+                }
+
+                // Final fallback: just use the original report
+                if (!report) {
+                    console.warn('[Admin] Report not found by ID, using fallback');
+                    report = r;
+                }
+
                 openReportModal(report);
             });
         }
@@ -1852,6 +1870,16 @@ function openReportModal(report) {
     const modal = document.getElementById('report-modal');
     if (!modal) return;
 
+    // Defensive check: ensure report exists
+    if (!report || !report.url) {
+        console.error('[Admin] openReportModal called with invalid report:', report);
+        console.log('[Admin] allReportsCache has', allReportsCache.length, 'reports');
+        alert('Error: Report data not found. Please refresh the page and try again.');
+        return;
+    }
+
+    console.log('[Admin] Opening modal for report:', report.id, report.url);
+
     // Populate Data
     document.getElementById('report-modal-url').textContent = report.url;
     document.getElementById('report-modal-reporter').textContent = report.reporter || 'Anonymous';
@@ -1935,7 +1963,11 @@ function openReportModal(report) {
             fetch(`${API_BASE}/reports/ai-verify`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: report.id, provider: provider })
+                body: JSON.stringify({
+                    id: report.id,
+                    url: report.url,  // Add URL as fallback for server lookup
+                    provider: provider
+                })
             })
                 .then(res => res.json())
                 .then(data => {
