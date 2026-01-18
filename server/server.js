@@ -26,6 +26,35 @@ const PORT = process.env.PORT || 3000;
         console.warn('[Server] MongoDB not available, using JSON file storage');
     }
 })();
+// Background Sync Timer for Trust Data (Automatic Global Sync)
+if (!process.env.RENDER) {
+    setInterval(async () => {
+        try {
+            const localData = await readData(TRUST_FILE);
+            if (!localData || localData.length === 0) return;
+
+            let syncCount = 0;
+            for (const entry of localData) {
+                // Efficiency: Only push if there are actual votes to sync
+                if ((entry.safe || 0) + (entry.unsafe || 0) > 0) {
+                    await fetch('https://phishingshield.onrender.com/api/trust/seed', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(entry)
+                    }).catch(() => { }); // Silent fail for per-item background errors
+                    syncCount++;
+                }
+            }
+            if (syncCount > 0) {
+                console.log(`[Auto-Sync] background-sync: ✓ ${syncCount} sites updated on global cloud.`);
+            }
+        } catch (error) {
+            // Only log major failures
+            console.error('[Auto-Sync] background-sync failed:', error.message);
+        }
+    }, 5 * 60 * 1000); // Every 5 minutes
+}
+
 const REPORTS_FILE = path.join(__dirname, 'reports.json');
 const USERS_FILE = path.join(__dirname, 'users.json');
 const DELETED_USERS_FILE = path.join(__dirname, 'data', 'deleted_users.json'); // Persistent deletion list
@@ -555,14 +584,15 @@ app.post('/api/trust/vote', async (req, res) => {
     // --- GLOBAL SYNC (FORWARD WRITE) ---
     // Forward vote to global server immediately (don't wait, fire and forget)
     if (!process.env.RENDER) {
-        console.log(`[Trust-Sync] [SEND] Forwarding vote to global server: ${normalizedDomain} = ${vote} (User: ${userId || 'Anon'})`);
+        console.log(`[Trust-Sync] [SEND] Forwarding vote to global server: ${normalizedDomain} = ${vote} (User: ${effectiveUserId})`);
+        // Use effectiveUserId to ensure anonymous votes are tracked consistently globally
         fetch('https://phishingshield.onrender.com/api/trust/vote', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
-            body: JSON.stringify({ domain: normalizedDomain, vote, userId })
+            body: JSON.stringify({ domain: normalizedDomain, vote, userId: effectiveUserId })
         })
             .then(async globalRes => {
                 if (globalRes.ok) {
@@ -910,10 +940,26 @@ app.post('/api/trust/sync', async (req, res) => {
         // 1. Read Local Trust Data
         const localData = await readData(TRUST_FILE);
 
-        // 2. Simulate Upload delay (async/await version)
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // 2. REAL SYNC: Push local data to global server
+        if (!process.env.RENDER) {
+            console.log(`[Trust-Sync] [PUSH] Starting full sync of ${localData.length} records to global server...`);
 
-        // 3. Update Sync Timestamp (stored in a separate file or metadata)
+            // Push each entry to global seed endpoint
+            // We use a loop with small delay to avoid overwhelming the cloud server
+            for (const entry of localData) {
+                try {
+                    await fetch('https://phishingshield.onrender.com/api/trust/seed', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(entry)
+                    });
+                } catch (e) {
+                    console.warn(`[Trust-Sync] [PUSH] Failed to sync ${entry.domain}: ${e.message}`);
+                }
+            }
+        }
+
+        // 3. Update Sync Timestamp
         const META_FILE = path.join(__dirname, 'data', 'server_meta.json');
         let meta = {};
         if (fs.existsSync(META_FILE)) meta = JSON.parse(fs.readFileSync(META_FILE));
@@ -921,7 +967,7 @@ app.post('/api/trust/sync', async (req, res) => {
         meta.lastTrustSync = Date.now();
         fs.writeFileSync(META_FILE, JSON.stringify(meta, null, 2));
 
-        console.log("[Sync] Trust scores synced to Global Server (Simulated).");
+        console.log(`[Sync] Trust scores synced to Global Server. Total records: ${localData.length}`);
         res.json({ success: true, syncedCount: localData.length, timestamp: meta.lastTrustSync });
     } catch (error) {
         console.error('[Sync] Error syncing trust scores:', error);
@@ -947,7 +993,7 @@ const LOGS_FILE = path.join(__dirname, 'data', 'threat_logs.json');
 app.get('/api/logs/all', async (req, res) => {
     try {
         // 1. Read Local Logs
-        const localLogs = readData(LOGS_FILE);
+        const localLogs = await readData(LOGS_FILE);
 
         // 2. Fetch Global Logs
         let globalLogs = [];
@@ -987,19 +1033,17 @@ app.get('/api/logs/all', async (req, res) => {
         res.json(mergedLogs);
     } catch (error) {
         console.error('[Logs] Error in /api/logs/all:', error);
-        res.json(readData(LOGS_FILE)); // Fallback to local
+        res.json(await readData(LOGS_FILE)); // Fallback to local
     }
 });
 
 // POST /api/logs - Submit a new threat log
-app.post('/api/logs', (req, res) => {
+app.post('/api/logs', async (req, res) => {
     const log = req.body;
-    if (!log.hostname || !log.timestamp) {
-        return res.status(400).json({ error: "Hostname and timestamp required" });
-    }
+    if (!log.hostname) return res.status(400).json({ error: "Missing data" });
 
     // 1. Save locally
-    const logs = readData(LOGS_FILE);
+    const logs = await readData(LOGS_FILE);
     logs.push(log);
 
     // Keep last 1000 logs
@@ -1007,7 +1051,7 @@ app.post('/api/logs', (req, res) => {
         logs.shift();
     }
 
-    writeData(LOGS_FILE, logs);
+    await writeData(LOGS_FILE, logs);
     console.log(`[Logs] New threat log: ${log.hostname} (Score: ${log.score})`);
 
     // 2. Forward to global server
@@ -1023,8 +1067,8 @@ app.post('/api/logs', (req, res) => {
 });
 
 // POST /api/logs/clear - Clear all threat logs (Admin only)
-app.post('/api/logs/clear', (req, res) => {
-    writeData(LOGS_FILE, []);
+app.post('/api/logs/clear', async (req, res) => {
+    await writeData(LOGS_FILE, []);
     console.warn("[Admin] Threat logs cleared locally");
     res.json({ success: true, message: "Local logs cleared" });
 });
@@ -1088,16 +1132,17 @@ app.get("/api/reports", async (req, res) => {
 
 
     if (reporter && typeof reporter === 'string') {
-        // OPTIMIZED MATCHING:
-        // 1. Check strict 'reporterEmail' field (future proof)
-        // 2. Check if 'reporter' string INCLUDES the email (legacy support for "Name (email)")
         const searchEmail = reporter.trim().toLowerCase();
 
         reports = reports.filter(r => {
-            const rEmail = (r.reporterEmail || "").toLowerCase();
+            const rEmail = (r.reporterEmail || "").toLowerCase().trim();
             const rString = (r.reporter || "").toLowerCase();
+            const rName = (r.reporterName || "").toLowerCase();
 
-            return rEmail === searchEmail || rString.includes(searchEmail);
+            // Match exact email, or if email is contained in legacy reporter string, or name matches
+            return rEmail === searchEmail ||
+                rString.includes(searchEmail) ||
+                rName.includes(searchEmail);
         });
     }
 
@@ -1114,6 +1159,8 @@ app.post("/api/reports", async (req, res) => {
         url: newReport.url,
         hostname: newReport.hostname || "Unknown",
         reporter: newReport.reporter || "Anonymous",
+        reporterName: newReport.reporterName || "User",
+        reporterEmail: newReport.reporterEmail || "Anonymous",
         timestamp: Date.now(),
         status: "pending",
         ...newReport,
@@ -1596,7 +1643,7 @@ app.post("/api/users/sync", async (req, res) => {
         users[idx].settings = userData.settings || users[idx].settings;
 
         finalUser = users[idx];
-        writeData(USERS_FILE, users);
+        await writeData(USERS_FILE, users);
         console.log(`[Sync] Final state for ${userData.email}: XP=${finalUser.xp}, Level=${finalUser.level}, lastUpdated=${finalUser.lastUpdated}`);
 
         // --- GLOBAL SYNC (FORWARD WRITE) ---
@@ -1639,11 +1686,11 @@ app.post("/api/users/sync", async (req, res) => {
 });
 
 // POST /api/users/create (NEW: Explicit Registration)
-app.post("/api/users/create", (req, res) => {
+app.post("/api/users/create", async (req, res) => {
     const userData = req.body;
     if (!userData.email) return res.status(400).json({ error: "Email required" });
 
-    let users = readData(USERS_FILE);
+    let users = await readData(USERS_FILE);
     const idx = users.findIndex((u) => u.email === userData.email);
 
     if (idx !== -1) {
@@ -1653,7 +1700,7 @@ app.post("/api/users/create", (req, res) => {
     // Create New
     const finalUser = { ...userData, xp: 0, level: 1, joined: Date.now() };
     users.push(finalUser);
-    writeData(USERS_FILE, users);
+    await writeData(USERS_FILE, users);
     console.log(`[User] New user registered: ${userData.email}`);
 
     // Global Sync (Forward)
@@ -1672,14 +1719,16 @@ app.post("/api/users/create", (req, res) => {
 
 
 // POST /api/users/reset-password
-app.post("/api/users/reset-password", (req, res) => {
+app.post("/api/users/reset-password", async (req, res) => {
     const { email, password } = req.body;
-    const users = readData(USERS_FILE);
+    if (!email || !password) return res.status(400).json({ success: false, message: "Email/Pass required" });
+
+    const users = await readData(USERS_FILE);
     const idx = users.findIndex((u) => u.email === email);
 
     if (idx !== -1) {
         users[idx].password = password;
-        writeData(USERS_FILE, users);
+        await writeData(USERS_FILE, users);
         console.log(`[User] Password reset for: ${email}`);
 
         // --- GLOBAL SYNC ---
@@ -1712,7 +1761,7 @@ app.get("/api/ping-server-js", (req, res) => {
     res.send("PONG FROM SERVER.JS");
 });
 
-app.post("/api/users/delete", (req, res) => {
+app.post("/api/users/delete", async (req, res) => {
     const { email } = req.body;
 
     if (!email) {
@@ -1721,21 +1770,21 @@ app.post("/api/users/delete", (req, res) => {
 
     const targetEmail = email.trim().toLowerCase();
 
-    let users = readData(USERS_FILE) || [];
+    let users = (await readData(USERS_FILE)) || [];
     const initialLen = users.length;
 
     // Case-insensitive filtering
     users = users.filter((u) => u.email.trim().toLowerCase() !== targetEmail);
 
     if (users.length !== initialLen) {
-        writeData(USERS_FILE, users);
+        await writeData(USERS_FILE, users);
 
         // --- ADD TO DELETED LIST (Tombstone Record) ---
         // This stops 'Global Sync' from re-importing this user if the global delete fails
-        const deletedList = readData(DELETED_USERS_FILE) || [];
+        const deletedList = (await readData(DELETED_USERS_FILE)) || [];
         if (!deletedList.some(u => u.email === targetEmail)) {
             deletedList.push({ email: targetEmail, deletedAt: Date.now() });
-            writeData(DELETED_USERS_FILE, deletedList);
+            await writeData(DELETED_USERS_FILE, deletedList);
         }
 
         console.log(`[User] Deleted user: ${targetEmail} (Original: ${email})`);
@@ -1805,7 +1854,7 @@ app.post("/api/auth/admin/login", async (req, res) => {
                         // Sync to local
                         console.log(`[Login] Found ${email} globally. Syncing to local...`);
                         users.push(user);
-                        writeData(USERS_FILE, users);
+                        await writeData(USERS_FILE, users);
                     }
                 }
             }
@@ -1886,16 +1935,16 @@ const SESSIONS_FILE = path.join(__dirname, "data", "admin_sessions.json");
 if (!fs.existsSync(SESSIONS_FILE))
     fs.writeFileSync(SESSIONS_FILE, JSON.stringify({}, null, 2));
 
-function getAdminSessions() {
-    return readData(SESSIONS_FILE) || {};
+async function getAdminSessions() {
+    return (await readData(SESSIONS_FILE)) || {};
 }
 
-function saveAdminSessions(sessions) {
-    writeData(SESSIONS_FILE, sessions);
+async function saveAdminSessions(sessions) {
+    await writeData(SESSIONS_FILE, sessions);
 }
 
 // POST /api/auth/admin/verify-mfa - Step 2: MFA Verification
-app.post("/api/auth/admin/verify-mfa", (req, res) => {
+app.post("/api/auth/admin/verify-mfa", async (req, res) => {
     const { sessionId, otp } = req.body;
     const ip = getClientIP(req);
 
@@ -1943,7 +1992,7 @@ app.post("/api/auth/admin/verify-mfa", (req, res) => {
     }
 
     // OTP verified - create admin session
-    const users = readData(USERS_FILE);
+    const users = await readData(USERS_FILE);
     const user = users.find(
         (u) => u.email.toLowerCase() === pendingSession.email.toLowerCase(),
     );
@@ -1968,7 +2017,7 @@ app.post("/api/auth/admin/verify-mfa", (req, res) => {
     );
 
     // Store admin session PERSISTENTLY
-    const sessions = getAdminSessions();
+    const sessions = await getAdminSessions();
     sessions[sessionId] = {
         userId: user.email,
         token: adminToken,
@@ -1976,7 +2025,7 @@ app.post("/api/auth/admin/verify-mfa", (req, res) => {
         createdAt: Date.now(),
         expiresAt: Date.now() + 10 * 24 * 60 * 60 * 1000, // 10 days
     };
-    saveAdminSessions(sessions);
+    await saveAdminSessions(sessions);
 
     // Clean up pending session
     delete adminPendingSessions[sessionId];
@@ -2154,7 +2203,7 @@ app.post("/api/reports/ai-verify", async (req, res) => {
                             const exists = reports.findIndex(r => r.id === globalReport.id);
                             if (exists === -1) {
                                 reports.push(globalReport);
-                                writeData(REPORTS_FILE, reports);
+                                await writeData(REPORTS_FILE, reports);
                                 reportIndex = reports.length - 1;
                             } else {
                                 reportIndex = exists;
@@ -2377,6 +2426,7 @@ Provide comprehensive analysis.`;
                 score: aiScore,
                 suggestion: aiSuggestion,
                 reason: aiReason,
+                published: false,
                 timestamp: Date.now(),
             },
         };
@@ -2389,6 +2439,31 @@ Provide comprehensive analysis.`;
     } catch (error) {
         console.error("[AI-Verify] Error:", error);
         res.status(500).json({ success: false, error: "AI Analysis Error: " + error.message });
+    }
+});
+
+// POST /api/reports/publish
+app.post("/api/reports/publish", async (req, res) => {
+    const { id } = req.body;
+    if (!id) return res.status(400).json({ success: false, message: "Report ID required" });
+
+    try {
+        const reports = await readData(REPORTS_FILE);
+        const idx = reports.findIndex(r => r.id === id);
+        if (idx === -1) return res.status(404).json({ success: false, message: "Report not found" });
+
+        if (!reports[idx].aiAnalysis) {
+            return res.status(400).json({ success: false, message: "No AI analysis to publish. Please run AI verification first." });
+        }
+
+        reports[idx].aiAnalysis.published = true;
+        await writeData(REPORTS_FILE, reports);
+
+        console.log(`[Admin] Analysis published for report ${id}`);
+        res.json({ success: true, message: "Analysis published to user dashboard successfully!" });
+    } catch (error) {
+        console.error("[Admin] Publish Error:", error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -2481,7 +2556,7 @@ app.post("/api/reports/update", async (req, res) => {
         if (status === "banned") reports[idx].bannedAt = Date.now();
         if (status === "ignored") reports[idx].ignoredAt = Date.now();
 
-        writeData(REPORTS_FILE, reports);
+        await writeData(REPORTS_FILE, reports);
         console.log(`[Report] Updated status for ${id} to ${status}`);
 
         // --- GLOBAL SYNC (FORWARD WRITE) ---
@@ -2540,7 +2615,7 @@ app.post("/api/reports/delete", async (req, res) => {
 // and merges with local data.
 app.get("/api/reports/global-sync", async (req, res) => {
     try {
-        const localReports = readData(REPORTS_FILE) || [];
+        const localReports = (await readData(REPORTS_FILE)) || [];
         console.log(`[Global-Sync] Loaded ${localReports.length} local reports.`);
 
         // OPTIMIZATION: If we are the Global Server, we don't need to sync with ourselves.
@@ -2728,7 +2803,7 @@ app.get("/api/reports/global-sync", async (req, res) => {
         // --- PERSISTENCE: Save merged state locally ---
         if (dataChanged) {
             console.log(`[Global-Sync] Updates found. Saving ${mergedReports.length} reports to local DB.`);
-            writeData(REPORTS_FILE, mergedReports);
+            await writeData(REPORTS_FILE, mergedReports);
         }
 
         // --- AUTO-REPAIR: If Global is empty/behind but Local has data, PUSH it up ---
@@ -2767,7 +2842,7 @@ app.get("/api/reports/global-sync", async (req, res) => {
 
     } catch (error) {
         console.error("[Global-Sync] Error:", error);
-        res.json(readData(REPORTS_FILE) || []);
+        res.json((await readData(REPORTS_FILE)) || []);
     }
 });
 
@@ -2776,8 +2851,8 @@ app.get("/api/users/global-sync", async (req, res) => {
     try {
         const localUsers = (await readData(USERS_FILE)) || [];
         // Ensure Deleted Users file exists
-        if (!fs.existsSync(DELETED_USERS_FILE)) writeData(DELETED_USERS_FILE, []);
-        const deletedUsers = readData(DELETED_USERS_FILE) || [];
+        if (!fs.existsSync(DELETED_USERS_FILE)) await writeData(DELETED_USERS_FILE, []);
+        const deletedUsers = (await readData(DELETED_USERS_FILE)) || [];
 
         console.log(`[User-Sync] Loaded ${localUsers.length} local users.`);
 
@@ -2849,7 +2924,7 @@ app.get("/api/users/global-sync", async (req, res) => {
         // Save the merged list back to local file so it sticks
         if (dataChanged) {
             console.log(`[User-Sync] Data difference detected. updating local storage.`);
-            writeData(USERS_FILE, mergedUsers);
+            await writeData(USERS_FILE, mergedUsers);
         }
 
 

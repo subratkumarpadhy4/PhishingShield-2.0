@@ -149,9 +149,10 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
         chrome.storage.local.get(['currentUser', 'adminUser'], (data) => {
             const user = data.currentUser || data.adminUser || {};
-            const reporter = user.email || 'Anonymous';
-            // FIX: Ensure email is included in display string for server-side filtering
-            const reporterDisplay = (user.name || (user.email ? 'User' : 'Anonymous')) + (user.email ? ` (${user.email})` : '');
+            const reporterEmail = user.email || 'Anonymous';
+            const reporterName = user.name || (user.email ? 'User' : 'Anonymous');
+            // Display string for legacy compatibility
+            const reporterDisplay = `${reporterName} (${reporterEmail})`;
 
             let hostname;
             try {
@@ -167,6 +168,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
                     url: urlToReport,
                     hostname: hostname,
                     reporter: reporterDisplay,
+                    reporterName: reporterName,
+                    reporterEmail: reporterEmail,
                     timestamp: Date.now(),
                     status: 'pending',
                     // Attach User's Local Analysis
@@ -443,13 +446,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === "REPORT_SITE") {
         chrome.storage.local.get(['currentUser', 'adminUser'], (data) => {
             const user = data.currentUser || data.adminUser || {};
-            const reporterDisplay = (user.name || 'Anonymous') + (user.email ? ` (${user.email})` : '');
+            const reporterEmail = user.email || 'Anonymous';
+            const reporterName = user.name || (user.email ? 'User' : 'Anonymous');
+            const reporterDisplay = `${reporterName} (${reporterEmail})`;
 
             const reportPayload = {
                 id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                 url: request.url,
                 hostname: request.hostname,
                 reporter: reporterDisplay,
+                reporterName: reporterName,
+                reporterEmail: reporterEmail,
                 timestamp: Date.now(),
                 status: 'pending'
             };

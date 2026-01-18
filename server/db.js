@@ -20,18 +20,18 @@ async function connectDB() {
         });
         isConnected = true;
         console.log('[MongoDB] ✓ Connected successfully');
-        
+
         // Handle connection events
         mongoose.connection.on('error', (err) => {
             console.error('[MongoDB] Connection error:', err);
             isConnected = false;
         });
-        
+
         mongoose.connection.on('disconnected', () => {
             console.warn('[MongoDB] Disconnected');
             isConnected = false;
         });
-        
+
         mongoose.connection.on('reconnected', () => {
             console.log('[MongoDB] Reconnected');
             isConnected = true;
@@ -64,6 +64,9 @@ const ReportSchema = new mongoose.Schema({
     userId: { type: String },
     userName: { type: String },
     userEmail: { type: String },
+    reporter: { type: String },
+    reporterName: { type: String },
+    reporterEmail: { type: String },
     timestamp: { type: Number, required: true },
     status: { type: String, default: 'pending', enum: ['pending', 'banned', 'ignored'] },
     lastUpdated: { type: Number, default: Date.now },

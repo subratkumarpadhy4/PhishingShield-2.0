@@ -247,7 +247,8 @@ function loadUserReports() {
         }
 
         // Fetch reports for this user from global server
-        fetch(`https://phishingshield.onrender.com/api/reports?reporter=${encodeURIComponent(user.email)}`)
+        console.log(`[Dashboard] Loading reports for: ${user.email} from http://localhost:3000/api/reports`);
+        fetch(`http://localhost:3000/api/reports?reporter=${encodeURIComponent(user.email)}`)
             .then(res => res.json())
             .then(reports => {
                 renderUserReportsTable(reports);
@@ -280,9 +281,9 @@ function renderUserReportsTable(reports) {
         if (r.status === 'banned') statusBadge = '<span class="badge" style="background:#dc3545; color:#fff; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold;">🚫 BANNED</span>';
         else if (r.status === 'ignored') statusBadge = '<span class="badge" style="background:#6c757d; color:#fff; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold;">IGNORED</span>';
 
-        let analysisHtml = '<span style="color:#adb5bd; font-size:12px;">No feedback yet.</span>';
+        let analysisHtml; // Declare analysisHtml here
 
-        if (r.aiAnalysis) {
+        if (r.aiAnalysis && r.aiAnalysis.published) {
             const score = r.aiAnalysis.score || 0;
             const suggestion = r.aiAnalysis.suggestion || 'N/A';
             const reason = r.aiAnalysis.reason || '';
@@ -293,15 +294,33 @@ function renderUserReportsTable(reports) {
             else if (suggestion === 'SAFE') color = '#166534';
 
             // Truncate long reasons
-            const shortReason = reason.length > 80 ? reason.substring(0, 80) + '...' : reason;
+            const shortReason = reason ? (reason.length > 80 ? reason.substring(0, 80) + '...' : reason) : 'Analyzing risk factors...';
 
             analysisHtml = `
                 <div style="font-size:12px;">
-                    <div style="margin-bottom:4px;"><strong>Verfication:</strong> <span style="color:${color}; font-weight:bold;">${suggestion}</span> (${score}/100)</div>
+                    <div style="margin-bottom:4px;"><strong>Verification:</strong> <span style="color:${color}; font-weight:bold;">${suggestion}</span> (${score}/100)</div>
                     <div style="color:#475569; font-style:italic; line-height:1.4;">"${shortReason}"</div>
-                    ${reason.length > 80 ? `<div class="view-analysis-btn" style="color:${color}; cursor:pointer; font-size:11px; margin-top:2px; text-decoration:underline;">View Full Analysis</div>` : ''}
+                    <div class="view-analysis-btn" style="color:${color}; cursor:pointer; font-size:11px; margin-top:4px; text-decoration:underline; font-weight:600;">View Details</div>
                 </div>
              `;
+        } else if (r.aiAnalysis && !r.aiAnalysis.published) {
+            // Case where AI has run but Admin hasn't uploaded it yet
+            analysisHtml = `
+                <div style="font-size:12px;">
+                    <div style="margin-bottom:4px; color:#d97706;"><strong>Verification:</strong> <span style="font-style:italic;">Pending Admin Sync</span></div>
+                    <div style="color:#94a3b8; font-style:italic;">Analysis completed, waiting for admin approval...</div>
+                    <div style="color:#94a3b8; font-size:11px; margin-top:4px;">View Details (Locked)</div>
+                </div>
+            `;
+        } else {
+            // Case where AI hasn't run yet
+            analysisHtml = `
+                <div style="font-size:12px;">
+                    <div style="margin-bottom:4px; color:#64748b;"><strong>Verification:</strong> <span style="font-style:italic;">Pending AI Review</span></div>
+                    <div style="color:#94a3b8; font-style:italic;">Waiting for system analysis...</div>
+                    <div style="color:#94a3b8; font-size:11px; margin-top:4px;">View Details (Locked)</div>
+                </div>
+            `;
         }
 
         tr.innerHTML = `
@@ -315,7 +334,7 @@ function renderUserReportsTable(reports) {
 
         // Attach Listener Programmatically (CSP Safe)
         const viewBtn = tr.querySelector('.view-analysis-btn');
-        if (viewBtn && r.aiAnalysis && r.aiAnalysis.reason) {
+        if (viewBtn && r.aiAnalysis) {
             viewBtn.addEventListener('click', () => {
                 showAnalysisModal(r.aiAnalysis);
             });

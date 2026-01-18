@@ -18,12 +18,12 @@
     "name": "subrat kumar padhy",
     "email": "padhysubratkumar7@gmail.com",
     "password": "padhysubratkumar7@gmail.com",
-    "xp": 1280,
+    "xp": 1340,
     "level": 4,
     "joined": 1766952392006,
     "rank": "Novice",
     "isPenalty": false,
-    "lastUpdated": 1768593203092
+    "lastUpdated": 1768682080491
   },
   {
     "email": "jenapriyanshu2006@gmail.com",
@@ -48,12 +48,12 @@
   {
     "email": "subratkumar_padhy@srmap.edu.in",
     "joined": 1766993673694,
-    "lastUpdated": 1768495551534,
-    "level": 3,
+    "lastUpdated": 1768728977581,
+    "level": 4,
     "name": "subrat clg id",
     "password": "subratkumar_padhy@srmap.edu.in",
     "rank": "Novice",
-    "xp": 790
+    "xp": 930
   },
   {
     "email": "priyanshu_jena@srmap.edu.in",
@@ -72,7 +72,7 @@
     "name": "phishingshield",
     "password": "phishingshield@gmail.com",
     "rank": "Novice",
-    "xp": 1190,
-    "lastUpdated": 0
+    "xp": 1210,
+    "lastUpdated": 1768713332232
   }
 ]

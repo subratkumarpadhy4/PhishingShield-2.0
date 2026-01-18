@@ -1035,13 +1035,18 @@ function renderReports(reports) {
         `;
 
         // Parse reporter to separate Name and Email if possible for better display
-        let reporterDisplay = r.reporter || 'Anonymous';
-        // If format is "Name (email)", we can bold the name
-        if (reporterDisplay.includes('(')) {
+        let reporterDisplay = r.reporterName || r.reporter || 'Anonymous';
+        let reporterEmail = r.reporterEmail || '';
+
+        // If format is "Name (email)", we can bold the name (legacy fallback)
+        if (!r.reporterName && reporterDisplay.includes('(')) {
             const parts = reporterDisplay.split('(');
             const name = parts[0].trim();
-            const email = '(' + parts[1]; // keep the email part
-            reporterDisplay = `<strong>${escapeHtml(name)}</strong> <span style="font-size:12px; color:#6c757d;">${escapeHtml(email)}</span>`;
+            const email = parts[1].replace(')', '').trim();
+            reporterDisplay = `<strong>${escapeHtml(name)}</strong> <span style="font-size:12px; color:#6c757d;">(${escapeHtml(email)})</span>`;
+        } else if (r.reporterName && r.reporterEmail) {
+            // Modern format with split fields
+            reporterDisplay = `<strong>${escapeHtml(r.reporterName)}</strong> <span style="font-size:12px; color:#6c757d;">(${escapeHtml(r.reporterEmail)})</span>`;
         } else {
             reporterDisplay = escapeHtml(reporterDisplay);
         }
@@ -1853,10 +1858,14 @@ function openReportModal(report) {
     const aiAction = document.getElementById('ai-action-container');
     const btnRunAI = document.getElementById('btn-run-ai');
 
+    const aiPublish = document.getElementById('ai-publish-container');
+    const btnPublishAI = document.getElementById('btn-publish-ai');
+
     // Reset UI
     aiLoading.style.display = 'none';
     aiResult.style.display = 'none';
     aiAction.style.display = 'none';
+    if (aiPublish) aiPublish.style.display = 'none';
 
     // ALWAYS show the Action Button first, never auto-show result
     aiAction.style.display = 'block';
@@ -2001,6 +2010,50 @@ function openReportModal(report) {
         } else {
             badge.style.background = '#dcfce7';
             badge.style.color = '#166534';
+        }
+
+        // --- Handle Publish/Upload Button Visibility ---
+        if (aiPublish) {
+            if (analysis.published) {
+                aiPublish.style.display = 'none';
+            } else {
+                aiPublish.style.display = 'block';
+                // --- RESET BUTTON STATE ---
+                btnPublishAI.innerHTML = '📤 Upload Report to User';
+                btnPublishAI.disabled = false;
+                btnPublishAI.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+
+                btnPublishAI.onclick = async () => {
+                    btnPublishAI.innerHTML = 'Uploading...';
+                    btnPublishAI.disabled = true;
+
+                    try {
+                        const res = await fetch('http://localhost:3000/api/reports/publish', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: report.id })
+                        });
+                        const data = await res.json();
+
+                        if (data.success) {
+                            btnPublishAI.innerHTML = '✅ Uploaded to User';
+                            btnPublishAI.style.background = '#10b981';
+                            analysis.published = true;
+                            setTimeout(() => {
+                                aiPublish.style.display = 'none';
+                            }, 2000);
+                        } else {
+                            alert('Publish failed: ' + data.message);
+                            btnPublishAI.innerHTML = '📤 Upload Report to User';
+                            btnPublishAI.disabled = false;
+                        }
+                    } catch (err) {
+                        alert('Network Error while uploading report.');
+                        btnPublishAI.innerHTML = '📤 Upload Report to User';
+                        btnPublishAI.disabled = false;
+                    }
+                };
+            }
         }
     }
 
@@ -2338,7 +2391,7 @@ function handleTrustSync() {
     if (btn) btn.disabled = true;
     if (statusEl) statusEl.innerText = "Syncing...";
 
-    fetch('https://phishingshield.onrender.com/api/trust/sync', { method: 'POST' })
+    fetch('http://localhost:3000/api/trust/sync', { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (data.success) {

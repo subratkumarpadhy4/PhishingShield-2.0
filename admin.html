@@ -868,44 +868,14 @@
                 <div>
                     <!-- AI SECTION - Enhanced Modern Design -->
                     <div id="ai-analysis-section" style="
-                        background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
-                        border: 2px solid transparent;
-                        background-clip: padding-box;
-                        border-radius: 16px;
+                        background: #0f172a;
+                        border: 1px solid #1e293b;
+                        border-radius: 12px;
                         padding: 20px;
                         margin-bottom: 20px;
                         position: relative;
-                        overflow: hidden;
-                        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 
-                                    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
                     ">
-                        <!-- Animated gradient border effect -->
-                        <div style="
-                            position: absolute;
-                            top: -2px;
-                            left: -2px;
-                            right: -2px;
-                            bottom: -2px;
-                            background: linear-gradient(45deg, #3b82f6, #8b5cf6, #ec4899, #3b82f6);
-                            background-size: 300% 300%;
-                            border-radius: 16px;
-                            z-index: -1;
-                            animation: gradientShift 4s ease infinite;
-                        "></div>
-
-                        <!-- Glassmorphism overlay -->
-                        <div style="
-                            position: absolute;
-                            top: 0;
-                            left: 0;
-                            right: 0;
-                            bottom: 0;
-                            background: rgba(255, 255, 255, 0.03);
-                            backdrop-filter: blur(10px);
-                            border-radius: 16px;
-                            pointer-events: none;
-                        "></div>
-
                         <!-- Content -->
                         <div style="position: relative; z-index: 1;">
                             <h5 style="
@@ -921,7 +891,6 @@
                             ">
                                 <span style="
                                     font-size: 20px;
-                                    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.8));
                                     animation: pulse 2s ease-in-out infinite;
                                 ">🤖</span>
                                 <span style="
@@ -1015,11 +984,33 @@
                                 </div>
                             </div>
 
-                            <!-- Action Button -->
-                            <div id="ai-action-container" style="margin-top: 15px; display: none;">
-                                <button id="btn-run-ai" class="btn btn-sm btn-ai-verify">
-                                    <span style="position: relative; z-index: 1;">⚡ Run AI Verification</span>
-                                    <div style="
+                            <!-- New: Upload/Publish Button -->
+                            <div id="ai-publish-container" style="margin-top: 15px; display: none;">
+                                <button id="btn-publish-ai" class="btn" style="
+                                        width: 100%;
+                                        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                                        color: white;
+                                        padding: 10px;
+                                        border: none;
+                                        border-radius: 8px;
+                                        font-weight: 600;
+                                        cursor: pointer;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        gap: 8px;
+                                        transition: transform 0.2s;
+                                    ">
+                                    <span style="font-size: 16px;">📤</span> Upload Report to User
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Action Button -->
+                        <div id="ai-action-container" style="margin-top: 15px; display: none;">
+                            <button id="btn-run-ai" class="btn btn-sm btn-ai-verify">
+                                <span style="position: relative; z-index: 1;">⚡ Run AI Verification</span>
+                                <div style="
                                         position: absolute;
                                         top: 0;
                                         left: -100%;
@@ -1028,68 +1019,66 @@
                                         background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
                                         transition: left 0.5s;
                                     "></div>
-                                </button>
-                            </div>
+                            </button>
                         </div>
                     </div>
-
-                    <!-- Add animations -->
-                    <style>
-                        @keyframes gradientShift {
-
-                            0%,
-                            100% {
-                                background-position: 0% 50%;
-                            }
-
-                            50% {
-                                background-position: 100% 50%;
-                            }
-                        }
-
-                        @keyframes pulse {
-
-                            0%,
-                            100% {
-                                opacity: 1;
-                                transform: scale(1);
-                            }
-
-                            50% {
-                                opacity: 0.8;
-                                transform: scale(1.1);
-                            }
-                        }
-
-                        @keyframes spin {
-                            from {
-                                transform: rotate(0deg);
-                            }
-
-                            to {
-                                transform: rotate(360deg);
-                            }
-                        }
-
-                        #btn-run-ai:hover div {
-                            left: 100%;
-                        }
-                    </style>
-
-                    <label
-                        style="font-size:11px; color:#6c757d; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Current
-                        Status</label>
-                    <div id="report-modal-status-container" style="margin-top:8px;">
-                        <!-- Injected JS -->
-                        <span class="badge" style="background:#ffc107; color:black">PENDING REVIEW</span>
-                    </div>
-                    <p style="font-size:13px; color:#6c757d; margin-top:8px; line-height:1.5;">
-                        This URL was flagged by a user as potentially malicious. Please verify the content before taking
-                        action.
-                    </p>
                 </div>
-            </div>
 
+                <!-- Add animations -->
+                <style>
+                    @keyframes gradientShift {
+
+                        0%,
+                        100% {
+                            background-position: 0% 50%;
+                        }
+
+                        50% {
+                            background-position: 100% 50%;
+                        }
+                    }
+
+                    @keyframes pulse {
+
+                        0%,
+                        100% {
+                            opacity: 1;
+                            transform: scale(1);
+                        }
+
+                        50% {
+                            opacity: 0.8;
+                            transform: scale(1.1);
+                        }
+                    }
+
+                    @keyframes spin {
+                        from {
+                            transform: rotate(0deg);
+                        }
+
+                        to {
+                            transform: rotate(360deg);
+                        }
+                    }
+
+                    #btn-run-ai:hover div {
+                        left: 100%;
+                    }
+                </style>
+
+                <label
+                    style="font-size:11px; color:#6c757d; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Current
+                    Status</label>
+                <div id="report-modal-status-container" style="margin-top:8px;">
+                    <!-- Injected JS -->
+                    <span class="badge" style="background:#ffc107; color:black">PENDING REVIEW</span>
+                </div>
+                <p style="font-size:13px; color:#6c757d; margin-top:8px; line-height:1.5;">
+                    This URL was flagged by a user as potentially malicious. Please verify the content before taking
+                    action.
+                </p>
+            </div>
             <!-- Footer Actions -->
             <div id="report-modal-footer"
                 style="padding:20px; background:#f8f9fa; border-top:1px solid #eee; text-align:right; display:flex; justify-content:flex-end; gap:12px;">
