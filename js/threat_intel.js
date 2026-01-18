@@ -4,12 +4,17 @@
  * and maintains a local cache of known threats.
  */
 
+if (typeof window.DEV_MODE === 'undefined') {
+    window.DEV_MODE = false;
+}
+var DEV_MODE = window.DEV_MODE;
+const GLOBAL_API = "https://phishingshield.onrender.com/api";
+
 const ThreatIntel = {
     // Configuration
-    // User should replace this with their actual API key
     apiKey: "",
-    useSimulatedMode: true, // Defaults to simulation to avoid API key errors during demo
-    backendUrl: "http://localhost:3000/api", // Local backend for Trust Scores
+    useSimulatedMode: true,
+    backendUrl: DEV_MODE ? "http://localhost:3000/api" : GLOBAL_API,
 
     // Local Blocklist (Cache of known bad domains for demo purposes)
     localBlocklist: [

@@ -1,3 +1,15 @@
+// Use existing API config if available (e.g., from auth.js), otherwise define it
+if (typeof window.DEV_MODE === 'undefined') {
+    window.DEV_MODE = false;
+}
+if (typeof window.API_BASE === 'undefined') {
+    window.API_BASE = window.DEV_MODE ? "http://localhost:3000/api" : "https://phishingshield.onrender.com/api";
+}
+
+console.log(`[ADMIN] Running in ${window.DEV_MODE ? 'DEVELOPMENT' : 'PRODUCTION'} mode`);
+console.log(`[ADMIN] API Base: ${window.API_BASE}`);
+var API_BASE = window.API_BASE; // Local alias for convenience
+
 // REPORTS FILTER STATE
 let allReportsCache = [];
 let currentReportFilter = 'all';
@@ -411,7 +423,7 @@ function loadDashboardData() {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
 
-            fetch(`http://localhost:3000/api/reports?t=${Date.now()}`, { signal: controller.signal })
+            fetch(`${API_BASE}/reports?t=${Date.now()}`, { signal: controller.signal })
                 .then(res => res.json())
                 .then(serverReports => {
                     clearTimeout(timeoutId);
@@ -813,7 +825,7 @@ function loadDashboardData() {
                             // Restore execution
                             let restored = 0;
                             const promises = cached.map(u => {
-                                return fetch('https://phishingshield.onrender.com/api/users/sync', {
+                                return fetch(`${API_BASE}/users/sync`, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify(u)
@@ -839,7 +851,7 @@ function loadDashboardData() {
                             if (missing.length > 0) {
                                 console.log(`[Admin] Restoring ${missing.length} missing users`);
                                 missing.forEach(u => {
-                                    fetch('https://phishingshield.onrender.com/api/users/sync', {
+                                    fetch(`${API_BASE}/users/sync`, {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify(u)
@@ -1148,7 +1160,7 @@ window.banSite = async function (url, reportId) {
 
         // Update status on server first and WAIT for response
         // Use LOCAL server first
-        const response = await fetch('http://localhost:3000/api/reports/update', {
+        const response = await fetch(`${API_BASE}/reports/update`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: reportId, status: 'banned' })
@@ -1276,7 +1288,7 @@ window.ignoreReport = async function (url, reportId) {
     try {
         // Update status on server AND WAIT for it
         // Use LOCAL server first
-        const response = await fetch('http://localhost:3000/api/reports/update', {
+        const response = await fetch(`${API_BASE}/reports/update`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: reportId, status: 'ignored' })
@@ -1330,7 +1342,7 @@ window.unbanSite = async function (url, reportId) {
 
         // Update status on server and WAIT for response
         // Use LOCAL server first
-        const response = await fetch('http://localhost:3000/api/reports/update', {
+        const response = await fetch(`${API_BASE}/reports/update`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: reportId, status: 'pending' })
@@ -1631,20 +1643,20 @@ function renderUsers(users, allLogs) {
                     }
 
                     // Sync Logic - Admin Edit (can increase or decrease XP)
-                    // Use a timestamp that's guaranteed to be newer than any existing timestamp
-                    const adminTimestamp = Date.now() + 1000; // Add 1 second to ensure it's always newer
+                    // Use a timestamp with a buffer (30s) to ensure it stays newer even if client clocks differ
+                    const adminTimestamp = Date.now() + 30000;
                     const updatedUser = {
                         ...user,
                         xp: newXP,
                         level: Math.floor(Math.sqrt(newXP / 100)) + 1,
-                        lastUpdated: adminTimestamp, // CRITICAL: Always newer timestamp to prevent reverting
-                        forceUpdate: true, // CRITICAL: Admin override - allows XP decrease
-                        isPenalty: (newXP < user.xp) // Mark as penalty if decreasing
+                        lastUpdated: adminTimestamp, // CRITICAL: Buffer to prevent immediate revert
+                        forceUpdate: true, // CRITICAL: Admin override
+                        isPenalty: (newXP < user.xp)
                     };
 
                     console.log(`[Admin] Editing XP for ${name}: ${user.xp} -> ${newXP} (forceUpdate: ${updatedUser.forceUpdate})`);
 
-                    fetch('https://phishingshield.onrender.com/api/users/sync', {
+                    fetch(`${API_BASE}/users/sync`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(updatedUser)
@@ -1920,7 +1932,7 @@ function openReportModal(report) {
             providerSelection.remove();
             aiLoading.style.display = 'block';
 
-            fetch('http://localhost:3000/api/reports/ai-verify', {
+            fetch(`${API_BASE}/reports/ai-verify`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: report.id, provider: provider })
@@ -2028,7 +2040,7 @@ function openReportModal(report) {
                     btnPublishAI.disabled = true;
 
                     try {
-                        const res = await fetch('http://localhost:3000/api/reports/publish', {
+                        const res = await fetch(`${API_BASE}/reports/publish`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ id: report.id })
@@ -2193,7 +2205,7 @@ function loadTrustData() {
     // Always use cache-busting to ensure fresh data (cache disabled on server anyway)
     // This ensures friend's device always gets latest votes
     const cacheParam = `?t=${Date.now()}`;
-    const url = `http://localhost:3000/api/trust/all${cacheParam}`;
+    const url = `${API_BASE}/trust/all${cacheParam}`;
 
     console.log('[Admin] Fetching trust data from server...', url);
 
@@ -2391,7 +2403,7 @@ function handleTrustSync() {
     if (btn) btn.disabled = true;
     if (statusEl) statusEl.innerText = "Syncing...";
 
-    fetch('http://localhost:3000/api/trust/sync', { method: 'POST' })
+    fetch(`${API_BASE}/trust/sync`, { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (data.success) {

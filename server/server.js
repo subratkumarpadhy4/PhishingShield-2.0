@@ -1168,8 +1168,20 @@ app.post("/api/reports", async (req, res) => {
 
     // --- ENHANCEMENT: Resolve Real Name if missing ---
     if (report.reporterEmail && report.reporterEmail !== 'Anonymous' && (report.reporterName === 'User' || report.reporterName === 'Anonymous')) {
+        // 1. Try JSON Storage
         const users = await readData(USERS_FILE);
-        const reporterUser = users.find(u => u.email.toLowerCase() === report.reporterEmail.toLowerCase());
+        let reporterUser = users.find(u => u.email.toLowerCase() === report.reporterEmail.toLowerCase());
+
+        // 2. Try MongoDB Fallback
+        if (!reporterUser && isConnected()) {
+            try {
+                reporterUser = await User.findOne({ email: report.reporterEmail.toLowerCase() }).lean();
+                if (reporterUser) console.log(`[Report] Found reporter ${report.reporterEmail} in MongoDB`);
+            } catch (e) {
+                console.warn("[Report] MongoDB lookup failed:", e.message);
+            }
+        }
+
         if (reporterUser && reporterUser.name) {
             report.reporterName = reporterUser.name;
             report.reporter = `${reporterUser.name} (${report.reporterEmail})`;
@@ -1599,7 +1611,9 @@ app.post("/api/users/sync", async (req, res) => {
         // 3. XP increase: Standard gameplay progression (ONLY if timestamp is newer)
         // 4. Reject: Older timestamps or decreases without flags
 
-        if (userData.forceUpdate === true) {
+        const isForced = userData.forceUpdate === true || String(userData.forceUpdate) === "true";
+
+        if (isForced) {
             // Admin Force Update - ALWAYS accept (can increase or decrease XP)
             const adminEditTimestamp = clientUpdated || Date.now();
             console.log(`[Sync] Force Update: Overwriting XP for ${userData.email} (${serverXP} -> ${userData.xp}) at ${adminEditTimestamp}`);
@@ -1610,37 +1624,25 @@ app.post("/api/users/sync", async (req, res) => {
             users[idx]._adminEdit = true;
             users[idx]._adminEditTime = adminEditTimestamp;
             users[idx]._adminEditXP = userData.xp; // Store the admin-set XP value
-        } else if (userData.isPenalty === true && clientUpdated > serverUpdated) {
+        } else if ((userData.isPenalty === true || String(userData.isPenalty) === "true") && clientUpdated > serverUpdated) {
             // Penalty System - Only if it's a new event (prevents replay attacks)
             console.log(`[Sync] Penalty Applied: Overwriting XP for ${userData.email} (${serverXP} -> ${userData.xp})`);
             users[idx].xp = userData.xp;
             users[idx].level = userData.level;
             users[idx].lastUpdated = clientUpdated || Date.now();
         } else if (userData.xp > serverXP) {
-            // Standard XP Increase (Gameplay) - Check if this would revert an admin edit
-            const adminEditTime = users[idx]._adminEditTime || 0;
-            const adminEditXP = users[idx]._adminEditXP;
-            const timeSinceAdminEdit = adminEditTime > 0 ? (clientUpdated - adminEditTime) : Infinity;
-            const minTimeAfterAdminEdit = 10 * 60 * 1000; // 10 minutes after admin edit
-
-            // CRITICAL: If admin recently edited and new XP would be higher than admin-set XP, reject it
-            if (adminEditTime > 0 && adminEditXP !== undefined && userData.xp > adminEditXP && timeSinceAdminEdit < minTimeAfterAdminEdit) {
-                // This would revert an admin decrease - reject it
-                console.log(`[Sync] Rejected XP increase: Would revert admin edit (${adminEditXP} -> ${userData.xp}). Admin edited ${Math.round(timeSinceAdminEdit / 1000)}s ago.`);
-            } else if (clientUpdated > serverUpdated) {
-                // Timestamp is newer and no admin edit conflict - accept increase
+            // Standard XP Increase (Gameplay) - Accept only if timestamp is newer
+            if (clientUpdated > serverUpdated) {
                 console.log(`[Sync] XP Increase: ${serverXP} -> ${userData.xp} (timestamp: ${clientUpdated} > ${serverUpdated})`);
                 users[idx].xp = userData.xp;
                 users[idx].level = userData.level;
                 users[idx].lastUpdated = clientUpdated || Date.now();
-                // Clear admin edit flag if XP is now higher than admin-set value
-                if (adminEditXP !== undefined && userData.xp > adminEditXP) {
-                    delete users[idx]._adminEdit;
-                    delete users[idx]._adminEditTime;
-                    delete users[idx]._adminEditXP;
-                }
+                // Clear admin edit flags as user has progressed beyond that point
+                delete users[idx]._adminEdit;
+                delete users[idx]._adminEditTime;
+                delete users[idx]._adminEditXP;
             } else {
-                // Timestamp is older - reject (prevents reverting admin edits)
+                // Timestamp is older - reject (prevents stale client data from overwriting newer server data)
                 console.log(`[Sync] Rejected XP increase: ${serverXP} -> ${userData.xp} (Older timestamp: ${clientUpdated} <= ${serverUpdated})`);
             }
         } else {

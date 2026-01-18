@@ -1,3 +1,17 @@
+// Toggle this for development
+if (typeof window.DEV_MODE === 'undefined') {
+    window.DEV_MODE = false;
+}
+if (typeof window.API_BASE === 'undefined') {
+    window.API_BASE = window.DEV_MODE ? "http://localhost:3000/api" : "https://phishingshield.onrender.com/api";
+}
+
+var DEV_MODE = window.DEV_MODE;
+var API_BASE = window.API_BASE;
+
+console.log(`[DASHBOARD] Running in ${DEV_MODE ? 'DEVELOPMENT' : 'PRODUCTION'} mode`);
+console.log(`[DASHBOARD] API Base: ${API_BASE}`);
+
 document.addEventListener('DOMContentLoaded', () => {
     try {
         console.log("Dashboard: Initializing...");
@@ -247,8 +261,8 @@ function loadUserReports() {
         }
 
         // Fetch reports for this user from global server
-        console.log(`[Dashboard] Loading reports for: ${user.email} from http://localhost:3000/api/reports`);
-        fetch(`http://localhost:3000/api/reports?reporter=${encodeURIComponent(user.email)}`)
+        console.log(`[Dashboard] Loading reports for: ${user.email} from ${API_BASE}/reports`);
+        fetch(`${API_BASE}/reports?reporter=${encodeURIComponent(user.email)}`)
             .then(res => res.json())
             .then(reports => {
                 renderUserReportsTable(reports);

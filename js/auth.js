@@ -9,9 +9,15 @@ if (typeof emailjs !== 'undefined') {
 }
 
 // Toggle this for development
-// In extension, we usually want production unless we are specifically debugging locally.
-const DEV_MODE = false;
-const API_BASE = DEV_MODE ? "http://localhost:3000/api" : "https://phishingshield.onrender.com/api";
+if (typeof window.DEV_MODE === 'undefined') {
+    window.DEV_MODE = false;
+}
+if (typeof window.API_BASE === 'undefined') {
+    window.API_BASE = window.DEV_MODE ? "http://localhost:3000/api" : "https://phishingshield.onrender.com/api";
+}
+
+var DEV_MODE = window.DEV_MODE;
+var API_BASE = window.API_BASE;
 
 console.log(`[AUTH] Running in ${DEV_MODE ? 'DEVELOPMENT' : 'PRODUCTION'} mode`);
 console.log(`[AUTH] API Base: ${API_BASE}`);

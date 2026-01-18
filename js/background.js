@@ -6,6 +6,8 @@ let db = null; // No longer used
 console.log("[PhishingShield] Service Worker Starting... " + new Date().toISOString());
 
 // API Endpoints
+const DEV_MODE = false;
+const API_BASE = DEV_MODE ? "http://localhost:3000/api" : "https://phishingshield.onrender.com/api";
 const LOCAL_API = "http://localhost:3000/api/reports";
 const GLOBAL_API = "https://phishingshield.onrender.com/api/reports";
 
@@ -147,14 +149,26 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
             return;
         }
 
-        chrome.storage.local.get(['currentUser', 'adminUser'], (data) => {
+        chrome.storage.local.get(['currentUser', 'adminUser', 'users'], (data) => {
             const user = data.currentUser || data.adminUser || {};
-            const reporterEmail = user.email || 'Anonymous';
-            const reporterName = user.name || (user.email ? 'User' : 'Anonymous');
+            let reporterEmail = user.email || 'Anonymous';
+            let reporterName = user.name || (user.email ? 'User' : 'Anonymous');
+
+            // --- IMPROVEMENT: Double check 'users' cache if name is generic ---
+            if (reporterEmail !== 'Anonymous' && reporterName === 'User') {
+                const cachedUsers = data.users || [];
+                const found = cachedUsers.find(u => u.email === reporterEmail);
+                if (found && found.name) {
+                    reporterName = found.name;
+                    console.log(`[PhishingShield] Found name in cache for ${reporterEmail}: ${reporterName}`);
+                }
+            }
+
             // Display string for legacy compatibility
             const reporterDisplay = `${reporterName} (${reporterEmail})`;
 
             console.log(`[PhishingShield] 🚩 Reporting as: ${reporterDisplay}`);
+            console.log(`[PhishingShield] Account Status: ${user.email ? 'LOGGED_IN' : 'GUEST'}`);
 
             let hostname;
             try {
@@ -1175,7 +1189,7 @@ function syncXPToServer(customData = {}) {
             };
 
             // Sync to server
-            fetch("http://localhost:3000/api/users/sync", {
+            fetch(`${API_BASE}/users/sync`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(userData)
@@ -1260,7 +1274,7 @@ function syncReportsHeal() {
         const myReports = res.reportedSites || [];
         if (myReports.length === 0) return;
 
-        fetch('http://localhost:3000/api/reports')
+        fetch(`${API_BASE}/reports`)
             .then(r => r.json())
             .then(serverReports => {
                 const serverUrls = new Set(serverReports.map(r => r.url));
@@ -1268,7 +1282,7 @@ function syncReportsHeal() {
                 myReports.forEach(localR => {
                     if (!serverUrls.has(localR.url)) {
                         console.warn(`[PhishingShield] Report missing on server (Wipe?): ${localR.url}. Re-uploading...`);
-                        fetch('http://localhost:3000/api/reports', {
+                        fetch(`${API_BASE}/reports`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(localR)
