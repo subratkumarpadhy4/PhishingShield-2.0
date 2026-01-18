@@ -6,49 +6,38 @@
 
 ---
 
-## � Three Main Features
+## 📢 Three Main Features
 
-### 📢 1. Community Reporting System
-**Empower users to protect each other**
-*   **Right-Click Reporting**: Users can report suspicious sites directly from any webpage using the context menu
-*   **Instant Submission**: Reports are immediately sent to both local and global servers
-*   **Admin Review Dashboard**: All reports appear in the Admin Portal for verification
-*   **User Feedback**: Reporters can track their submission status in "My Reports" section
-*   **XP Rewards**: Earn points for valid threat reports
-*   **Global Impact**: Your reports help protect the entire PhishingShield community
+### 1. Community Trust & Scoring System
+**"The Network of Trust" - Powered by collective intelligence**
+*   **Trust Scores**: Every site has a dynamic trust score based on user upvotes (Safe) and downvotes (Dangerous).
+*   **Visual Indicators**: The HUD displays Green 🟢 (High Trust) or Red 🔴 (Low Trust) signals instantly.
+*   **Community Verified**: Safety isn't just an algorithm; it's confirmed by real humans.
+*   **Safety in Numbers**: If 500 users vote "Safe", you can browse with confidence.
+*   **XP Rewards**: Earn XP for contributing to the community trust scores.
 
-### � 2. Ban/Unban Management System
-**Intelligent threat control with real-time propagation**
-*   **One-Click Ban**: Admins can ban malicious sites instantly from the Admin Portal
-*   **Global Propagation**: Bans sync to all connected users within 10 seconds
-*   **Instant Protection**: Banned sites are blocked immediately using Chrome's declarativeNetRequest API
-*   **Smart Unban**: Admins can reverse bans if sites are verified safe
-*   **Auto-Redirect on Unban**: Users on banned pages automatically redirect when site is unbanned (just refresh!)
-*   **Penalty System**: 500 XP deduction only when users explicitly choose "Proceed Anyway"
-*   **Warning Page**: Clear, informative blocked page with safety recommendations
-*   **Bypass Option**: Users can proceed with explicit confirmation (with XP penalty)
+### 2. Report, Ban, & Unban Lifecycle
+**A complete, unified workflow for threat management**
+*   **Report (The Trigger)**: Users right-click to report suspicious sites instantly.
+*   **Ban (The Enforcement)**: Admins review reports and Ban sites with one click.
+    *   *Global Propagation*: Bans sync to all users within 10 seconds.
+    *   *Instant Blocking*: Uses Chrome's `declarativeNetRequest` for immediate protection.
+*   **Unban (The Correction)**: Admins can reverse bans if a site is verified safe.
+    *   *Auto-Redirect*: Users on a banned page are automatically redirected back when unbanned.
 
-### 🤖 3. AI-Powered Threat Analysis
-**Cutting-edge AI for accurate threat detection**
-*   **Dual AI System**: 
-    *   **Primary**: Groq (llama-3.3-70b-versatile) - Lightning-fast analysis
-    *   **Fallback**: Google Gemini 2.5 Flash - Reliable backup
-*   **Smart Fallback**: Automatically switches if primary AI is unavailable
-*   **Deep Content Analysis**: AI examines page title, meta descriptions, and context
-*   **Risk Scoring**: 0-100 threat score with detailed reasoning
-*   **Visual Reports**: Beautiful, color-coded modal displays:
-    *   🔴 **Red** for High Risk (BAN recommendation)
-    *   🟡 **Yellow** for Medium Risk (CAUTION)
-    *   🟢 **Green** for Low Risk (SAFE)
-*   **Detailed Reasoning**: See exactly why AI flagged a site
-*   **Admin Integration**: "Re-Analyze (AI)" button in Admin Portal
-*   **Threat Indicators**: Lists specific suspicious elements found
+### 3. AI-Powered Threat Analysis
+**Dual-Engine Intelligence for accurate verification**
+*   **Primary Brain**: **Groq (Llama-3)** for lightning-fast analysis (< 1 second).
+*   **Backup Brain**: **Google Gemini** for reliable failover if Groq is busy.
+*   **Deep Scan**: AI analyzes page content, CSS patterns, and hosting data.
+*   **Risk Scoring**: Returns a 0-100 score with detailed reasoning (e.g., "Imitating Amazon CSS").
+*   **Admin Assistant**: Gives Admins the confidence to Ban without visiting dangerous sites.
 
 ---
 
 ## 🌟 Additional Features
 
-### �🔍 1. Intelligent Risk Engine
+### � 1. Intelligent Risk Engine
 The heart of PhishingShield is `risk_engine.js`, a client-side heuristics engine that analyzes every webpage you visit.
 *   **Brand Impersonation Detection**: Checks page content and titles against a protected list of major banks and services (PayPal, Google, SBI, HDFC, etc.).
 *   **Typosquatting Sentinel**: Detects deceptive domains like `goog1e.com` or `paypaI.com` (using Levenshtein distance algorithms).
@@ -82,6 +71,24 @@ A futuristic, floating overlay (`content.js`) that provides instant feedback on 
 
 ---
 
+## ⚠️ Important for Developers / Cloned Repos
+
+### Why You Cannot Sign In
+If you have cloned this repository and are running it locally, **Sign In and Registration will NOT work** by default.
+
+**The Reason:**
+This application relies on a secure **cloud-hosted backend** and a protected **MongoDB database** to sync user accounts, global bans, and trust scores. 
+*   Connection credentials (API Keys, Database URI) are stored in secure `.env` files which are **not included** in this public repository.
+*   Without these keys, your local version cannot connect to the global PhishingShield network.
+
+### 🧪 How to Test Locally (Offline Mode)
+You can still explore the extension in "Offline/Developer Mode" by creating your own local environment:
+1.  **Install Dependencies:** `npm install` and `cd server && npm install`
+2.  **Start Local Server:** `./start_system.sh` (Mac/Linux) or `./start_system.bat` (Windows)
+    *   *This creates a local, isolated instance on `localhost:3000` set to "DEV_MODE". You can create accounts and ban sites locally, but you won't see global community data.*
+
+---
+
 ## 🛠️ Extensions & Permissions Explained
 PhishingShield requires specific permissions to function effectively:
 
@@ -107,9 +114,9 @@ PhishingShield requires specific permissions to function effectively:
 
 ---
 
-## 🚀 Installation Guide
+## � Installation Guide
 
-### 1. Backend Setup (Crucial for Global Sync & AI)
+### 1. Backend Setup
 The backend acts as your local gateway to the PhishingShield Network and AI services.
 
 ```bash
@@ -131,39 +138,12 @@ npm start
 # Optional: Run keep-alive daemon for global server
 node keep-alive.js &
 ```
-*Note: The server must be running to receive reports, sync XP, and perform AI analysis.*
 
 ### 2. Extension Installation
 1.  Open Chrome/Edge and go to `chrome://extensions`.
 2.  Enable **Developer Mode** (top right toggle).
 3.  Click **Load Unpacked**.
 4.  Select the **root folder** of this project (`/PhishingShield`).
-
-### 3. Usage & Admin
-*   **Dashboard**: Click the extension icon to view your stats, XP, and threat logs.
-*   **Admin Portal**: Access at `admin.html` for network-wide management.
-*   **AI Analysis**: Click "Re-Analyze (AI)" in the Admin Portal to get detailed AI threat assessments.
-*   **Global Bans**: Admin bans propagate to all users within ~10 seconds.
-
----
-
-## 🔮 Future Roadmap
-*   **Deep Learning integration**: Move from simple Bayes to a TensorFlow.js model running locally.
-*   **Enterprise Integration**: LDAP/Active Directory sync.
-*   **Mobile App**: React Native companion app.
-*   **Enhanced AI Models**: Integration with additional AI providers for even more robust analysis.
-*   **Threat Intelligence Feeds**: Integration with external threat databases.
-
----
-
-## 💻 Tech Stack
-*   **Frontend**: HTML5, CSS3, JavaScript (Vanilla)
-*   **Extension API**: Chrome Manifest V3
-*   **Backend**: Node.js, Express.js
-*   **Cloud Sync**: Hybrid Local/Cloud Architecture (REST API)
-*   **AI Integration**: 
-    *   Groq (llama-3.3-70b-versatile) - Primary AI
-    *   Google Gemini 2.5 Flash - Fallback AI
 
 ---
 
@@ -189,16 +169,6 @@ The system uses:
 
 ## 📄 License
 MIT License - See LICENSE file for details.
-
----
-
-## 🤝 Contributing
-Contributions are welcome! Please feel free to submit a Pull Request.
-
----
-
-## 📧 Support
-For issues, questions, or feature requests, please open an issue on GitHub.
 
 ---
 
