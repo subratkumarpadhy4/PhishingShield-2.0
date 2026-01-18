@@ -154,6 +154,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
             // Display string for legacy compatibility
             const reporterDisplay = `${reporterName} (${reporterEmail})`;
 
+            console.log(`[PhishingShield] 🚩 Reporting as: ${reporterDisplay}`);
+
             let hostname;
             try {
                 hostname = new URL(urlToReport).hostname;

@@ -1155,7 +1155,7 @@ app.post("/api/reports", async (req, res) => {
     if (!newReport.url) return res.status(400).json({ error: "Missing URL" });
 
     const report = {
-        id: Date.now().toString(),
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         url: newReport.url,
         hostname: newReport.hostname || "Unknown",
         reporter: newReport.reporter || "Anonymous",
@@ -1165,6 +1165,17 @@ app.post("/api/reports", async (req, res) => {
         status: "pending",
         ...newReport,
     };
+
+    // --- ENHANCEMENT: Resolve Real Name if missing ---
+    if (report.reporterEmail && report.reporterEmail !== 'Anonymous' && (report.reporterName === 'User' || report.reporterName === 'Anonymous')) {
+        const users = await readData(USERS_FILE);
+        const reporterUser = users.find(u => u.email.toLowerCase() === report.reporterEmail.toLowerCase());
+        if (reporterUser && reporterUser.name) {
+            report.reporterName = reporterUser.name;
+            report.reporter = `${reporterUser.name} (${report.reporterEmail})`;
+            console.log(`[Report] Resolved Anonymous reporter to: ${report.reporterName}`);
+        }
+    }
 
     const reports = await readData(REPORTS_FILE);
 

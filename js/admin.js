@@ -1596,7 +1596,7 @@ function renderUsers(users, allLogs) {
             if (user.history && user.history.length > 0) {
                 [...user.history].reverse().slice(0, 10).forEach(h => {
                     const row = document.createElement('tr');
-                    const riskColor = h.score > 50 ? '#dc3545' : '#198754';
+                    const riskColor = h.score >= 60 ? '#dc3545' : (h.score >= 20 ? '#ffc107' : '#198754');
                     row.innerHTML = `
                         <td>${h.timestamp ? new Date(h.timestamp).toLocaleTimeString() : 'N/A'}</td>
                         <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis;">${h.url}</td>
@@ -1992,9 +1992,9 @@ function openReportModal(report) {
                     providerLabel.title = "No AI key provided. Using local pattern matching.";
                 }
             } else {
-                providerLabel.innerText = "POWERED BY GROQ";
+                providerLabel.innerText = "POWERED BY PHISHINGSHIELD";
                 providerLabel.style.opacity = "1";
-                providerLabel.title = "Verified by Llama-3.3-70b via Groq";
+                providerLabel.title = "Verified by AI Threat Analysis via PhishingShield Engine";
             }
         }
 
