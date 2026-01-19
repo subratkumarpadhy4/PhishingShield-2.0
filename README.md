@@ -65,9 +65,14 @@ A futuristic, floating overlay (`content.js`) that provides instant feedback on 
 
 ### 🎮 5. Gamification (XP System) & Training Dojo 🥋
 *   **Earn XP**: Get points for safely browsing and reporting threats.
-*   **Global Leaderboard**: Compete with other users worldwide. Your rank syncs globally.
+*   **Global Leaderboard**: Compete with other users worldwide.
+*   **Balanced Training Curve**:
+    *   **Base XP**: 5 XP (Hard mode start).
+    *   **Streak Multiplier**: XP increases by +2 for every streak step. Highest streaks yield massive rewards.
+    *   **Difficulty Bonus**: 1.5x - 2x Multipliers for solving advanced scenarios.
+    *   **Mega Bonuses**: +50 XP windfalls for hitting streak milestones (5x, 10x).
 *   **Ranks**: Novice 🥉 -> Scout 🥈 -> Sentinel 🥇.
-*   **Training Dojo**: Interactive quizzes to learn about Typosquatting, Homograph attacks, and more.
+*   **Training Dojo**: 100+ Interactive scenarios covering Typosquatting, Homograph attacks, and more.
 
 ---
 

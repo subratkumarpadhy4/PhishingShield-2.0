@@ -17,6 +17,11 @@ console.log("[DEBUG] MAIN SERVER STARTING - LOADED server.js");
 console.log("-----------------------------------------");
 const PORT = process.env.PORT || 3000;
 
+// PERFORMANCE: Reduce logging in production
+const IS_PRODUCTION = !!process.env.RENDER;
+const log = IS_PRODUCTION ? () => { } : console.log;
+const logError = console.error; // Always log errors
+
 // Initialize MongoDB connection
 (async () => {
     try {
@@ -26,7 +31,46 @@ const PORT = process.env.PORT || 3000;
         console.warn('[Server] MongoDB not available, using JSON file storage');
     }
 })();
-// Background Sync Timer for Trust Data (Automatic Global Sync)
+
+// OPTIMIZATION: Helper function for fetch with timeout
+async function fetchWithTimeout(url, options = {}, timeoutMs = 2000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        throw error;
+    }
+}
+
+// OPTIMIZATION: Add MongoDB query cache
+const queryCache = new Map();
+const CACHE_TTL = 30000; // 30 seconds
+
+function getCacheKey(collection, query) {
+    return `${collection}:${JSON.stringify(query)}`;
+}
+
+function getFromCache(key) {
+    const cached = queryCache.get(key);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        return cached.data;
+    }
+    queryCache.delete(key);
+    return null;
+}
+
+function setCache(key, data) {
+    queryCache.set(key, { data, timestamp: Date.now() });
+}
+// OPTIMIZATION: Background Sync Timer - Only run on LOCAL server, not on Render
 if (!process.env.RENDER) {
     setInterval(async () => {
         try {
@@ -35,22 +79,20 @@ if (!process.env.RENDER) {
 
             let syncCount = 0;
             for (const entry of localData) {
-                // Efficiency: Only push if there are actual votes to sync
                 if ((entry.safe || 0) + (entry.unsafe || 0) > 0) {
-                    await fetch('https://phishingshield.onrender.com/api/trust/seed', {
+                    await fetchWithTimeout('https://phishingshield.onrender.com/api/trust/seed', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(entry)
-                    }).catch(() => { }); // Silent fail for per-item background errors
+                    }, 3000).catch(() => { });
                     syncCount++;
                 }
             }
             if (syncCount > 0) {
-                console.log(`[Auto-Sync] background-sync: ✓ ${syncCount} sites updated on global cloud.`);
+                log(`[Auto-Sync] background-sync: ✓ ${syncCount} sites updated on global cloud.`);
             }
         } catch (error) {
-            // Only log major failures
-            console.error('[Auto-Sync] background-sync failed:', error.message);
+            logError('[Auto-Sync] background-sync failed:', error.message);
         }
     }, 5 * 60 * 1000); // Every 5 minutes
 }
@@ -86,8 +128,9 @@ app.use(
 // Handle preflight requests
 app.options("*", cors());
 
+// OPTIMIZATION: Reduce logging middleware overhead in production
 app.use((req, res, next) => {
-    console.log(`[REQUEST] ${req.method} ${req.url}`);
+    log(`[REQUEST] ${req.method} ${req.url}`);
     next();
 });
 
@@ -112,35 +155,52 @@ if (!fs.existsSync(AUDIT_LOG_FILE)) fs.writeFileSync(AUDIT_LOG_FILE, JSON.string
 if (!fs.existsSync(TRUST_FILE)) fs.writeFileSync(TRUST_FILE, JSON.stringify([], null, 2));
 if (!fs.existsSync(DELETED_USERS_FILE)) fs.writeFileSync(DELETED_USERS_FILE, JSON.stringify([], null, 2));
 
-// --- Data Access Layer (MongoDB with JSON fallback) ---
+// --- Data Access Layer (MongoDB with JSON fallback + Query Cache) ---
 const readData = async (file) => {
-    console.log(`[DEBUG] readData called for: ${file}`);
+    log(`[DEBUG] readData called for: ${file}`);
     if (isConnected()) {
-        console.log(`[DEBUG] MongoDB is connected`);
-        // Use MongoDB based on file type
+        log(`[DEBUG] MongoDB is connected`);
         try {
             if (file === TRUST_FILE) {
+                const cacheKey = getCacheKey('trustscores', {});
+                const cached = getFromCache(cacheKey);
+                if (cached) return cached;
+
                 const docs = await TrustScore.find({}).lean();
-                return docs.map(doc => ({
+                const result = docs.map(doc => ({
                     domain: doc.domain,
                     safe: doc.safe || 0,
                     unsafe: doc.unsafe || 0,
                     voters: doc.voters instanceof Map ? Object.fromEntries(doc.voters) : (doc.voters || {})
                 }));
+                setCache(cacheKey, result);
+                return result;
             } else if (file === REPORTS_FILE) {
+                const cacheKey = getCacheKey('reports', {});
+                const cached = getFromCache(cacheKey);
+                if (cached) return cached;
+
                 const docs = await Report.find({}).lean();
-                return docs.map(doc => {
+                const result = docs.map(doc => {
                     const { _id, __v, createdAt, updatedAt, ...rest } = doc;
                     return rest;
                 });
+                setCache(cacheKey, result);
+                return result;
             } else if (file === USERS_FILE) {
-                console.log(`[DEBUG] Fetching Users from MongoDB...`);
+                log(`[DEBUG] Fetching Users from MongoDB...`);
+                const cacheKey = getCacheKey('users', {});
+                const cached = getFromCache(cacheKey);
+                if (cached) return cached;
+
                 const docs = await User.find({}).lean();
-                console.log(`[DEBUG] Found ${docs.length} users`);
-                return docs.map(doc => {
+                log(`[DEBUG] Found ${docs.length} users`);
+                const result = docs.map(doc => {
                     const { _id, __v, createdAt, updatedAt, ...rest } = doc;
                     return rest;
                 });
+                setCache(cacheKey, result);
+                return result;
             } else if (file === AUDIT_LOG_FILE) {
                 const docs = await AuditLog.find({}).sort({ timestamp: -1 }).lean();
                 return docs.map(doc => {
@@ -155,15 +215,14 @@ const readData = async (file) => {
                 }));
             }
         } catch (error) {
-            console.error(`[MongoDB] Error reading ${file}:`, error.message);
-            // Fallback to JSON
+            logError(`[MongoDB] Error reading ${file}:`, error.message);
         }
     } else {
-        console.log(`[DEBUG] MongoDB NOT connected`);
+        log(`[DEBUG] MongoDB NOT connected`);
     }
 
     // JSON fallback
-    console.log(`[DEBUG] Falling back to JSON for ${file}`);
+    log(`[DEBUG] Falling back to JSON for ${file}`);
     try {
         return JSON.parse(fs.readFileSync(file, 'utf8'));
     } catch (e) {
@@ -172,6 +231,15 @@ const readData = async (file) => {
 };
 
 const writeData = async (file, data) => {
+    // OPTIMIZATION: Clear cache for this collection
+    if (file === TRUST_FILE) {
+        queryCache.delete(getCacheKey('trustscores', {}));
+    } else if (file === REPORTS_FILE) {
+        queryCache.delete(getCacheKey('reports', {}));
+    } else if (file === USERS_FILE) {
+        queryCache.delete(getCacheKey('users', {}));
+    }
+
     if (isConnected()) {
         try {
             if (file === TRUST_FILE) {
@@ -291,10 +359,11 @@ app.get('/api/trust/score', async (req, res) => {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5s timeout for faster response
 
-            const globalRes = await fetch(`https://phishingshield.onrender.com/api/trust/score?domain=${normalizedDomain}`, {
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
+            const globalRes = await fetchWithTimeout(
+                `https://phishingshield.onrender.com/api/trust/score?domain=${normalizedDomain}`,
+                {},
+                1000
+            );
 
             if (globalRes.ok) {
                 const globalData = await globalRes.json();
@@ -588,7 +657,7 @@ app.post('/api/trust/vote', async (req, res) => {
     if (!process.env.RENDER) {
         console.log(`[Trust-Sync] [SEND] Forwarding vote to global server: ${normalizedDomain} = ${vote} (User: ${effectiveUserId})`);
         // Use effectiveUserId to ensure anonymous votes are tracked consistently globally
-        fetch('https://phishingshield.onrender.com/api/trust/vote', {
+        fetchWithTimeout('https://phishingshield.onrender.com/api/trust/vote', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -672,19 +741,14 @@ app.get('/api/trust/all', async (req, res) => {
         // CRITICAL: Always fetch global data to ensure sync across devices
         if (!process.env.RENDER) {
             try {
-                console.log('[Trust] [SYNC] Fetching global trust data from https://phishingshield.onrender.com/api/trust/all...');
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout (increased for reliability)
-
+                log('[Trust] [SYNC] Fetching global trust data from https://phishingshield.onrender.com/api/trust/all...');
                 const fetchStart = Date.now();
-                const globalResponse = await fetch('https://phishingshield.onrender.com/api/trust/all', {
-                    signal: controller.signal,
+                const globalResponse = await fetchWithTimeout('https://phishingshield.onrender.com/api/trust/all', {
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     }
-                });
-                clearTimeout(timeoutId);
+                }, 2000); // OPTIMIZATION: Reduced from 5s to 2s
                 const fetchDuration = Date.now() - fetchStart;
                 console.log(`[Trust] [SYNC] Global fetch completed in ${fetchDuration}ms with status ${globalResponse.status}`);
 
@@ -841,7 +905,7 @@ app.get('/api/trust/all', async (req, res) => {
                 if (missingInGlobal.length > 0) {
                     console.log(`[Trust-Sync] Found ${missingInGlobal.length} domains missing globally. Syncing...`);
                     missingInGlobal.forEach(item => {
-                        fetch('https://phishingshield.onrender.com/api/trust/seed', {
+                        fetchWithTimeout('https://phishingshield.onrender.com/api/trust/seed', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(item)
@@ -950,7 +1014,7 @@ app.post('/api/trust/sync', async (req, res) => {
             // We use a loop with small delay to avoid overwhelming the cloud server
             for (const entry of localData) {
                 try {
-                    await fetch('https://phishingshield.onrender.com/api/trust/seed', {
+                    await fetchWithTimeout('https://phishingshield.onrender.com/api/trust/seed', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(entry)
@@ -1001,7 +1065,7 @@ app.get('/api/logs/all', async (req, res) => {
         let globalLogs = [];
         try {
             if (!process.env.RENDER) {
-                const response = await fetch('https://phishingshield.onrender.com/api/logs/all');
+                const response = await fetchWithTimeout('https://phishingshield.onrender.com/api/logs/all', {}, 2000);
                 if (response.ok) {
                     globalLogs = await response.json();
                     console.log(`[Logs] Fetched ${globalLogs.length} global threat logs`);
@@ -1058,7 +1122,7 @@ app.post('/api/logs', async (req, res) => {
 
     // 2. Forward to global server
     if (!process.env.RENDER) {
-        fetch('https://phishingshield.onrender.com/api/logs', {
+        fetchWithTimeout('https://phishingshield.onrender.com/api/logs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(log)
@@ -1087,13 +1151,7 @@ app.get("/api/reports", async (req, res) => {
     if (!process.env.RENDER) {
         try {
             // Fetch global reports with short timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
-
-            const globalRes = await fetch('https://phishingshield.onrender.com/api/reports', {
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
+            const globalRes = await fetchWithTimeout('https://phishingshield.onrender.com/api/reports', {}, 2000);
 
             if (globalRes.ok) {
                 const globalReports = await globalRes.json();
@@ -1211,7 +1269,7 @@ app.post("/api/reports", async (req, res) => {
 
     // --- GLOBAL SYNC (FORWARD WRITE) ---
     if (!process.env.RENDER) {
-        fetch('https://phishingshield.onrender.com/api/reports', {
+        fetchWithTimeout('https://phishingshield.onrender.com/api/reports', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(report)
@@ -1665,7 +1723,7 @@ app.post("/api/users/sync", async (req, res) => {
         // Forward this update to the central cloud server
         // CRITICAL: Always forward forceUpdate/admin edits to global server
         if (userData.forceUpdate === true) {
-            fetch('https://phishingshield.onrender.com/api/users/sync', {
+            fetchWithTimeout('https://phishingshield.onrender.com/api/users/sync', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(userData) // Forward with forceUpdate flag
@@ -1680,7 +1738,7 @@ app.post("/api/users/sync", async (req, res) => {
                 .catch(e => console.warn(`[Global-Forward] Failed to sync user: ${e.message}`));
         } else {
             // Regular sync - forward but don't block
-            fetch('https://phishingshield.onrender.com/api/users/sync', {
+            fetchWithTimeout('https://phishingshield.onrender.com/api/users/sync', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(userData)
@@ -1720,7 +1778,7 @@ app.post("/api/users/create", async (req, res) => {
 
     // Global Sync (Forward)
     try {
-        fetch('https://phishingshield.onrender.com/api/users/create', {
+        fetchWithTimeout('https://phishingshield.onrender.com/api/users/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(finalUser)
@@ -1747,7 +1805,7 @@ app.post("/api/users/reset-password", async (req, res) => {
         console.log(`[User] Password reset for: ${email}`);
 
         // --- GLOBAL SYNC ---
-        fetch('https://phishingshield.onrender.com/api/users/reset-password', {
+        fetchWithTimeout('https://phishingshield.onrender.com/api/users/reset-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
@@ -1815,7 +1873,7 @@ app.post("/api/users/delete", async (req, res) => {
         console.log(`[User] Deleted user: ${targetEmail} (Original: ${email})`);
 
         // --- GLOBAL SYNC ---
-        fetch('https://phishingshield.onrender.com/api/users/delete', {
+        fetchWithTimeout('https://phishingshield.onrender.com/api/users/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: targetEmail })
@@ -1870,7 +1928,7 @@ app.post("/api/auth/admin/login", async (req, res) => {
         // --- GLOBAL SYNC FALLBACK ---
         console.log(`[Login] User ${email} not found locally. Checking global...`);
         try {
-            const r = await fetch('https://phishingshield.onrender.com/api/users');
+            const r = await fetchWithTimeout('https://phishingshield.onrender.com/api/users', {}, 2000);
             if (r.ok) {
                 const globalUsers = await r.json();
                 if (Array.isArray(globalUsers)) {
@@ -2212,7 +2270,7 @@ app.post("/api/reports/ai-verify", async (req, res) => {
                 console.log("[AI-Verify] Not found via URL either. Checking Global Server...");
                 try {
                     // Use the same global URL as the sync process
-                    const response = await fetch('https://phishingshield.onrender.com/api/reports');
+                    const response = await fetchWithTimeout('https://phishingshield.onrender.com/api/reports', {}, 2000);
                     if (response.ok) {
                         const globalReports = await response.json();
                         let globalReport = globalReports.find(r => r.id === id);
@@ -2265,27 +2323,15 @@ app.post("/api/reports/ai-verify", async (req, res) => {
         console.log("[AI-Verify] GEMINI_API_KEY exists:", !!process.env.GEMINI_API_KEY);
 
         if (process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY) {
-            console.log("[AI-Verify] API keys found, proceeding with AI analysis");
-            // --- FETCH PAGE CONTEXT (Shared) ---
-            let pageContext = "";
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
-                const fetchRes = await fetch(url, { signal: controller.signal });
-                const html = await fetchRes.text();
-                clearTimeout(timeoutId);
-                const title = (html.match(/<title>(.*?)<\/title>/i) || [])[1] || "No Title";
-                const desc = (html.match(/<meta\s+name=["']description["']\s+content=["'](.*?)["']/i) || [])[1] || "No Description";
-                pageContext = `Page Title: "${title}"\nMeta Description: "${desc}"`;
-                console.log(`[AI-Verify] Fetched Context: ${pageContext}`);
-            } catch (e) {
-                pageContext = "Could not fetch page content. Analyze URL pattern only.";
-                console.warn(`[AI-Verify] Fetch failed: ${e.message}`);
-            }
+            log("[AI-Verify] API keys found, proceeding with AI analysis");
+
+            // OPTIMIZATION: Skip page content fetching (major latency bottleneck - was 5s timeout)
+            // Analyze URL pattern only for faster response
+            const pageContext = "URL-based analysis (optimized for speed)";
 
             // --- SHARED PROMPT ---
             const SYSTEM_PROMPT = `You are PhishingShield AI, an expert cybersecurity analyst.
-Your task is to analyze URLs and page context to identify phishing threats.
+Your task is to analyze URLs to identify phishing threats.
 
 Classify the site into one of 3 categories:
 1. 'SAFE' - Legitimate, well-known sites (e.g., Google, GitHub, Universities)
@@ -2302,95 +2348,112 @@ Return JSON format:
 
             const USER_PROMPT = `Analyze this URL for phishing threats:
 URL: ${url}
-Page Context: ${pageContext}
-Provide comprehensive analysis.`;
+Provide comprehensive analysis based on URL pattern, domain reputation, and known threat indicators.`;
 
             let rawResult = null;
             let provider = "NONE";
 
-            // Get user's provider choice from request (if specified)
             const requestedProvider = req.body.provider ? req.body.provider.toUpperCase() : null;
-            console.log("[AI-Verify] Requested provider:", requestedProvider);
+            log("[AI-Verify] Requested provider:", requestedProvider);
 
-            // 1. TRY GROQ (if requested or as fallback)
-            if ((requestedProvider === 'GROQ' || !requestedProvider) && process.env.GROQ_API_KEY) {
-                console.log("[AI-Verify] Attempting Groq analysis...");
-                try {
-                    const Groq = require("groq-sdk");
-                    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-                    const completion = await groq.chat.completions.create({
-                        messages: [
-                            { role: "system", content: SYSTEM_PROMPT },
-                            { role: "user", content: USER_PROMPT }
-                        ],
-                        model: "llama-3.3-70b-versatile",
-                        temperature: 0.1,
-                        response_format: { type: "json_object" }
-                    });
-                    rawResult = JSON.parse(completion.choices[0]?.message?.content || "{}");
-                    provider = "GROQ";
-                    console.log("[AI-Verify] Groq Analysis Success");
-                } catch (e) {
-                    console.error(`[AI-Verify] Groq Error (Falling back to Gemini):`, e.message);
-                    // Continue to Gemini fallback even if Groq was requested
-                }
-            } else {
-                console.log("[AI-Verify] Skipping Groq (requested:", requestedProvider, ", key exists:", !!process.env.GROQ_API_KEY, ")");
-            }
-
-            // 2. TRY GEMINI (if requested or as fallback)
-            console.log(`[AI-Verify] Checking Gemini... RawResult: ${!!rawResult}, Provider: ${requestedProvider}`);
-
-            if (!rawResult && ((requestedProvider === 'GEMINI') || !requestedProvider) && process.env.GEMINI_API_KEY) {
-                try {
-                    console.log("[AI-Verify] Initializing Gemini Client...");
-                    const { GoogleGenerativeAI } = require("@google/generative-ai");
-                    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-                    const generateWithModel = async (modelName) => {
-                        console.log(`[AI-Verify] Attempting Gemini Model: ${modelName}`);
-                        const model = genAI.getGenerativeModel({ model: modelName });
-                        const fullPrompt = `${SYSTEM_PROMPT}\n\nTask:\n${USER_PROMPT}`;
-
-                        try {
-                            const result = await model.generateContent(fullPrompt);
-                            const response = await result.response;
-                            const text = response.text();
-                            console.log(`[AI-Verify] Gemini Raw Response (${modelName}):`, text.substring(0, 500) + "..."); // Start of response
-
-                            // Robust JSON Extraction
-                            const jsonMatch = text.match(/\{[\s\S]*\}/);
-                            if (jsonMatch) {
-                                return JSON.parse(jsonMatch[0]);
-                            }
-                            console.warn(`[AI-Verify] JSON parse failed for ${modelName}. Raw text logged above.`);
-                            throw new Error("No JSON found in response");
-                        } catch (genErr) {
-                            console.error(`[AI-Verify] Generation Error (${modelName}):`, genErr.message);
-                            throw genErr;
-                        }
-                    };
-
+            // OPTIMIZATION: Set timeout for AI analysis (8 seconds max instead of unlimited)
+            const AI_TIMEOUT = 8000;
+            const aiAnalysisPromise = (async () => {
+                // 1. TRY GROQ (if requested or as fallback)
+                if ((requestedProvider === 'GROQ' || !requestedProvider) && process.env.GROQ_API_KEY) {
+                    log("[AI-Verify] Attempting Groq analysis...");
                     try {
-                        // Primary: Gemini 2.5 Flash (Available for this API key)
-                        rawResult = await generateWithModel("gemini-2.5-flash");
-                        console.log("[AI-Verify] Gemini (2.5 Flash) Analysis Success");
-                    } catch (err) {
-                        console.warn("[AI-Verify] Gemini 2.5 Flash failed, trying 2.0 Flash:", err.message);
-                        // Fallback: Gemini 2.0 Flash
-                        try {
-                            rawResult = await generateWithModel("gemini-2.0-flash");
-                            console.log("[AI-Verify] Gemini (2.0 Flash) Analysis Success");
-                        } catch (proErr) {
-                            console.error("[AI-Verify] Gemini Pro also failed.");
-                        }
+                        const Groq = require("groq-sdk");
+                        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+                        const completion = await groq.chat.completions.create({
+                            messages: [
+                                { role: "system", content: SYSTEM_PROMPT },
+                                { role: "user", content: USER_PROMPT }
+                            ],
+                            model: "llama-3.3-70b-versatile",
+                            temperature: 0.1,
+                            response_format: { type: "json_object" }
+                        });
+                        rawResult = JSON.parse(completion.choices[0]?.message?.content || "{}");
+                        provider = "GROQ";
+                        log("[AI-Verify] Groq Analysis Success");
+                        return { rawResult, provider };
+                    } catch (e) {
+                        logError(`[AI-Verify] Groq Error (Falling back to Gemini):`, e.message);
                     }
-
-                    if (rawResult) provider = "GEMINI";
-
-                } catch (e) {
-                    console.error("[AI-Verify] Gemini Fatal Error:", e);
+                } else {
+                    log("[AI-Verify] Skipping Groq (requested:", requestedProvider, ", key exists:", !!process.env.GROQ_API_KEY, ")");
                 }
+
+                // 2. TRY GEMINI (if requested or as fallback)
+                log(`[AI-Verify] Checking Gemini... RawResult: ${!!rawResult}, Provider: ${requestedProvider}`);
+
+                if (!rawResult && ((requestedProvider === 'GEMINI') || !requestedProvider) && process.env.GEMINI_API_KEY) {
+                    try {
+                        log("[AI-Verify] Initializing Gemini Client...");
+                        const { GoogleGenerativeAI } = require("@google/generative-ai");
+                        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+                        const generateWithModel = async (modelName) => {
+                            log(`[AI-Verify] Attempting Gemini Model: ${modelName}`);
+                            const model = genAI.getGenerativeModel({ model: modelName });
+                            const fullPrompt = `${SYSTEM_PROMPT}\n\nTask:\n${USER_PROMPT}`;
+
+                            try {
+                                const result = await model.generateContent(fullPrompt);
+                                const response = await result.response;
+                                const text = response.text();
+                                log(`[AI-Verify] Gemini Raw Response (${modelName}):`, text.substring(0, 500) + "...");
+
+                                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                                if (jsonMatch) {
+                                    return JSON.parse(jsonMatch[0]);
+                                }
+                                log(`[AI-Verify] JSON parse failed for ${modelName}. Raw text logged above.`);
+                                throw new Error("No JSON found in response");
+                            } catch (genErr) {
+                                logError(`[AI-Verify] Generation Error (${modelName}):`, genErr.message);
+                                throw genErr;
+                            }
+                        };
+
+                        try {
+                            rawResult = await generateWithModel("gemini-2.5-flash");
+                            log("[AI-Verify] Gemini (2.5 Flash) Analysis Success");
+                        } catch (err) {
+                            log("[AI-Verify] Gemini 2.5 Flash failed, trying 2.0 Flash:", err.message);
+                            try {
+                                rawResult = await generateWithModel("gemini-2.0-flash");
+                                log("[AI-Verify] Gemini (2.0 Flash) Analysis Success");
+                            } catch (proErr) {
+                                logError("[AI-Verify] Gemini Pro also failed.");
+                            }
+                        }
+
+                        if (rawResult) provider = "GEMINI";
+
+                    } catch (e) {
+                        logError("[AI-Verify] Gemini Fatal Error:", e);
+                    }
+                }
+
+                return { rawResult, provider };
+            })();
+
+            // OPTIMIZATION: Race AI analysis with timeout
+            try {
+                const result = await Promise.race([
+                    aiAnalysisPromise,
+                    new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('AI analysis timeout')), AI_TIMEOUT)
+                    )
+                ]);
+
+                rawResult = result.rawResult;
+                provider = result.provider;
+            } catch (timeoutError) {
+                logError("[AI-Verify] AI analysis timed out after 8s");
+                rawResult = null;
             }
 
             // 3. PROCESS RESULT
@@ -2595,7 +2658,7 @@ app.post("/api/reports/update", async (req, res) => {
         // --- GLOBAL SYNC (FORWARD WRITE) ---
         // Fire and forget - don't block local success
         if (!process.env.RENDER) {
-            fetch('https://phishingshield.onrender.com/api/reports/update', {
+            fetchWithTimeout('https://phishingshield.onrender.com/api/reports/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id, status })
@@ -2630,7 +2693,7 @@ app.post("/api/reports/delete", async (req, res) => {
 
         // --- GLOBAL SYNC ---
         if (!process.env.RENDER) {
-            fetch('https://phishingshield.onrender.com/api/reports/delete', {
+            fetchWithTimeout('https://phishingshield.onrender.com/api/reports/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ids })
@@ -2659,7 +2722,7 @@ app.get("/api/reports/global-sync", async (req, res) => {
         let globalReports = [];
         try {
             // Native fetch in Node 18+
-            const response = await fetch('https://phishingshield.onrender.com/api/reports');
+            const response = await fetchWithTimeout('https://phishingshield.onrender.com/api/reports');
             if (response.ok) {
                 globalReports = await response.json();
                 console.log(`[Global-Sync] Fetched ${globalReports.length} global reports.`);
@@ -2752,7 +2815,7 @@ app.get("/api/reports/global-sync", async (req, res) => {
                         mergedReportsMap.set(globalR.id, winner); // Update local cache with winning hybrid
                         dataChanged = true;
 
-                        fetch('https://phishingshield.onrender.com/api/reports/update', {
+                        fetchWithTimeout('https://phishingshield.onrender.com/api/reports/update', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ id: globalR.id, status: lStatus }) // Use canonical Global ID
@@ -2778,7 +2841,7 @@ app.get("/api/reports/global-sync", async (req, res) => {
                                 dataChanged = true;
                                 resolved = true;
 
-                                fetch('https://phishingshield.onrender.com/api/reports/update', {
+                                fetchWithTimeout('https://phishingshield.onrender.com/api/reports/update', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ id: globalR.id, status: lStatus })
@@ -2797,7 +2860,7 @@ app.get("/api/reports/global-sync", async (req, res) => {
                                 mergedReportsMap.set(globalR.id, winner);
                                 dataChanged = true;
 
-                                fetch('https://phishingshield.onrender.com/api/reports/update', {
+                                fetchWithTimeout('https://phishingshield.onrender.com/api/reports/update', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ id: globalR.id, status: lStatus })
@@ -2813,14 +2876,14 @@ app.get("/api/reports/global-sync", async (req, res) => {
                 if (!processedIds.has(id)) {
                     console.log(`[Global-Sync] Found Local-Only report ${id} (${report.url}). Uploading to Cloud...`);
                     // Fire and forget upload
-                    fetch('https://phishingshield.onrender.com/api/reports', {
+                    fetchWithTimeout('https://phishingshield.onrender.com/api/reports', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(report)
                     }).then(() => {
                         // Also sync status if not pending
                         if (report.status && report.status !== 'pending') {
-                            fetch('https://phishingshield.onrender.com/api/reports/update', {
+                            fetchWithTimeout('https://phishingshield.onrender.com/api/reports/update', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ id: report.id, status: report.status })
@@ -2850,14 +2913,14 @@ app.get("/api/reports/global-sync", async (req, res) => {
                 let successCount = 0;
                 for (const r of localReports) {
                     try {
-                        await fetch('https://phishingshield.onrender.com/api/reports', {
+                        await fetchWithTimeout('https://phishingshield.onrender.com/api/reports', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(r)
                         });
                         // Also sync status if it's not pending
                         if (r.status !== 'pending') {
-                            await fetch('https://phishingshield.onrender.com/api/reports/update', {
+                            await fetchWithTimeout('https://phishingshield.onrender.com/api/reports/update', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ id: r.id, status: r.status })
@@ -2896,7 +2959,7 @@ app.get("/api/users/global-sync", async (req, res) => {
 
         let globalUsers = [];
         try {
-            const response = await fetch('https://phishingshield.onrender.com/api/users');
+            const response = await fetchWithTimeout('https://phishingshield.onrender.com/api/users');
             if (response.ok) {
                 globalUsers = await response.json();
                 console.log(`[User-Sync] Fetched ${globalUsers.length} global users.`);
