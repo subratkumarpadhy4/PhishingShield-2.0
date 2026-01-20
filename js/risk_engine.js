@@ -133,6 +133,11 @@ window.RiskEngine = {
             }
         }
 
+        // IDN / Homograph Check
+        const idnCheck = this.checkIDNRisk(hostname);
+        score += idnCheck.score;
+        reasons.push(...idnCheck.reasons);
+
         // 3. AI Analysis (Naive Bayes)
         // 3. AI Analysis (Naive Bayes) - DISABLED in favor of Real Async AI (Gemini)
         /*
@@ -217,12 +222,36 @@ window.RiskEngine = {
             }
         }
 
-        // E. Domain Age Penalty (Simulation)
-        // In a real app, this would call a WHOIS API.
-        // Simulation: Penalize if "new" or "temp" is in the name, or randomized for demo
-        if (hostname.includes('new') || hostname.includes('temp') || urlParams.has('simulate_new_domain')) {
+        // E. Domain Age Penalty (Real Async Check)
+        // Only check if sensitive fields exist (Optimization)
+        const hasSensitiveFields = document.querySelector('input[type="password"]') || document.querySelector('form[action*="login"]');
+
+        if ((hasSensitiveFields || urlParams.has('simulate_new_domain')) && hostname && hostname.length > 0) {
+            try {
+                // Fetch from Local Backend (Mocked for now)
+                // Timeout of 1s to not block UI
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 1000);
+
+                const ageRes = await fetch(`http://localhost:3000/api/domain-age?domain=${hostname}`, { signal: controller.signal });
+                clearTimeout(timeoutId);
+
+                if (ageRes.ok) {
+                    const ageData = await ageRes.json();
+                    if (ageData.daysOld < 30) {
+                        score += 35; // Significant penalty for brand new domains with login forms
+                        reasons.push(`⚠️ Suspiciously New Domain (${ageData.daysOld} days old) (+35)`);
+                    }
+                }
+            } catch (e) {
+                // Ignore fetch errors (server might be down)
+            }
+        }
+
+        // Legacy Simulation fallback (keep for demo)
+        if (hostname.includes('temp') && !reasons.some(r => r.includes("New Domain"))) {
             score += 20;
-            reasons.push(`⚠️ Domain Too Young (< 30 Days) (+20)`);
+            reasons.push(`⚠️ Domain Too Young (Simulated) (+20)`);
         }
 
         // 5. Sensitive Input Check & MITM Detection (SSL Stripping)
@@ -276,6 +305,14 @@ window.RiskEngine = {
 
             // Remove specific "Suspicion" warnings if we are now trusted
             reasons = reasons.filter(r => !r.includes("Generic Suspicion"));
+        }
+
+        // 7. QR Code / Quishing Check (Async)
+        // Detects hidden malicious URLs inside images
+        const qrResult = await this.analyzeImages();
+        if (qrResult && qrResult.score > 0) {
+            score += qrResult.score;
+            reasons.push(...qrResult.reasons);
         }
 
         // Determine Primary Threat for HUD Headline
@@ -375,6 +412,206 @@ window.RiskEngine = {
         };
     },
 
+    /**
+     * Feature 6: QUISHING DETECTOR (QR Phishing)
+     * Scans images for QR Code "Finder Patterns" (Concentric Squares).
+     * Uses the 1:1:3:1:1 ratio rule to detect QR codes without heavy libraries.
+     */
+    analyzeImages: async function () {
+        // Collect Images AND Canvases
+        const images = Array.from(document.querySelectorAll('img'));
+        const canvases = Array.from(document.querySelectorAll('canvas'));
+
+        const visibleElements = [...images, ...canvases].filter(el => {
+            const width = el.naturalWidth || el.width;
+            const height = el.naturalHeight || el.height;
+            return width > 50 && height > 50;
+        });
+
+        let score = 0;
+        let reasons = [];
+        let qrFound = false;
+
+        // processing loop
+        scan_loop:
+        for (const el of visibleElements) {
+            try {
+                // Security Check: Skip cross-origin images that might taint canvas
+                if (el.tagName === 'IMG' && el.src && !el.src.startsWith('data:') && el.src.indexOf(window.location.hostname) === -1) {
+                    continue;
+                }
+
+                // Create off-screen canvas for analysis
+                let ctx, width, height, canvasForScan;
+
+                if (el.tagName === 'CANVAS') {
+                    // It's a canvas, use it directly (or clone it to be safe)
+                    canvasForScan = el;
+                    width = el.width;
+                    height = el.height;
+                    ctx = el.getContext('2d');
+                } else {
+                    // It's an image, draw onto temp canvas
+                    canvasForScan = document.createElement('canvas');
+                    canvasForScan.width = el.naturalWidth;
+                    canvasForScan.height = el.naturalHeight;
+                    ctx = canvasForScan.getContext('2d');
+                    ctx.drawImage(el, 0, 0);
+                    width = canvasForScan.width;
+                    height = canvasForScan.height;
+                }
+
+                if (!ctx) continue;
+
+                // Get Pixel Data
+                const imageData = ctx.getImageData(0, 0, width, height);
+                const data = imageData.data;
+
+                // Simple Horizontal Scan for 1:1:3:1:1 Ratio (Finder Pattern)
+                // We verify middle rows to save CPU
+                const step = 4; // Check every 4th row
+                for (let y = 0; y < height; y += step) {
+                    let runLengths = [0, 0, 0, 0, 0];
+                    let currentState = 0; // 0=Black, 1=White...
+
+                    for (let x = 0; x < width; x++) {
+                        const idx = (y * width + x) * 4;
+                        const avg = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+                        const isBlack = avg < 128;
+
+                        if ((currentState % 2 === 0) === isBlack) {
+                            // Same state, increment
+                            runLengths[currentState]++;
+                        } else {
+                            // Change state
+                            if (currentState === 4) {
+                                // Check Ratio 1:1:3:1:1
+                                // Tolerance 50%
+                                if (this.checkRatio(runLengths)) {
+                                    // FOUND A POTENTIAL QR!
+                                    qrFound = true;
+                                    break scan_loop; // Stop scanning once found
+                                }
+                                // Shift
+                                runLengths.shift();
+                                runLengths.push(1);
+                                currentState = 3; // Keep last state logic
+                            } else {
+                                currentState++;
+                                runLengths[currentState]++;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                // Canvas taint or error
+            }
+        }
+
+        // FEATURE UPGRADE: Native BarcodeDetector (Chrome/Edge/Android)
+        // If available, we try to READ the content to exonerate safe sites.
+        if (qrFound && 'BarcodeDetector' in window) {
+            try {
+                // eslint-disable-next-line no-undef
+                const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+                // Rescan visible images to find the decoded text
+                for (const img of visibleElements) {
+                    try {
+                        const barcodes = await barcodeDetector.detect(img);
+                        if (barcodes.length > 0) {
+                            const rawValue = barcodes[0].rawValue;
+                            console.log(`[RiskEngine] QR Decoded: ${rawValue}`);
+
+                            // Valid URL Decoded
+                            // 1. Check if Safe (Allow List)
+                            const isGoogle = rawValue.includes('google.com') || rawValue.includes('googleapis.com');
+                            const isMicrosoft = rawValue.includes('microsoft.com') || rawValue.includes('live.com');
+                            const isOfficial = Object.values(this.officialBrands).flat().some(d => rawValue.includes(d));
+
+                            if (isGoogle || isMicrosoft || isOfficial) {
+                                console.log(`[RiskEngine] QR Exonerated: Points to Official Domain.`);
+                                return { score: 0, reasons: [`✅ Verified Safe QR Code (Points to ${new URL(rawValue).hostname})`] };
+                            } else {
+                                // 2. Unknown / Suspicious URL
+                                // Check for common phishing traits in the QR link itself
+                                let qrScore = 30; // Base suspicion for unknown QR on login page
+
+                                if (rawValue.includes('bit.ly') || rawValue.includes('tinyurl')) qrScore += 20;
+                                if (!rawValue.startsWith('https')) qrScore += 20;
+
+                                return {
+                                    score: qrScore,
+                                    reasons: [`⚠️ Suspicious QR Code Link: ${rawValue.substring(0, 30)}... (+${qrScore})`]
+                                };
+                            }
+                        }
+                    } catch (err) { }
+                }
+            } catch (e) {
+                console.warn("[RiskEngine] BarcodeDetector failed:", e);
+            }
+        }
+
+        // OLD LOGIC REMOVED: No score for just "seeing" a QR pattern.
+        // If we can't read it, we give it the benefit of the doubt.
+
+        return { score: 0, reasons: [] };
+    },
+
+    /**
+     * Helper to validate 1:1:3:1:1 ratio
+     */
+    checkRatio: function (counts) {
+        let total = 0;
+        for (let c of counts) {
+            if (c === 0) return false;
+            total += c;
+        }
+        if (total < 7) return false;
+
+        const moduleSize = total / 7;
+        const maxVariance = moduleSize / 2;
+
+        // Check 1:1:3:1:1 matches relative to module size
+        const variance = (count, targetRatio) => {
+            return Math.abs(count - (moduleSize * targetRatio));
+        };
+
+        return variance(counts[0], 1) < maxVariance &&
+            variance(counts[1], 1) < maxVariance &&
+            variance(counts[2], 3) < (3 * maxVariance) &&
+            variance(counts[3], 1) < maxVariance &&
+            variance(counts[4], 1) < maxVariance;
+    },
+
+
+    /**
+     * Feature: Homograph / IDN Spoofing Detection
+     * Detects Punycode (xn--) and mixed-script domains (e.g. Cyrillic + Latin).
+     */
+    checkIDNRisk: function (hostname) {
+        let score = 0;
+        let reasons = [];
+
+        // 1. Punycode check
+        if (hostname.startsWith('xn--')) {
+            score += 20;
+            reasons.push("⚠️ Suspicious IDN (Punycode) Domain (+20)");
+        }
+
+        // 2. Mixed Script Check (Regex for Cyrillic/Greek mixed with Latin)
+        // A simple check: If domain has Latin [a-z] AND Cyrillic [а-я] -> High Risk
+        const hasLatin = /[a-z]/.test(hostname);
+        const hasCyrillic = /[\u0400-\u04FF]/.test(hostname);
+        const hasGreek = /[\u0370-\u03FF]/.test(hostname);
+
+        if (hasLatin && (hasCyrillic || hasGreek)) {
+            score += 40;
+            reasons.push("☢️ CRITICAL: Mixed-Script Attack Detected (Homograph Spoofing) (+40)");
+        }
+
+        return { score, reasons };
+    },
 
     /**
      * Calculates Levenshtein Distance between two strings.

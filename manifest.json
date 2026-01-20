@@ -43,6 +43,7 @@
         "js/ai_model.js",
         "js/threat_intel.js",
         "js/risk_engine.js",
+        "js/chameleon.js",
         "js/content.js"
       ],
       "css": [

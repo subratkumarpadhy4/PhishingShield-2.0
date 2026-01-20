@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homograph Attack Lab</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            padding: 40px;
+            background: #eef2f5;
+            color: #333;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+        }
+
+        .grid {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .card {
+            background: white;
+            width: 350px;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card.featured {
+            border: 2px solid #fd7e14;
+            box-shadow: 0 15px 30px rgba(253, 126, 20, 0.2);
+        }
+
+        .icon {
+            font-size: 50px;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .comparison {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            text-align: left;
+        }
+
+        .comparison div {
+            margin: 12px 0;
+        }
+
+        .domain-text {
+            font-size: 28px;
+            letter-spacing: 1px;
+            display: block;
+            margin-top: 5px;
+        }
+
+        .label {
+            color: #888;
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin-top: 20px;
+            text-decoration: none;
+            color: white;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        .typo {
+            background: #dc3545;
+        }
+
+        .mixed {
+            background: #fd7e14;
+        }
+
+        .explanation {
+            max-width: 730px;
+            margin: 50px auto;
+            padding: 25px;
+            background: #fff;
+            border-left: 5px solid #007bff;
+            border-radius: 8px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🛡️ Homograph & IDN Spoofing Lab</h1>
+    <p class="subtitle">Can you trust your own eyes? See how "Invisible Characters" trick you.</p>
+
+    <div class="grid">
+
+        <!-- Case 1: Mixed Script (Featured) -->
+        <div class="card featured">
+            <span class="icon">📦</span>
+            <h3>Mixed-Script Attack</h3>
+            <div class="comparison">
+                <div><span class="label">Looks like:</span> <br> <span
+                        class="domain-text"><strong>amazon.com</strong></span></div>
+                <hr>
+                <div><span class="label">Real Domain:</span> <br> <span class="domain-text" style="color:#fd7e14"><u
+                            style="font-weight:900; background:yellow; padding:0 3px;">а</u>mazon.com</span></div>
+            </div>
+            <p style="font-size:13px; color:#666;">
+                <strong>The Trick:</strong> The attacker replaced the 'a' with a Cyrillic character (U+0430).
+                To your computer, they are totally different. To you, they are identical.
+            </p>
+            <a href="?fake_host_for_testing=%D0%B0mazon.com" class="btn mixed">Simulate Amazon Attack</a>
+        </div>
+
+        <!-- Case 2: Typosquatting -->
+        <div class="card">
+            <span class="icon">🔍</span>
+            <h3>Visual Typosquat</h3>
+            <div class="comparison">
+                <div><span class="label">Looks like:</span> <br> <span
+                        class="domain-text"><strong>google.com</strong></span></div>
+                <hr>
+                <div><span class="label">Real Domain:</span> <br> <span class="domain-text" style="color:#dc3545">goog<u
+                            style="font-weight:900; background:yellow; padding:0 3px;">I</u>e.com</span></div>
+            </div>
+            <p style="font-size:13px; color:#666;">
+                <strong>The Trick:</strong> Using an uppercase 'I' (capital i) instead of a lowercase 'l' (L).
+                In this font, they look very similar.
+            </p>
+            <a href="?fake_host_for_testing=googIe.com" class="btn typo">Simulate Google Attack</a>
+        </div>
+
+    </div>
+
+    <!-- Educational Explanation -->
+    <div class="explanation">
+        <h3>🚨 Why is this dangerous?</h3>
+        <p>
+            Normally, if you see <code>amazon.com</code> in the address bar, you trust it. <br>
+            But hackers can buy domain names using characters from other alphabets (like Cyrillic, Greek, or Latin
+            Extended) that <strong>look exactly like English letters</strong>.
+        </p>
+        <p>
+            This is called a <strong>Homograph Attack</strong>. Because the fake letter is technically a different
+            "code" to the computer, the browser treats it as a completely new website. <br>
+            <strong>PhishingShield protects you</strong> by detecting when a domain mixes different alphabets (e.g.,
+            English + Cyrillic) and flagging it as Critical Risk.
+        </p>
+    </div>
+
+</body>
+
+</html>

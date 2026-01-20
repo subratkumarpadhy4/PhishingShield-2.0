@@ -3033,6 +3033,38 @@ app.get("/api/users/global-sync", async (req, res) => {
     }
 });
 
+// --- MOCKED WHOIS / DOMAIN AGE API ---
+// In production, this would call a real WHOIS provider (e.g., WhoisXML, GoDaddy API)
+app.get('/api/domain-age', (req, res) => {
+    const domain = req.query.domain;
+    if (!domain) return res.status(400).json({ error: "Missing domain" });
+
+    // SIMULATION LOGIC:
+    // 1. If domain contains "new", "test", "temp", "verify" -> Treat as VERY NEW (2 days old)
+    // 2. If domain contains "google", "paypal", "amazon" -> Treat as OLD (10 years)
+    // 3. Otherwise -> Random age for demo
+
+    let daysOld = 365; // Default safe
+
+    if (domain.match(/new|test|temp|verify|update|secure-login/)) {
+        daysOld = 2; // Suspiciously new
+    } else if (domain.match(/google|paypal|amazon|microsoft|facebook|apple|netflix/)) {
+        daysOld = 5000; // Ancient
+    } else {
+        daysOld = Math.floor(Math.random() * 500); // Random
+    }
+
+    // Return the "Registration Date"
+    const regDate = new Date();
+    regDate.setDate(regDate.getDate() - daysOld);
+
+    res.json({
+        domain: domain,
+        daysOld: daysOld,
+        created: regDate.toISOString()
+    });
+});
+
 // Start Server
 // Bind to 0.0.0.0 to accept connections from Render's network
 app.listen(PORT, "0.0.0.0", () => {

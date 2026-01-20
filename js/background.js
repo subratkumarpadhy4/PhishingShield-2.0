@@ -560,8 +560,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         console.log(`[PhishingShield] 🤖 Initiating AI Scan for ${payload.url.substring(0, 50)}...`);
 
-        // Use Global Server for AI scanning
-        fetch('https://phishingshield.onrender.com/api/ai/scan', {
+        // Use API_BASE for AI scanning (Local or Global)
+        const scanEndpoint = `${API_BASE}/ai/scan`;
+        console.log(`[PhishingShield] 🤖 Initiating AI Scan via ${scanEndpoint}...`);
+
+        fetch(scanEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -581,6 +584,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         return true; // Keep channel open
     }
+
+
 
     return false;
 });

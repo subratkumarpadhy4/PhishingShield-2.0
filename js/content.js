@@ -187,6 +187,21 @@ function initRiskAnalysis(isFortressMode) {
             console.warn("RiskEngine Missing - Sending fallback log.");
         }
 
+        // 🐍 CHAMELEON CHECK (Visual DNA)
+        // Overrides previous score if a visual clone is detected
+        if (typeof Chameleon !== 'undefined') {
+            const dnaResult = Chameleon.scan();
+            if (dnaResult.isClone) {
+                console.warn("[Content] 🦎 Chameleon Detected Clone:", dnaResult.brand);
+                analysis.score = 100; // Critical Threat - Override to Max
+                analysis.primaryThreat = `🚨 IMPERSONATION: ${dnaResult.brand.toUpperCase()}`;
+                // Add to TOP of reasons
+                analysis.reasons.unshift(
+                    `🦎 CHAMELEON ALERT: Page mimics ${dnaResult.brand.toUpperCase()} visual style but is NOT official (+100)`
+                );
+            }
+        }
+
         // Fortress Mode: Heightened Sensitivity
         if (isFortressMode) {
             analysis.score += 25; // Base paranoia penalty
@@ -335,56 +350,31 @@ function initRiskAnalysis(isFortressMode) {
             showRiskHUD(analysis);
         }
 
-        // --- PHASE 2: REAL AI VERIFICATION (Async) ---
-        if (true) {
-            console.log("[Content] Initiating Real AI Scan...");
-            chrome.runtime.sendMessage({
-                type: "SCAN_CONTENT",
-                url: window.location.href,
-                content: document.body.innerText.substring(0, 5000)
-            }, (res) => {
-                if (chrome.runtime.lastError) return;
-                if (res && res.error) console.error("AI Error:", res.error);
+        // --- PHASE 2: REAL AI VERIFICATION (Async with Cache) ---
+        // Optimization: Check cache first to save API calls/time
+        const hasSensitiveInput = document.querySelector('input[type="password"]');
+        if (analysis.score >= 20 || hasSensitiveInput) {
 
-                if (res && res.aiAnalysis) {
+            checkAICache(window.location.href, (cachedResult) => {
+                if (cachedResult) {
+                    console.log("[Content] ⚡ Using Cached AI Result");
+                    updateAnalysisWithAI(analysis, cachedResult);
+                } else {
+                    console.log("[Content] Initiating Real AI Scan (No Cache)...");
+                    chrome.runtime.sendMessage({
+                        type: "SCAN_CONTENT",
+                        url: window.location.href,
+                        content: document.body.innerText.substring(0, 5000)
+                    }, (res) => {
+                        if (chrome.runtime.lastError) return;
+                        if (res && res.error) console.error("AI Error:", res.error);
 
-                    console.log("[Content] AI Scan Returned:", res.aiAnalysis);
-                    const aiScore = res.aiAnalysis.score || 0;
-
-                    // Only show AI result if it's SIGNIFICANT (>= 20) or CONFIRMS a higher risk
-                    // If it's just "Safe" (< 20), keep it hidden
-                    if (aiScore < 20 && analysis.score < 20) {
-                        console.log("[Content] AI confirms risk is safe (both AI and Page scores < 20), staying hidden.");
-                        return;
-                    }
-
-                    // ALWAYS update to show AI verification
-                    console.log("[Content] Updating HUD with AI Result");
-
-                    // Merge Results
-                    analysis.score = Math.max(analysis.score, aiScore);
-
-                    // Avoid duplicate entries
-                    const aiMsg = `🤖 Real AI Analysis: ${res.aiAnalysis.suggestion} (+${aiScore})`;
-                    let duplicate = false;
-                    for (let r of analysis.reasons) { if (r.includes('Real AI Analysis')) duplicate = true; }
-
-                    if (!duplicate) {
-                        analysis.reasons.push(aiMsg);
-                        analysis.reasons.push(`${res.aiAnalysis.reason}`);
-                    }
-
-                    if (aiScore > 80) analysis.primaryThreat = "AI CONFIRMED THREAT";
-                    else if (aiScore > 50) analysis.primaryThreat = "Suspicious Content (AI)";
-
-                    // Re-render HUD
-                    showRiskHUD(analysis);
-
-                    // AUTO-EXPAND DETAILS disabled - user must click info button
-                    // setTimeout(() => {
-                    //     const panel = document.getElementById('hud-details-panel');
-                    //     if (panel) panel.style.display = 'block';
-                    // }, 500);
+                        if (res && res.aiAnalysis) {
+                            // Cache the result
+                            cacheAIResult(window.location.href, res.aiAnalysis);
+                            updateAnalysisWithAI(analysis, res.aiAnalysis);
+                        }
+                    });
                 }
             });
         }
@@ -577,20 +567,6 @@ function initLoginProtection() {
         }
     }
 
-    function injectSecurityBanner() {
-        if (document.getElementById('phishingshield-banner')) return;
-
-        const banner = document.createElement('div');
-        banner.id = 'phishingshield-banner';
-        banner.innerHTML = `
-            <p>⚠️ SECURITY ALERT: Unencrypted password field detected on this page. DO NOT ENTER YOUR CREDENTIALS.</p>
-        `;
-        document.body.prepend(banner); // Add to top of body
-
-        // Adjust body margin if needed to not hide content, or just overlay (user request says "prominent... top of page")
-        document.body.style.marginTop = '60px';
-    }
-
     // Run immediately
     checkForInsecureLogin();
 
@@ -601,8 +577,92 @@ function initLoginProtection() {
     observer.observe(document.body, { childList: true, subtree: true });
 }
 
+function injectSecurityBanner(customMsg) {
+    if (document.getElementById('phishingshield-banner')) return;
+
+    const msg = customMsg || `⚠️ SECURITY ALERT: Unencrypted password field detected on this page. DO NOT ENTER YOUR CREDENTIALS.`;
+
+    const banner = document.createElement('div');
+    banner.id = 'phishingshield-banner';
+    banner.innerHTML = `
+        <p>${msg}</p>
+    `;
+    document.body.prepend(banner); // Add to top of body
+
+    // Adjust body margin if needed to not hide content, or just overlay (user request says "prominent... top of page")
+    document.body.style.marginTop = '60px';
+}
+
 function showRiskHUD(analysis) {
-    if (document.getElementById('phishingshield-hud')) return;
+    // If HUD exists, UPDATE it instead of returning
+    const existingHUD = document.getElementById('phishingshield-hud');
+    if (existingHUD) {
+        // Update Score Badge (if it exists in collapsed view)
+        const scoreBadge = existingHUD.shadowRoot ? existingHUD.shadowRoot.getElementById('ps-score-badge') : document.getElementById('ps-score-badge');
+        if (scoreBadge) {
+            scoreBadge.innerText = analysis.score;
+            scoreBadge.style.backgroundColor = getScoreColor(analysis.score);
+        }
+
+        // Update Text (collapsed view)
+        const threatText = existingHUD.shadowRoot ? existingHUD.shadowRoot.getElementById('ps-threat-text') : document.getElementById('ps-threat-text');
+        if (threatText) {
+            threatText.innerText = analysis.primaryThreat;
+        }
+
+        // Update Details Panel (if open or created)
+        // We store the analysis object on the DOM element to be re-read by the click handler
+        existingHUD.dataset.analysisIdx = JSON.stringify(analysis);
+
+        // If formatting function exists, try to update panel lively
+        const panel = document.getElementById('hud-details-panel');
+        if (panel && panel.style.display === 'block') {
+            // Re-render the list inside
+            let listHtml = '<ul>';
+            analysis.reasons.forEach(r => {
+                // Inline Parsing Logic to avoid Helper Function Dependency
+                const match = r.match(/(.*)\s\(\s*([+-]\d+)\s*\)$/);
+                let text = r;
+                let badge = '';
+
+                if (match) {
+                    text = match[1].trim();
+                    const scoreVal = parseInt(match[2]);
+                    const isSafety = scoreVal < 0 || text.includes('Adaptive Trust');
+                    const badgeClass = isSafety ? 'ps-score-badge bonus' : 'ps-score-badge';
+                    // Ensure sign is displayed
+                    const sign = scoreVal > 0 ? '+' : '';
+                    badge = `<span class="${badgeClass}">${sign}${scoreVal}</span>`;
+                } else {
+                    // Fallback check
+                    const simpleMatch = r.match(/\(\+(\d+)\)/);
+                    if (simpleMatch) {
+                        badge = `<span class="ps-score-badge">+${simpleMatch[1]}</span>`;
+                        text = r.replace(`(+${simpleMatch[1]})`, '').trim();
+                    }
+                }
+
+                listHtml += `<li><span>${text}</span>${badge}</li>`;
+            });
+            listHtml += '</ul>';
+
+            // Keep the title, just update list
+            const h4 = panel.querySelector('h4');
+            panel.innerHTML = '';
+            if (h4) panel.appendChild(h4);
+            panel.insertAdjacentHTML('beforeend', listHtml);
+        }
+
+        return;
+    }
+
+    // CHECK FOR SPECIFIC QUISHING WARNING
+    if (analysis.reasons.some(r => r.includes('Suspicious QR Code Link') || r.includes('Quishing'))) {
+        // VISIBLE WARNING (Toast)
+        if (typeof showToastNotification === 'function') {
+            showToastNotification("🚨 Suspicious QR Detected", "Do NOT scan this QR code. It leads to a suspicious website.", "danger");
+        }
+    }
 
     // Cleanup
     const existingStyles = document.getElementById('ps-styles');
@@ -1026,4 +1086,120 @@ function initFortressClipboard(isFortressMode) {
             }
         }, true); // Capture phase
     });
+}
+
+/**
+ * Toast Notification (In-Page Fallback)
+ * Look-alike of Chrome Notification but guaranteed to render.
+ */
+function showToastNotification(title, message, type = 'info') {
+    if (document.getElementById('ps-toast')) return;
+
+    const toast = document.createElement('div');
+    toast.id = 'ps-toast';
+
+    const bgColor = type === 'danger' ? '#dc3545' : '#007bff';
+    const icon = type === 'danger' ? '🚨' : 'ℹ️';
+
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 2147483647;
+        background: white;
+        color: #333;
+        padding: 16px 24px;
+        border-right: 6px solid ${bgColor};
+        border-radius: 8px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        display: flex;
+        gap: 15px;
+        align-items: flex-start;
+        animation: slideInRight 0.4s ease-out;
+        max-width: 350px;
+    `;
+
+    toast.innerHTML = `
+        <div style="font-size: 24px;">${icon}</div>
+        <div>
+            <div style="font-weight: 700; font-size: 15px; margin-bottom: 4px;">${title}</div>
+            <div style="font-size: 13px; color: #555; line-height: 1.4;">${message}</div>
+        </div>
+        <button style="background:none; border:none; color:#999; cursor:pointer; font-size:18px; position:absolute; top:5px; right:8px;" onclick="this.parentElement.remove()">×</button>
+    `;
+
+    // Add Keyframe if needed (likely existing, but safe to add inline or assume simple transition)
+    document.body.appendChild(toast);
+
+    // Auto dismiss
+    setTimeout(() => {
+        if (toast) {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(20px)';
+            toast.style.transition = 'all 0.4s';
+            setTimeout(() => toast.remove(), 400);
+        }
+    }, 8000);
+}
+
+/**
+ * AI Caching System
+ */
+function checkAICache(url, callback) {
+    chrome.storage.local.get(['aiCache'], (data) => {
+        const cache = data.aiCache || {};
+        const entry = cache[url];
+        // Valid if exists and younger than 24 hours
+        if (entry && (Date.now() - entry.timestamp < 86400000)) { // 24h ms
+            callback(entry.data);
+        } else {
+            callback(null);
+        }
+    });
+}
+
+function cacheAIResult(url, aiData) {
+    chrome.storage.local.get(['aiCache'], (data) => {
+        const cache = data.aiCache || {};
+        // Prune old entries if too big (>100 urls)
+        const keys = Object.keys(cache);
+        if (keys.length > 100) delete cache[keys[0]];
+
+        cache[url] = {
+            timestamp: Date.now(),
+            data: aiData
+        };
+        chrome.storage.local.set({ aiCache: cache });
+    });
+}
+
+function updateAnalysisWithAI(analysis, aiResult) {
+    console.log("[Content] AI Scan Returned:", aiResult);
+    const aiScore = aiResult.score || 0;
+
+    // Only show if significant or mismatch
+    if (aiScore < 20 && analysis.score < 20) {
+        console.log("[Content] AI confirms safe, staying hidden.");
+        return;
+    }
+
+    console.log("[Content] Updating HUD with AI Result");
+
+    // Merge logic
+    analysis.score = Math.max(analysis.score, aiScore);
+
+    const aiMsg = `�� Real AI Analysis: ${aiResult.suggestion} (+${aiScore})`;
+    let duplicate = false;
+    for (let r of analysis.reasons) { if (r.includes('Real AI Analysis')) duplicate = true; }
+
+    if (!duplicate) {
+        analysis.reasons.push(aiMsg);
+        analysis.reasons.push(aiResult.reason); // No extra string interpolation needed
+    }
+
+    if (aiScore > 80) analysis.primaryThreat = "AI CONFIRMED THREAT";
+    else if (aiScore > 50) analysis.primaryThreat = "Suspicious Content (AI)";
+
+    showRiskHUD(analysis);
 }
