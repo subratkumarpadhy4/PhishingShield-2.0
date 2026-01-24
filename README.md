@@ -123,15 +123,15 @@ When heuristics flag a site as suspicious, the **AI Cloud Layer** engages.
 
 ```mermaid
 graph LR
-    A[Suspicious Page] --> B{Heuristic Score > 20?}
-    B -- No --> C[Green HUD]
-    B -- Yes --> D[Snapshot DOM]
-    D --> E[Send to Groq Llama-3]
-    E --> F{Is Phishing?}
-    F -- No --> G[Mark Safe (Cache)]
-    F -- Yes --> H{Confidence > 80%?}
-    H -- Yes --> I[🔴 BLOCK & ALERT]
-    H -- No --> J[Consult Gemini (Fallback)]
+    A["Suspicious Page"] --> B{"Heuristic Score > 20?"}
+    B -- No --> C["Green HUD"]
+    B -- Yes --> D["Snapshot DOM"]
+    D --> E["Send to Groq Llama-3"]
+    E --> F{"Is Phishing?"}
+    F -- No --> G["Mark Safe (Cache)"]
+    F -- Yes --> H{"Confidence > 80%?"}
+    H -- Yes --> I["🔴 BLOCK & ALERT"]
+    H -- No --> J["Consult Gemini (Fallback)"]
     J --> I
 ```
 *   **Results**: Generates a human-readable report (e.g., "AI Detected: Imitating Amazon Login page with urgency tactics").
