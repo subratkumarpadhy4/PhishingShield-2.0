@@ -175,11 +175,18 @@ Security meets Fun.
 *   **Ban**: Admins review and ban sites instantly.
 *   **Block**: Uses `declarativeNetRequest` for network-level blocking.
 
-### 7. � Advanced Download Protection
+### 7. 🛡️ Advanced Download Protection
 PhishingShield analyzes incoming files for hidden execution risks:
 *   **Double Extension Detection**: Blocks `invoice.pdf.exe`.
 *   **Source Correlation**: Downloads from "High Risk" sites are flagged automatically.
 *   **Fortress Mode**: Lockdown mode handling 3rd party scripts.
+
+### 8. 📸 AI Quishing (QR Phishing) Detector
+Phishing schemes now use QR codes to bypass text filters. We catch them.
+*   **Auto-Scan**: Scans visible images for valid QR codes.
+*   **URL Extraction**: Decodes the QR payload securely in the background.
+*   **Risk Analysis**: Runs the decoded URL through the same Risk Engine & AI checks as a normal page visit.
+*   **Overlay Alert**: Draws a warning box directly over the malicious QR code image.
 
 ---
 
