@@ -34,12 +34,14 @@ Traditional antiviruses are **Reactive** (waiting for blacklists). PhishingShiel
 ## 🏗️ Architecture Visualization
 
 ### 🌐 System Architecture & Logic
-
-### 🌐 System Architecture & Logic
 #### 1. 🧩 Modular System View
 The system is composed of specialized detectors that feed into a central Risk Engine.
 
-> *Note: If the diagram below does not render on your device, [view the static image here](./images/architecture.png).*
+![PhishingShield Architecture](./images/architecture.png)
+
+<details>
+<summary><b>🔍 Click here to view Interactive Diagram (Mermaid)</b></summary>
+<br>
 
 ```mermaid
 graph TD
@@ -75,8 +77,16 @@ graph TD
     end
 ```
 
+</details>
+
 #### 2. ⚡ Threat Detection Logic Flow
 How a "Suspicious Site" triggers the AI Defense Grid.
+
+![Threat Detection Logic Flow](./images/threat_logic_flow.png)
+
+<details>
+<summary><b>🔍 Click here to view Interactive Diagram (Mermaid)</b></summary>
+<br>
 
 ```mermaid
 sequenceDiagram
@@ -103,6 +113,8 @@ sequenceDiagram
         Ext->>User: Update HUD to RED (Blocked)
     end
 ```
+
+</details>
 
 ---
 
