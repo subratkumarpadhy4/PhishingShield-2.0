@@ -1,29 +1,57 @@
-# 🛡️ PhishingShield 2.0: The Ultimate AI-Powered Browser Security Suite
+# 🛡️ PhishingShield 2.0: The AI-Powered Guardian of the Web
 
-![PhishingShield Banner](https://img.shields.io/badge/Security-AI%20Powered-blue?style=for-the-badge&logo=shield) ![Version](https://img.shields.io/badge/Version-2.0-green?style=for-the-badge) ![Status](https://img.shields.io/badge/Status-Active-success?style=for-the-badge) ![License](https://img.shields.io/badge/License-MIT-orange?style=for-the-badge)
+<div align="center">
 
-**PhishingShield** is a comprehensive, client-side browser security suite designed to protect users from modern web threats in real-time. Unlike traditional antivirus software that relies solely on static blacklists, PhishingShield employs a multi-layered heuristic risk engine, **Real-Time Global Synchronization**, and cutting-edge **Generative AI** to detect Zero-Day phishing attacks, brand impersonation, and malicious browser extensions.
+![PhishingShield Banner](https://img.shields.io/badge/Security-AI%20Powered-blue?style=for-the-badge&logo=shield)
+![Version](https://img.shields.io/badge/Version-2.0.0-green?style=for-the-badge)
+![Tech](https://img.shields.io/badge/Stack-Chrome%20Ext%20%7C%20Node.js%20%7C%20Llama3-blueviolet?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-Active%20Defense-success?style=for-the-badge)
+
+**Detects Zero-Day Phishing Attacks in < 500ms.**
+*Protection that thinks faster than hackers can type.*
+
+[Features](#-key-features) • [Installation](#-installation--setup) • [Architecture](#-architecture-visualization) • [Live Demo](#-how-to-test-demo-scenarios)
+
+</div>
+
+---
+
+## ⚔️ Why PhishingShield?
+
+Traditional antiviruses are **Reactive** (waiting for blacklists). PhishingShield is **Proactive**.
+
+| Feature | 🚫 Traditional Antivirus | 🛡️ PhishingShield 2.0 |
+| :--- | :--- | :--- |
+| **Detection logic** | Static Blacklists (Slow) | **Real-Time AI & Heuristics** (Instant) |
+| **Zero-Day Defense** | Fails on new sites | **Detects threat patterns** automatically |
+| **User Feedback** | Passive / Non-existent | **Community Trust Scores** & Voting |
+| **Education** | "Access Denied" (No Info) | **Explains WHY** (e.g., "Typosquatting detected") |
+| **Sync Speed** | Hours/Days | **< 10 Seconds** (Global Neural Sync) |
+| **AI Brain** | None / Cloud-heavy | **Hybrid** (Local Heuristics + Groq/Gemini LLM) |
 
 ---
 
 ## 🏗️ Architecture Visualization
+
+### 🌐 System Overview
+The system is built on a **Hybrid Client-Server Architecture** designed for speed and resilience.
 
 ```mermaid
 graph TD
     User[User Browsing] -->|Visits Page| Ext[Chrome Extension]
     
     subgraph "Client Side (Browser)"
-        Ext -->|1. Inject| Content[content.js]
-        Content -->|2. Heuristic Scan| Engine[risk_engine.js]
+        Ext -->|1. Inject Content Script| Content[content.js]
+        Content -->|2. Heuristic Analysis| Engine[risk_engine.js]
         Engine -->|3. Score Calculated| HUD[Risk HUD UI]
     end
     
     subgraph "Cloud / AI Layer"
         Engine -->|If Score > 20| BG[background.js]
-        BG -->|4. Request Analysis| Server[Node.js Server]
-        Server -->|5. Forensic Audit| LLM[Groq / Gemini AI]
-        LLM -->|6. Verdict| Server
-        Server -->|7. Result| HUD
+        BG -->|4. Request Forensic Audit| Server[Node.js Server]
+        Server -->|5. Analyze DOM| LLM[Groq Llama-3 / Gemini]
+        LLM -->|6. Verdict & reasoning| Server
+        Server -->|7. Return Report| HUD
     end
     
     subgraph "Global Sync Network"
@@ -33,37 +61,57 @@ graph TD
     end
 ```
 
-## ⚔️ Why PhishingShield?
+<details>
+<summary><b>🔍 Click here to see the detailed Data Flow Sequence</b></summary>
 
-| Feature | 🚫 Traditional Antivirus | 🛡️ PhishingShield 2.0 |
-| :--- | :--- | :--- |
-| **Detection Method** | Static Blacklists (Slow) | **Real-Time AI & Heuristics** (Instant) |
-| **New Threats** | Fails on Zero-Day attacks | **Detects Unknown Threats** via Logic |
-| **User Feedback** | Passive / Non-existent | **Community Trust Scores** & Voting |
-| **Education** | Blocks page without explanation | **Explains WHY** (e.g., "Typosquatting") |
-| **Protection Speed** | Hours/Days to update DB | **< 10 Seconds** (Global Sync) |
-| **AI Integration** | None / Cloud-heavy | **Hybrid** (Local + Groq/Gemini LLM) |
+### 📡 Data Flow Sequence (User Visit -> Protection)
+How a single page visit triggers the entire defense network.
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant B as Browser (Extension)
+    participant E as Risk Engine (Local)
+    participant S as Server (API)
+    participant AI as AI Model (Groq)
+    participant D as Database
+
+    U->>B: Visits suspicious-site.com
+    B->>E: Scan DOM, URL, & Meta Tags
+    E->>E: Calculate Heuristic Score (Local)
+    
+    alt Score < 20 (Safe)
+        E-->>B: Status: GREEN (Safe)
+    else Score > 20 (Suspicious)
+        E->>B: Status: YELLOW (Warning)
+        B->>S: POST /api/ai/scan (DOM Snapshot)
+        S->>AI: Analyze Prompts (Urgency, Brand Spoofing)
+        AI-->>S: Verdict: PHISHING (95%)
+        S-->>B: Result: CRITICAL THREAT
+        B->>U: RED HUD ALERT (Blocked)
+    end
+    
+    B->>S: Log Visit (Async)
+    S->>D: Update User XP & Stats
+```
+
+</details>
 
 ---
 
 ## 🚀 Key Features
 
 ### 1. 🔍 Intelligent Risk Engine (`risk_engine.js`)
-The core of our defense is a purely client-side heuristic engine that analyzes every webpage in milliseconds.
-*   **Brand Impersonation Detection**: Compares page content/titles against a protected list of major brands (PayPal, Google, SBI, etc.).
-*   **Typosquatting Sentinel**: Detects deceptive domains like `goog1e.com` or `paypaI.com` using complex Levenshtein distance algorithms.
-*   **Punycode & Homograph Detecion**: Blocks international character spoofing (e.g., Cyrillic 'a' vs Latin 'a').
-*   **Domain Entropy Analysis**: Identifies randomly generated domains often used by botnets.
-*   **Quishing (QR Phishing) Detector**: Scans images for QR codes and decodes them to verify if they lead to safe or malicious URLs.
-*   **Extension Security Audit**: Scans *other* installed extensions to detect rogue scripts injecting code into your pages.
+The core of our defense is a purely client-side heuristic engine.
+*   **Brand Impersonation**: Compares page content/titles against a protected list of major brands (PayPal, Google, SBI, etc.).
+*   **Typosquatting Sentinel**: Detects deceptive domains like `goog1e.com` or `paypaI.com`.
+*   **Punycode & Homograph Detection**: Blocks IDN homograph attacks (e.g., Cyrillic 'a' vs Latin 'a').
+*   **Entropy Analysis**: Identifies randomly generated domains (DGA) used by botnets.
+*   **Extension Audit**: Scans *other* installed extensions to detect rogue scripts.
 
-### 2. 🤖 Dual-Engine AI Analysis
-When heuristics flag a site as suspicious (Score 20-50), the **AI Cloud Layer** is engaged for a forensic audit.
-*   **Groq (Llama-3)**: Acts as the primary "Forensic Analyst", scanning page tone, hidden threats, and social engineering patterns in <1s.
-*   **Google Gemini**: Serves as the "Failover Validator", ensuring 99.9% uptime and double-checking high-risk verdicts.
-*   **The Result**: If confirmed, the HUD turns **Red** and displays a detailed report (e.g., "AI Detected: Imitating Amazon Login page with urgency tactics").
-
-#### 🧠 AI Decision Logic
+### 2. � Dual-Engine AI Analysis
+When heuristics flag a site as suspicious, the **AI Cloud Layer** engages.
+#### AI Logic Flow
 ```mermaid
 graph LR
     A[Suspicious Page] --> B{Heuristic Score > 20?}
@@ -77,133 +125,112 @@ graph LR
     H -- No --> J[Consult Gemini (Fallback)]
     J --> I
 ```
+*   **Results**: Generates a human-readable report (e.g., "AI Detected: Imitating Amazon Login page with urgency tactics").
 
 ### 3. 🛡️ The Risk HUD (Head-Up Display)
-A non-intrusive, futuristic overlay that keeps you informed without blocking your view.
+A non-intrusive overlay that sits on top of your browsing experience.
 
 #### 📊 Threat Matrix
-| Risk Level | Score Range | Color | Meaning | Action User Should Take |
+| Risk Level | Score | Color | Meaning | Action |
 | :--- | :---: | :---: | :--- | :--- |
-| **SAFE** | **0 - 20** | 🟢 Green | Verified Brand or Clean Domain | Safe to Browse. |
-| **CAUTION** | **21 - 50** | 🟡 Yellow | Suspicious traits (New Domain, HTTP) | **Proceed with care.** Don't enter passwords. |
-| **DANGEROUS** | **51 - 79** | 🟠 Orange | High Heuristic Risk (Typosquatting) | **Leave Immediately.** Extremely risky. |
-| **CRITICAL** | **80 - 100** | 🔴 Red | **AI Confirmed Phishing** / Malware | **BLOCKED.** Do not interact. Report it. |
-
-*   **Interactive Info Panel**: Click the **ℹ️ Info Button** to see exactly *why* a page is flagged (e.g., "+30 Unencrypted Login", "+50 Typosquatting").
+| **SAFE** | **0 - 20** | 🟢 Green | Verified Brand | Safe to process. |
+| **CAUTION** | **21 - 50** | 🟡 Yellow | Suspicious traits | **Proceed with care.** |
+| **DANGEROUS** | **51 - 79** | 🟠 Orange | High Heuristic Risk | **Leave Immediately.** |
+| **CRITICAL** | **80 - 100** | 🔴 Red | **AI Confirmed Threat** | **BLOCKED.** |
 
 ### 4. 🌐 Real-Time Global Synchronization
-Protection follows you everywhere.
-*   **Community Trust Network**: Every site has a dynamic trust score based on user upvotes/downvotes.
-*   **Global Ban Propagation**: When an Admin bans a malicious site, the update is pushed to **all connected users** within 10 seconds.
-*   **Hybrid Sync**: Merges data from your Local Server (DEV) and Global Cloud, ensuring you never miss a threat.
+*   **Community Trust**: Sites have dynamic trust scores based on user votes.
+*   **Global Ban System**: Admin bans propagate to **all users in < 10 seconds**.
+*   **Hybrid Sync**: Merges Local Server (DEV) and Global Cloud data seamlessly.
 
 ### 5. 🎮 Gamification & XP System
-Security doesn't have to be boring.
-*   **Earn XP**: Gain points for reporting threats, visiting safe sites, and keeping streaks.
-*   **Ranks**: Progress from **Novice** 🥉 to **Scout** 🥈 to **Sentinel** 🥇.
-*   **Unlock Features**: High-level features (like ML Analysis and Chameleon Anti-Bot) are unlocked as you level up.
+Security meets Fun.
+*   **Earn XP**: +10 XP for Reports, +5 XP for safe browsing.
+*   **Ranks**: Novice 🥉 -> Scout 🥈 -> Sentinel 🥇 -> Cyber Ninja 🥷.
+*   **Unlocks**: High-level features (like ML Analysis) unlock as you level up.
 
-### 7. 🛡️ Advanced Download Protection
-PhishingShield analyzes incoming downloads for hidden threats:
-*   **Double Extension Detection**: Blocks files like `invoice.pdf.exe` used to trick users.
-*   **Source Correlation**: If you download a file from a site flagged as "High Risk" (Score > 60), the download is flagged even if the file type looks safe.
-*   **Fortress Mode**: A special lockdown mode that blocks *all* 3rd party scripts on a page (useful for analyzing dangerous sites safely).
+### 6. 🚨 Report, Ban, & Unban Lifecycle
+*   **Report**: Right-click -> "Report to PhishingShield".
+*   **Ban**: Admins review and ban sites instantly.
+*   **Block**: Uses `declarativeNetRequest` for network-level blocking.
 
-### 8. 🚨 Report, Ban, & Unban Lifecycle
-*   **Report**: Right-click any page -> "Report to PhishingShield".
-*   **Ban**: Admins review reports in the Dashboard and ban sites with one click.
-*   **Enforcement**: Banned sites are blocked instantly using Chrome's `declarativeNetRequest` API.
+### 7. � Advanced Download Protection
+PhishingShield analyzes incoming files for hidden execution risks:
+*   **Double Extension Detection**: Blocks `invoice.pdf.exe`.
+*   **Source Correlation**: Downloads from "High Risk" sites are flagged automatically.
+*   **Fortress Mode**: Lockdown mode handling 3rd party scripts.
 
 ---
 
 ## 🛠️ Installation & Setup
 
 ### Prerequisites
-*   **Node.js** (v16+)
-*   **Google Chrome**, Edge, or Brave Browser.
+*   Node.js (v16+)
+*   Chrome / Edge / Brave
 
-### Step 1: Backend Server Setup
-The backend handles AI requests, database sync, and user accounts.
+### 1. Server Setup
 ```bash
-# Clone the repository
 git clone https://github.com/subratkumarpadhy4/PhishingShield.git
 cd PhishingShield/server
-
-# Install dependencies
 npm install
 
-# Configure Environment Variables
-# Create a .env file with your API keys:
-echo "GROQ_API_KEY=your_groq_key" >> .env
-echo "GEMINI_API_KEY=your_gemini_key" >> .env
+# Setup API Keys
+echo "GROQ_API_KEY=your_key" >> .env
+echo "GEMINI_API_KEY=your_key" >> .env
 
-# Start the Server
 npm start
 ```
-*   *Note: Runs on `http://localhost:3000` by default.*
 
-### Step 2: Extension Installation
-1.  Open Chrome and navigate to `chrome://extensions`.
-2.  Toggle **Developer Mode** (top-right corner).
+### 2. Extension Setup
+1.  Go to `chrome://extensions`.
+2.  Enable **Developer Mode**.
 3.  Click **Load Unpacked**.
-4.  Select the **root folder** of this project (`/PhishingShield-2.0`).
-5.  Pin the **Shield Icon 🛡️** to your browser toolbar.
+4.  Select the `PhishingShield-2.0` folder.
 
 ---
 
 ## 🧪 How to Test (Demo Scenarios)
 
 ### Scenario A: The AI Phishing Test
-1.  Navigate to `tests/ai_phishing_test.html`.
-2.  This page contains "Urgency Keywords" (e.g., "Account Suspended").
-3.  **Observation**:
-    *   Initially, the HUD shows **Yellow (~30)**.
-    *   After 2 seconds, the AI analysis completes.
-    *   HUD turns **Red (95+)**.
-    *   Open Info Panel to see: "🤖 AI Analysis Detected Threat".
+1.  Navigate to local file `tests/ai_phishing_test.html`.
+2.  **Watch HUD**: Yellow (Heuristic) -> **Red (AI Confirmed)** after 2s.
+3.  **Result**: "🤖 AI Analysis Detected Threat".
 
 ### Scenario B: Typosquatting
-1.  Navigate to a legitimate site (e.g., `google.com`). HUD is **Green**.
-2.  Open `tests/fake_instagram.html` (simulates a fake login).
-3.  **Observation**:
-    *   HUD detects **"Unencrypted Password Field" (+50)**.
-    *   HUD detects **"Brand Impersonation" (+30)**.
-    *   Score hits **Critical**.
+1.  Open `tests/fake_instagram.html`.
+2.  **Observation**: HUD detects "Brand Impersonation" & "Unencrypted Login".
 
 ### Scenario C: QR Quishing
 1.  Open `tests/qr_safe.html`.
-2.  The engine scans the QR code.
-3.  **Observation**:
-    *   If the QR leads to a known safe domain (e.g., Google), the HUD remains **Green**.
-    *   If the QR leads to a suspicious URL, the score increases.
+2.  **Observation**: Engine scans QR codes in images and validates the destination URL.
 
 ---
 
 ## 📂 Project Structure
 
-*   **/js**:
-    *   `content.js`: The HUD UI and main orchestration logic.
-    *   `risk_engine.js`: Heuristic algorithms (Entropy, Typosquatting, etc.).
-    *   `background.js`: Handles API calls, Global Sync, and Declarative Blocking.
-*   **/server**: Node.js Express backend for AI and Database.
-*   **/tests**: HTML files for testing various attack vectors safely.
-*   **/css**: Styles for the futuristic HUD interface.
+*   **/js**
+    *   `risk_engine.js`: Pure mathematical models for risk calculation.
+    *   `content.js`: UI orchestration.
+    *   `background.js`: Service worker for sync & API.
+*   **/server**: Express app handling AI & Consistency.
+*   **/tests**: Safe environments for testing malware logic.
 
 ---
 
-## 🔒 Permissions Explained
+## 🔒 Permissions Policy
 
-| Permission | Reason |
+| Permission | Justification |
 | :--- | :--- |
-| **`declarativeNetRequest`** | To block banned sites instantly at the network level. |
-| **`scripting`** | To inject the Risk Engine and HUD into webpages. |
-| **`storage`** | To save XP, user settings, and cached AI results. |
-| **`activeTab`** | To capture page text for AI analysis. |
-| **`contextMenus`** | Adds the "Report Phishing" right-click menu. |
+| `activeTab` | Required to read DOM for heuristic analysis. |
+| `scripting` | Needed to inject the Risk HUD overlay. |
+| `declarativeNetRequest` | Used to block banned sites at the network layer. |
+| `storage` | Stores User XP, Level, and cached threats. |
 
 ---
 
 ## 📄 License
 MIT License. Open Source for Educational and Security Research.
 
-**Built with ❤️ by the PhishingShield Team**
+<div align="center">
+<b>Built with ❤️ by the PhishingShield Team</b>
+</div>
