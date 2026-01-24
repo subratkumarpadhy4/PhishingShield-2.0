@@ -59,7 +59,7 @@ graph TD
     end
 
     subgraph "Gamification Layer"
-        HUD -->|Safe Browse (+5XP)| XP[XP Manager]
+        HUD -->|"Safe Browse (+5XP)"| XP[XP Manager]
         XP -->|Level Up| Unlocks{Feature Unlocks}
         Unlocks -->|Lvl 5| QR
         Unlocks -->|Lvl 10| AI_Enable[AI Analysis]
@@ -67,11 +67,11 @@ graph TD
     end
 
     subgraph "AI Cloud Layer"
-        Heuristics -.->|If Score > 20| BG[background.js]
+        Heuristics -.->|"If Score > 20"| BG[background.js]
         BG -->|Request Audit| Server[Node.js Server]
         Server -->|Forensic Prompt| LLM[Groq Llama-3 / Gemini]
         LLM -->|Verdict| Server
-        Server -.->|Return +AI Score| HUD
+        Server -.->|"Return +AI Score"| HUD
     end
 ```
 
