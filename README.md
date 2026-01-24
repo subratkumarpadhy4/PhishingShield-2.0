@@ -34,30 +34,46 @@ Traditional antiviruses are **Reactive** (waiting for blacklists). PhishingShiel
 ## 🏗️ Architecture Visualization
 
 ### 🌐 System Overview
-The system is built on a **Hybrid Client-Server Architecture** designed for speed and resilience.
+The system employs a multi-module architecture where Gamification directly influences Security Capabilities.
 
 ```mermaid
 graph TD
-    User[User Browsing] -->|Visits Page| Ext[Chrome Extension]
+    User[User Browsing] -->|Visits Page / Downloads File| Ext[Browser Extension]
     
     subgraph "Client Side (Browser)"
-        Ext -->|1. Inject Content Script| Content[content.js]
-        Content -->|2. Heuristic Analysis| Engine[risk_engine.js]
-        Engine -->|3. Score Calculated| HUD[Risk HUD UI]
+        Ext -->|Inject| Content[content.js]
+        
+        subgraph "Risk Engine Core"
+            Content -->|1. Extract Features| DOM[DOM Analysis]
+            DOM -->|Check QR Codes| QR[Quishing Detector]
+            DOM -->|Check Icons| Favicon[Favicon Matcher]
+            DOM -->|Check Evasion| Cham[Chameleon Mode]
+            
+            Content -->|Monitor| DL[Download Detector]
+            DL -->|Analyze| DLExt[Double Ext / Source Risk]
+        end
+        
+        Content -->|Calculate Score| HUD[Risk HUD UI]
     end
     
-    subgraph "Cloud / AI Layer"
-        Engine -->|If Score > 20| BG[background.js]
-        BG -->|4. Request Forensic Audit| Server[Node.js Server]
-        Server -->|5. Analyze DOM| LLM[Groq Llama-3 / Gemini]
-        LLM -->|6. Verdict & reasoning| Server
-        Server -->|7. Return Report| HUD
+    subgraph "Gamification Layer (XP)"
+        HUD -->|Safe Browsing +5 XP| XP[XP Manager]
+        XP -->|Level Up!| Unlocks{Feature Unlocks}
+        Unlocks -->|Level 5| QR
+        Unlocks -->|Level 10| ML[Local ML Model]
+        Unlocks -->|Level 20| Cham
     end
     
-    subgraph "Global Sync Network"
-        Server <-->|Sync Bans/Trust| DB[(mongoDB / JSON)]
-        Admin[Admin Dashboard] -->|Ban Site| DB
-        DB -->|Propagate Ban| BG
+    subgraph "Cloud / AI Intelligence"
+        Content -->|If Suspicious| BG[background.js]
+        BG -->|Request Audit| Server[Node.js Server]
+        Server -->|Forensic Scan| LLM[Groq Llama-3 / Gemini]
+        BG <-->|Sync Trust Scores| Trust[Community Trust DB]
+    end
+    
+    subgraph "Global Sync"
+        Trust -->|Global Ban| BG
+        Trust -->|Vote| User
     end
 ```
 
