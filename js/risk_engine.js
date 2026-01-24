@@ -93,7 +93,8 @@ window.RiskEngine = {
         "state bank of india": ["onlinesbi.sbi", "sbi.co.in", "statebankofindia.com"],
         "hdfc": ["hdfcbank.com"],
         "icici": ["icicibank.com"],
-        "axis bank": ["axisbank.com"]
+        "axis bank": ["axisbank.com"],
+        "github": ["github.com"]
     },
 
     analyzePage: async function () {
@@ -124,13 +125,10 @@ window.RiskEngine = {
             console.warn(`[PhishingShield] ⚠️ SIMULATION MODE: Spoofing hostname to ${hostname}`);
         }
 
-        // 0. Search Engine Whitelist
-        if (/google|bing|yahoo|duckduckgo|search|msn/.test(hostname)) {
-            return { score: 0, reasons: [] };
-        }
 
-        // 0. Search Engine Whitelist
-        if (/google|bing|yahoo|duckduckgo|search|msn/.test(hostname)) {
+
+        // 0. Search Engine & Trusted Platform Whitelist
+        if (/google|bing|yahoo|duckduckgo|search|msn|github/.test(hostname)) {
             return { score: 0, reasons: [] };
         }
 
@@ -856,3 +854,4 @@ window.RiskEngine = {
         return entropy;
     }
 };
+console.log('[PhishingShield] Build: 1769298539');
