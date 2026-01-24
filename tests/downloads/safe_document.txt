@@ -1,0 +1,2 @@
+This is a safe text file. 
+Downloading this should NOT trigger any alarms.

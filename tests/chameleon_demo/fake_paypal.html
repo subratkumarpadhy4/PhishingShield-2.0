@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log in to your account</title>
+    <!-- Generic title often used by phishers -->
+    <style>
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            background-color: #f5f7fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .login-container {
+            background: white;
+            padding: 40px;
+            width: 400px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            border: 1px solid #e1e7eb;
+        }
+
+        .brand-logo {
+            /* Mimicking PayPal's branding color without using the actual image to avoid copyright, 
+               but using the structure 'logo' class */
+            color: #003087;
+            font-size: 32px;
+            font-weight: bold;
+            font-style: italic;
+            margin-bottom: 30px;
+            display: block;
+        }
+
+        .login-form input {
+            width: 90%;
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid #b7bcbf;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 15px;
+            background-color: #0070ba;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+
+        .btn-primary:hover {
+            background-color: #005ea6;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- 
+        CHAMELEON TRAP:
+        The structure below mimics a typical payment gateway login.
+        Traditional phishing detection looks for URL typos (e.g., paypa1.com).
+        But this file is local (file://) or could be hosted on safe-site.com/login.
+        
+        Our current engine checks URL: "file://..." -> Neutral/Safe (usually).
+        
+        The Chameleon Engine will scan this DOM and see:
+        1. Class "login-container"
+        2. Input type "email" + "password"
+        3. Specific colors (#003087, #0070ba) matches PayPal brand palette.
+        4. Text "Log in to your account"
+        
+        Conclusion: LOOKS like PayPal, but URL is NOT PayPal = BLOCK.
+    -->
+
+    <div class="login-container" id="login">
+        <span class="brand-logo">PayPai</span>
+
+        <form class="login-form">
+            <input type="email" id="email" name="login_email" placeholder="Email or mobile number">
+            <input type="password" id="password" name="login_password" placeholder="Password">
+            <button type="submit" class="btn-primary" id="btnLogin">Log In</button>
+        </form>
+
+        <div style="margin-top: 20px; font-size: 14px; color: #0070ba; font-weight: bold;">
+            Having trouble logging in?
+        </div>
+
+        <div style="margin-top: 30px; border-top: 1px solid #e1e7eb; padding-top: 20px;">
+            <button
+                style="background:#e1e7eb; color:#2c2e2f; width:100%; padding:10px; border:none; border-radius:20px; font-weight:bold;">Sign
+                Up</button>
+        </div>
+    </div>
+
+</body>
+
+</html>

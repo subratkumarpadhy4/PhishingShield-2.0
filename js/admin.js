@@ -122,27 +122,12 @@ function setupReportFilters() {
     if (searchInput) {
         searchInput.addEventListener('input', (e) => {
             const query = e.target.value.toLowerCase().trim();
-            const currentReports = allReportsCache || [];
-
-            // Apply Filters (Search + Status)
-            const filtered = currentReports.filter(r => {
-                const matchesSearch = !query ||
-                    (r.url && r.url.toLowerCase().includes(query)) ||
-                    (r.hostname && r.hostname.toLowerCase().includes(query)) || // Added Hostname
-                    (r.reporter && r.reporter.toLowerCase().includes(query)) ||
-                    (r.reporterName && r.reporterName.toLowerCase().includes(query)) ||
-                    (r.reporterEmail && r.reporterEmail.toLowerCase().includes(query));
-
-                const matchesStatus = currentReportFilter === 'all' || r.status === currentReportFilter;
-
-                return matchesSearch && matchesStatus;
-            });
-
-            renderReports(filtered);
+            // Apply Filters (Search + Status + Rank)
+            triggerFilterUpdate();
         });
     }
 
-    // 2. Filter Tabs
+    // 2. Filter Tabs & Rank Filter
     const filters = ['all', 'pending', 'banned', 'ignored'];
     filters.forEach(status => {
         const btn = document.getElementById(`filter-${status}`);
@@ -151,33 +136,105 @@ function setupReportFilters() {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
                 setReportFilter(status); // This sets the global currentReportFilter
-
-                // Trigger search input event to re-apply both filters
-                if (searchInput) {
-                    searchInput.dispatchEvent(new Event('input'));
-                } else {
-                    // Fallback if no search input
-                    // Logic handled inside setReportFilter usually, but here we want to ensure combined logic
-                    // Actually setReportFilter will be updated to handle search query if we pass it, 
-                    // or we just trust the search listener to fire if we trigger it.
-                    // Let's rely on re-rendering:
-
-                    // IMPORTANT: The existing setReportFilter probably just renders based on status.
-                    // We need to make sure it respects the search query currently in the box.
-
-                    const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
-                    const filtered = allReportsCache.filter(r => {
-                        const matchesSearch = !query ||
-                            (r.url && r.url.toLowerCase().includes(query)) ||
-                            (r.reporter && r.reporter.toLowerCase().includes(query));
-                        const matchesStatus = status === 'all' || r.status === status;
-                        return matchesSearch && matchesStatus;
-                    });
-                    renderReports(filtered);
-                }
+                triggerFilterUpdate();
             });
         }
     });
+
+    const rankFilter = document.getElementById('filter-rank');
+    if (rankFilter) {
+        rankFilter.addEventListener('change', () => {
+            triggerFilterUpdate();
+        });
+    }
+
+    // Consolidated Filter Logic
+    function triggerFilterUpdate() {
+        // Need to grab users AND current admin info
+        chrome.storage.local.get(['users', 'currentUser', 'userLevel'], (data) => {
+            const users = data.users || [];
+            const currentUser = data.currentUser || {};
+            const localLevel = data.userLevel || 1;
+
+            // Build User Rank Map: email -> rankName
+            const userRankMap = {};
+
+            // 1. Map all regular users
+            console.log(`[Admin Filter] Validating ${users.length} users for Rank Map...`);
+            users.forEach(u => {
+                const emailKey = (u.email || '').toLowerCase().trim();
+                if (!emailKey) return;
+
+                const level = u.level || 1;
+                let rank = 'novice';
+                if (level >= 20) rank = 'sentinel';
+                else if (level >= 5) rank = 'scout';
+
+                userRankMap[emailKey] = rank;
+
+                // Specific Debug for Known Users
+                if (emailKey.includes('gopa') || emailKey.includes('rajkumar')) {
+                    console.log(`[Admin Filter] Mapped: ${emailKey} -> Level ${level} (${rank})`);
+                }
+            });
+
+            // 2. Explicitly map the Current User (Admin/Self)
+            const adminEmail = (currentUser.email || '').toLowerCase().trim();
+            if (adminEmail) {
+                let myRank = 'novice';
+                if (localLevel >= 20) myRank = 'sentinel';
+                else if (localLevel >= 5) myRank = 'scout';
+
+                userRankMap[adminEmail] = myRank;
+                console.log(`[Admin] Self-Mapped (Force Override): ${adminEmail} -> ${myRank} (Lvl ${localLevel})`);
+            }
+
+            const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+            const status = currentReportFilter;
+            const targetRank = rankFilter ? rankFilter.value : 'all';
+
+            const filtered = allReportsCache.filter(r => {
+                // 1. Text Search
+                const matchesSearch = !query ||
+                    (r.url && r.url.toLowerCase().includes(query)) ||
+                    (r.reporter && r.reporter.toLowerCase().includes(query));
+
+                // 2. Status Filter
+                const matchesStatus = status === 'all' || r.status === status;
+
+                // 3. Rank Filter
+                let matchesRank = true;
+                if (targetRank !== 'all') {
+                    // Normalize reporter email
+                    let rawEmail = r.reporterEmail || r.reporter || '';
+
+                    // EXTRACT EMAIL FROM FORMAT "Name (email)"
+                    if (rawEmail.includes('(') && rawEmail.includes(')')) {
+                        const parts = rawEmail.split('(');
+                        if (parts.length > 1) {
+                            rawEmail = parts[parts.length - 1].replace(')', '').trim();
+                        }
+                    }
+
+                    const reporterKey = rawEmail.toLowerCase().trim();
+
+                    // Lookup Rank (Default to 'novice' if not found)
+                    const actualRank = reporterKey && userRankMap[reporterKey] ? userRankMap[reporterKey] : 'novice';
+
+                    // DEBUG: Log mismatch explanation if this is the admin
+                    if (reporterKey === adminEmail && actualRank !== targetRank && targetRank === 'sentinel') {
+                        console.warn(`[Filter Debug] Admin Report (${reporterKey}) classified as ${actualRank}, but filter wanted ${targetRank}. Map Value:`, userRankMap[reporterKey]);
+                    }
+
+                    matchesRank = (actualRank === targetRank);
+                }
+
+                return matchesSearch && matchesStatus && matchesRank;
+            });
+
+            renderReports(filtered);
+        });
+    }
 
     // 3. Refresh Button
     const refreshReportsBtn = document.getElementById('btn-refresh-reports');
@@ -195,6 +252,12 @@ function setupReportFilters() {
             // Clear search input to prevent stale filters
             const searchInput = document.getElementById('reports-search');
             if (searchInput) searchInput.value = '';
+
+            // Force Sync of Users too (to fix rank filter issues)
+            if (typeof Auth !== 'undefined' && Auth.getUsers) {
+                console.log("[Admin] Force-Refeshing User Roster...");
+                Auth.getUsers(() => { console.log("[Admin] User Roster Updated"); });
+            }
 
             chrome.storage.local.set({ cachedGlobalReports: [] }, () => {
                 console.log('[Admin] Cache cleared, reloading reports...');

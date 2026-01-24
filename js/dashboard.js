@@ -875,6 +875,34 @@ function updateStats(log) {
 
         const p = level === 1 ? (xp / 100) * 100 : ((xp - prev) / (next - prev)) * 100;
         if (bar) bar.style.width = Math.min(p, 100) + '%';
+
+        // --- FEATURE UNLOCK UI UPDATES ---
+        const featQR = document.getElementById('feat-qr');
+        const featCham = document.getElementById('feat-cham');
+
+        if (featQR) {
+            if (level >= 5) {
+                featQR.innerHTML = `<span>✅</span> QR Scanner <span style="font-size:9px;">(ACTIVE)</span>`;
+                featQR.style.color = '#10b981'; // Success Green
+                featQR.style.fontWeight = '600';
+            } else {
+                featQR.innerHTML = `<span>🔒</span> QR Scanner <span style="font-size:9px; opacity:0.7;">(Lvl 5)</span>`;
+                featQR.style.color = '#94a3b8';
+                featQR.style.fontWeight = 'normal';
+            }
+        }
+
+        if (featCham) {
+            if (level >= 20) {
+                featCham.innerHTML = `<span>✅</span> Chameleon <span style="font-size:9px;">(ACTIVE)</span>`;
+                featCham.style.color = '#10b981'; // Success Green
+                featCham.style.fontWeight = '600';
+            } else {
+                featCham.innerHTML = `<span>🔒</span> Chameleon <span style="font-size:9px; opacity:0.7;">(Lvl 20)</span>`;
+                featCham.style.color = '#94a3b8';
+                featCham.style.fontWeight = 'normal';
+            }
+        }
     });
 
     // --- NEW: Radar Stats Population ---

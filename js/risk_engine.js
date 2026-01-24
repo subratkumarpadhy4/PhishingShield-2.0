@@ -3,6 +3,73 @@
  * Analyzes page content for signs of phishing/social engineering.
  */
 window.RiskEngine = {
+    // Feature Flags (Controlled by User Level)
+    // Feature Flags (Controlled by User Level)
+    config: {
+        enableQR: false,       // Unlocks at Level 5 (Scout)
+        enableML: false,       // Unlocks at Level 10 (Cyber Ninja)
+        enableChameleon: false // Unlocks at Level 20 (Sentinel)
+    },
+
+    // Method to update configuration
+    configure: function (settings) {
+        this.config = { ...this.config, ...settings };
+        console.log("[RiskEngine] Features Updated:", this.config);
+    },
+
+    // --- AI / ML MODULE ---
+    // A lightweight Neural Network simulation for URL Classification
+    mlModel: {
+        weights: {
+            urlLength: 0.05,
+            numDots: 0.8,
+            hasAtSymbol: 5.0,  // Strong indicator
+            hasHyphen: 0.5,
+            numDigits: 0.1,
+            isIP: 4.0,
+            hasSuspiciousTLD: 3.0
+        },
+        bias: -5.0, // Baseline bias to prevent false positives
+
+        // Sigmoid Activation Function
+        sigmoid: function (z) {
+            return 1 / (1 + Math.exp(-z));
+        },
+
+        predict: function (url) {
+            try {
+                // Ensure protocol exists for URL parsing
+                if (!url.startsWith('http')) {
+                    url = 'http://' + url;
+                }
+                const u = new URL(url);
+
+                const features = {
+                    urlLength: url.length > 75 ? 1 : 0,
+                    numDots: (u.hostname.match(/\./g) || []).length > 3 ? 1 : 0,
+                    hasAtSymbol: url.includes('@') ? 1 : 0,
+                    hasHyphen: u.hostname.includes('-') && !u.hostname.includes('amazon') ? 1 : 0,
+                    numDigits: (u.hostname.match(/\d/g) || []).length > 3 ? 1 : 0,
+                    isIP: /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(u.hostname) ? 1 : 0,
+                    hasSuspiciousTLD: /\.(xyz|top|pw|cc|tk|ml|ga|cf|gq)$/i.test(u.hostname) ? 1 : 0
+                };
+
+                // Linear Forward Pass (Dot Product)
+                let z = this.bias;
+                for (let key in features) {
+                    z += features[key] * (this.weights[key] || 0);
+                }
+
+                const result = this.sigmoid(z);
+                console.log(`[RiskEngine ML] Analyzing: ${url} | Z: ${z.toFixed(2)} | Confidence: ${(result * 100).toFixed(1)}% | Features:`, features);
+                return result;
+            } catch (e) {
+                console.warn("[RiskEngine ML] Error parsing URL:", url, e);
+                return 0;
+            }
+        }
+    },
+
     // Keywords often found in phishing attacks to create urgency
     urgencyKeywords: [
         "suspended", "suspend", "24 hours", "immediate action",
@@ -46,6 +113,11 @@ window.RiskEngine = {
 
         // HACKATHON DEMO MODE: Allow spoofing hostname via URL param
         const urlParams = new URLSearchParams(window.location.search);
+
+        console.log(`[RiskEngine Debug] Full URL: ${window.location.href}`);
+        console.log(`[RiskEngine Debug] Search Params: ${urlParams.toString()}`);
+        console.log(`[RiskEngine Debug] Has ml_test? ${urlParams.has('ml_test')}`);
+
         let hostname = window.location.hostname;
         if (urlParams.has('fake_host_for_testing')) {
             hostname = urlParams.get('fake_host_for_testing');
@@ -283,6 +355,30 @@ window.RiskEngine = {
             }
         }
 
+        // 5.5 AI / ML Heuristic Analysis
+        // FEATURE LOCK: Unlocks at Level 10 (Cyber Ninja)
+        if (this.config.enableML) {
+            // TEST MODE: Allow overriding the URL for demo purposes
+            // Note: 'urlParams' is already defined at the top of analyzePage
+            let targetUrl = window.location.href;
+
+            if (urlParams.has('ml_test')) {
+                targetUrl = urlParams.get('ml_test');
+                console.warn(`[RiskEngine] 🧪 ML SIMULATION MODE: Analyzing virtual URL: ${targetUrl}`);
+            }
+
+            const mlConfidence = this.mlModel.predict(targetUrl);
+            if (mlConfidence > 0.6) {
+                // Scale score: 0.6 -> starts adding risk. 1.0 -> Max 50 points.
+                const mlScore = Math.floor(mlConfidence * 50);
+                score += mlScore;
+                reasons.push(`🤖 AI Phishing Probability: ${(mlConfidence * 100).toFixed(0)}% (+${mlScore})`);
+                primaryThreat = "AI Detected Pattern";
+            }
+        } else {
+            // console.log("🔒 AI Analysis Locked (Level < 10)");
+        }
+
         // 6. Domain Coherence Check (Adaptive Whitelist)
         // Verify if the Page Title strongly matches the Domain (e.g. "Small Bank" -> "smallbank.com")
         const coherence = this.calculateDomainCoherence(title, hostname);
@@ -296,23 +392,40 @@ window.RiskEngine = {
             let safetyBonus = 40;
 
             // If it was flagged by AI or Keywords, dampen those specifically
-            if (reasons.some(r => r.includes("Urgency") || r.includes("AI"))) {
-                safetyBonus += 20; // Extra help for "false positives"
+            // CRITICAL FIX: If AI detected a high threat, disable trust bonus entirely
+            if (primaryThreat === "AI Detected Pattern") {
+                console.warn("[RiskEngine] 🤖 AI Threat overrides Domain Coherence Trust Bonus.");
+                safetyBonus = 0;
+            } else if (reasons.some(r => r.includes("Urgency"))) {
+                safetyBonus += 20; // Extra help for "false positives" on safe sites
             }
 
-            score = Math.max(0, score - safetyBonus); // Ensure valid score
-            reasons.push(`✅ Adaptive Trust: Domain matches Page Title (-${safetyBonus})`);
+            if (safetyBonus > 0) {
+                score = Math.max(0, score - safetyBonus); // Ensure valid score
+                reasons.push(`✅ Adaptive Trust: Domain matches Page Title (-${safetyBonus})`);
+            }
 
             // Remove specific "Suspicion" warnings if we are now trusted
-            reasons = reasons.filter(r => !r.includes("Generic Suspicion"));
+            if (safetyBonus > 0) {
+                reasons = reasons.filter(r => !r.includes("Generic Suspicion"));
+            }
         }
+
+
 
         // 7. QR Code / Quishing Check (Async)
         // Detects hidden malicious URLs inside images
-        const qrResult = await this.analyzeImages();
-        if (qrResult && qrResult.score > 0) {
-            score += qrResult.score;
-            reasons.push(...qrResult.reasons);
+        // FEATURE LOCK: Unlocks at Level 5
+        let qrResult = null;
+        if (this.config.enableQR) {
+            qrResult = await this.analyzeImages();
+            if (qrResult && qrResult.score > 0) {
+                score += qrResult.score;
+                reasons.push(...qrResult.reasons);
+            }
+        } else {
+            // Optional: Log that it's locked?
+            // console.log("QR Scan Locked (Level < 5)");
         }
 
         // Determine Primary Threat for HUD Headline

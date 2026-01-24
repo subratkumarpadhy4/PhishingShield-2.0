@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishingShield AI Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #d32f2f;
+        }
+
+        .btn {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            display: inline-block;
+            margin-top: 20px;
+        }
+
+        .note {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Urgent: Account Suspended</h1>
+        <p>Dear Customer,</p>
+        <p>We detected unauthorized access to your banking account ending in **4921.</p>
+        <p>For your security, we have temporarily <strong>LOCKED</strong> your funds.</p>
+        <p>You must <strong>verify your identity immediately</strong> within 24 hours or your account will be
+            permanently closed.</p>
+
+        <a href="http://unsafe-link.com" class="btn">Verify Account Now</a>
+
+        <div class="note">
+            <h3>🤖 AI Test Instructions</h3>
+            <p>This page contains high-risk keywords ("suspended", "unauthorized", "locked", "verify immediately").</p>
+            <p><strong>Your PhishingShield AI (Level 10+) should detect this pattern.</strong></p>
+            <p>Look for the "AI Detected Pattern" or "Social Engineering" warning in the HUD.</p>
+        </div>
+    </div>
+</body>
+
+</html>

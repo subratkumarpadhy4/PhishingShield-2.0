@@ -165,153 +165,116 @@ function initRiskAnalysis(isFortressMode) {
     if (window.location.protocol === 'chrome-extension:') return; // Skip extension pages
     if (window.location.protocol === 'chrome:') return; // Skip chrome:// pages
 
-    setTimeout(async () => {
-        // Fail-safe: Try to get engine from window if implicit fail
-        const Engine = window.RiskEngine || RiskEngine;
+    chrome.storage.local.get(['userLevel'], async (data) => {
+        const userLevel = data.userLevel || 1;
+        const enableQR = userLevel >= 5;       // Unlocks at SCOUT Rank
+        const enableML = userLevel >= 10;      // Unlocks at CYBER NINJA (Level 10)
+        const enableChameleon = userLevel >= 20; // Unlocks at SENTINEL Rank
 
-        // Default Analysis
-        let analysis = {
-            score: 0,
-            reasons: [],
-            primaryThreat: "Analysis Failed (Engine Missing)"
-        };
-
-        if (typeof Engine !== 'undefined' && Engine.analyzePage) {
-            try {
-                analysis = await Engine.analyzePage();
-            } catch (e) {
-                console.error("Risk Engine Crashed:", e);
-                analysis.reasons.push("Error: " + e.message);
-            }
-        } else {
-            console.warn("RiskEngine Missing - Sending fallback log.");
+        // Configure Risk Engine Locks
+        if (typeof RiskEngine !== 'undefined' && RiskEngine.configure) {
+            RiskEngine.configure({
+                enableQR: enableQR,
+                enableML: enableML,
+                enableChameleon: enableChameleon
+            });
         }
 
-        // 🐍 CHAMELEON CHECK (Visual DNA)
-        // Overrides previous score if a visual clone is detected
-        if (typeof Chameleon !== 'undefined') {
-            const dnaResult = Chameleon.scan();
-            if (dnaResult.isClone) {
-                console.warn("[Content] 🦎 Chameleon Detected Clone:", dnaResult.brand);
-                analysis.score = 100; // Critical Threat - Override to Max
-                analysis.primaryThreat = `🚨 IMPERSONATION: ${dnaResult.brand.toUpperCase()}`;
-                // Add to TOP of reasons
-                analysis.reasons.unshift(
-                    `🦎 CHAMELEON ALERT: Page mimics ${dnaResult.brand.toUpperCase()} visual style but is NOT official (+100)`
-                );
-            }
-        }
+        setTimeout(async () => {
+            // Fail-safe: Try to get engine from window if implicit fail
+            const Engine = window.RiskEngine || RiskEngine;
 
-        // Fortress Mode: Heightened Sensitivity
-        if (isFortressMode) {
-            analysis.score += 25; // Base paranoia penalty
-            analysis.reasons.push("🛡️ Fortress Mode: Security Tightened (+25)");
-            if (analysis.score > 100) analysis.score = 100;
-        }
-        // Listen for request to get current analysis
-        chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-            if (request.type === "GET_RISK_ANALYSIS") {
-                // If we have analysis, send it back
-                // analysis variable is global in this scope
-                sendResponse(analysis);
-            }
-        });
+            // Default Analysis
+            let analysis = {
+                score: 0,
+                reasons: [],
+                primaryThreat: "Analysis Failed (Engine Missing)"
+            };
 
-        // Initial Analysis
-        console.log("PhishingShield Risk Analysis:", analysis);
-
-        // Cap score at 100
-        analysis.score = Math.min(analysis.score, 100);
-
-        // Update Cache
-        currentPageAnalysis = analysis;
-
-        console.log("[Content] Sending LOG_VISIT message...");
-
-        const visitData = {
-            url: window.location.href,
-            hostname: window.location.hostname || window.location.pathname.split('/').pop(),
-            score: analysis.score,
-            reasons: analysis.reasons,
-            primaryThreat: analysis.primaryThreat,
-            timestamp: Date.now()
-        };
-
-        // Send LOG_VISIT message with timeout fallback
-        let messageReceived = false;
-        const timeout = setTimeout(() => {
-            if (!messageReceived) {
-                console.warn("[Content] Service worker not responding, updating XP directly");
-                // Fallback: Update XP directly
-                chrome.storage.local.get(['userXP', 'userLevel', 'users', 'currentUser', 'visitLog'], (data) => {
-                    let currentXP = typeof data.userXP === 'number' ? data.userXP : 0;
-                    currentXP += 5; // +5 XP for visit
-                    const newLevel = Math.floor(Math.sqrt(currentXP / 100)) + 1;
-
-                    const logs = Array.isArray(data.visitLog) ? data.visitLog : [];
-                    // Keep last 200 entries for better history tracking
-                    if (logs.length > 200) logs.shift();
-                    logs.push(visitData);
-
-                    const updateData = {
-                        userXP: currentXP,
-                        userLevel: newLevel,
-                        visitLog: logs,
-                        pendingXPSync: true
-                    };
-
-                    // Update user in users array if logged in
-                    if (data.currentUser && data.currentUser.email && Array.isArray(data.users)) {
-                        const users = [...data.users];
-                        const userIndex = users.findIndex(u => u && u.email === data.currentUser.email);
-                        if (userIndex >= 0) {
-                            users[userIndex].xp = currentXP;
-                            users[userIndex].level = newLevel;
-                            updateData.users = users;
-                        }
-                    }
-
-                    chrome.storage.local.set(updateData, () => {
-                        console.log("[Content] ✅ XP updated directly (fallback):", currentXP);
-                    });
-                });
-            }
-        }, 1000);
-
-        chrome.runtime.sendMessage({
-            type: "LOG_VISIT",
-            data: visitData
-        }, (response) => {
-            clearTimeout(timeout);
-            messageReceived = true;
-            if (chrome.runtime.lastError) {
-                console.error("[Content] ❌ LOG_VISIT Error:", chrome.runtime.lastError.message);
+            if (typeof Engine !== 'undefined' && Engine.analyzePage) {
+                try {
+                    analysis = await Engine.analyzePage();
+                } catch (e) {
+                    console.error("Risk Engine Crashed:", e);
+                    analysis.reasons.push("Error: " + e.message);
+                }
             } else {
-                console.log("[Content] ✅ LOG_VISIT Sent Success, response:", response);
+                console.warn("RiskEngine Missing - Sending fallback log.");
             }
-        });
 
-        // Fortress Mode: Show HUD for ALMOST EVERYTHING (Score > 0)
-        // Standard Mode: Show HUD for Low/Moderate Risk (Score >= 20)
-        const threshold = isFortressMode ? 0 : 19;
+            // 🐍 CHAMELEON CHECK (Visual DNA)
+            // FEATURE LOCK: Unlocks at Level 20 (Sentinel)
+            if (enableChameleon && typeof Chameleon !== 'undefined') {
+                const dnaResult = Chameleon.scan();
+                if (dnaResult.isClone) {
+                    console.warn("[Content] 🦎 Chameleon Detected Clone:", dnaResult.brand);
+                    analysis.score = 100; // Critical Threat - Override to Max
+                    analysis.primaryThreat = `🚨 IMPERSONATION: ${dnaResult.brand.toUpperCase()}`;
+                    // Add to TOP of reasons
+                    analysis.reasons.unshift(
+                        `🦎 CHAMELEON ALERT: Page mimics ${dnaResult.brand.toUpperCase()} visual style but is NOT official (+100)`
+                    );
+                }
+            } else if (!enableChameleon && typeof Chameleon !== 'undefined') {
+                // Optional: Log locked state
+                // console.log("Chameleon Scan Locked (Level < 10)");
+            }
 
-        if (analysis.score < 20) {
-            // Award 10 XP for safe site browsing
-            console.log("[Content] Sending ADD_XP message (safe site)...");
+            // Fortress Mode: Heightened Sensitivity
+            if (isFortressMode) {
+                analysis.score += 25; // Base paranoia penalty
+                analysis.reasons.push("🛡️ Fortress Mode: Security Tightened (+25)");
+                if (analysis.score > 100) analysis.score = 100;
+            }
+            // Listen for request to get current analysis
+            chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+                if (request.type === "GET_RISK_ANALYSIS") {
+                    // If we have analysis, send it back
+                    // analysis variable is global in this scope
+                    sendResponse(analysis);
+                }
+            });
 
-            let xpMessageReceived = false;
-            const xpTimeout = setTimeout(() => {
-                if (!xpMessageReceived) {
-                    console.warn("[Content] Service worker not responding for ADD_XP, updating directly");
+            // Initial Analysis
+            console.log("PhishingShield Risk Analysis:", analysis);
+
+            // Cap score at 100
+            analysis.score = Math.min(analysis.score, 100);
+
+            // Update Cache
+            currentPageAnalysis = analysis;
+
+            console.log("[Content] Sending LOG_VISIT message...");
+
+            const visitData = {
+                url: window.location.href,
+                hostname: window.location.hostname || window.location.pathname.split('/').pop(),
+                score: analysis.score,
+                reasons: analysis.reasons,
+                primaryThreat: analysis.primaryThreat,
+                timestamp: Date.now()
+            };
+
+            // Send LOG_VISIT message with timeout fallback
+            let messageReceived = false;
+            const timeout = setTimeout(() => {
+                if (!messageReceived) {
+                    console.warn("[Content] Service worker not responding, updating XP directly");
                     // Fallback: Update XP directly
-                    chrome.storage.local.get(['userXP', 'userLevel', 'users', 'currentUser'], (data) => {
+                    chrome.storage.local.get(['userXP', 'userLevel', 'users', 'currentUser', 'visitLog'], (data) => {
                         let currentXP = typeof data.userXP === 'number' ? data.userXP : 0;
-                        currentXP += 10; // +10 XP for safe site
+                        currentXP += 5; // +5 XP for visit
                         const newLevel = Math.floor(Math.sqrt(currentXP / 100)) + 1;
+
+                        const logs = Array.isArray(data.visitLog) ? data.visitLog : [];
+                        // Keep last 200 entries for better history tracking
+                        if (logs.length > 200) logs.shift();
+                        logs.push(visitData);
 
                         const updateData = {
                             userXP: currentXP,
                             userLevel: newLevel,
+                            visitLog: logs,
                             pendingXPSync: true
                         };
 
@@ -327,58 +290,114 @@ function initRiskAnalysis(isFortressMode) {
                         }
 
                         chrome.storage.local.set(updateData, () => {
-                            console.log("[Content] ✅ ADD_XP updated directly (fallback):", currentXP);
+                            console.log("[Content] ✅ XP updated directly (fallback):", currentXP);
                         });
                     });
                 }
             }, 1000);
 
-            chrome.runtime.sendMessage({ type: "ADD_XP", amount: 10 }, (response) => {
-                clearTimeout(xpTimeout);
-                xpMessageReceived = true;
+            chrome.runtime.sendMessage({
+                type: "LOG_VISIT",
+                data: visitData
+            }, (response) => {
+                clearTimeout(timeout);
+                messageReceived = true;
                 if (chrome.runtime.lastError) {
-                    console.error("[Content] ❌ ADD_XP Error:", chrome.runtime.lastError.message);
+                    console.error("[Content] ❌ LOG_VISIT Error:", chrome.runtime.lastError.message);
                 } else {
-                    console.log("[Content] ✅ ADD_XP Sent Success, response:", response);
+                    console.log("[Content] ✅ LOG_VISIT Sent Success, response:", response);
                 }
             });
-        }
+
+            // Fortress Mode: Show HUD for ALMOST EVERYTHING (Score > 0)
+            // Standard Mode: Show HUD for Low/Moderate Risk (Score >= 20)
+            const threshold = isFortressMode ? 0 : 19;
+
+            if (analysis.score < 20) {
+                // Award 10 XP for safe site browsing
+                console.log("[Content] Sending ADD_XP message (safe site)...");
+
+                let xpMessageReceived = false;
+                const xpTimeout = setTimeout(() => {
+                    if (!xpMessageReceived) {
+                        console.warn("[Content] Service worker not responding for ADD_XP, updating directly");
+                        // Fallback: Update XP directly
+                        chrome.storage.local.get(['userXP', 'userLevel', 'users', 'currentUser'], (data) => {
+                            let currentXP = typeof data.userXP === 'number' ? data.userXP : 0;
+                            currentXP += 10; // +10 XP for safe site
+                            const newLevel = Math.floor(Math.sqrt(currentXP / 100)) + 1;
+
+                            const updateData = {
+                                userXP: currentXP,
+                                userLevel: newLevel,
+                                pendingXPSync: true
+                            };
+
+                            // Update user in users array if logged in
+                            if (data.currentUser && data.currentUser.email && Array.isArray(data.users)) {
+                                const users = [...data.users];
+                                const userIndex = users.findIndex(u => u && u.email === data.currentUser.email);
+                                if (userIndex >= 0) {
+                                    users[userIndex].xp = currentXP;
+                                    users[userIndex].level = newLevel;
+                                    updateData.users = users;
+                                }
+                            }
+
+                            chrome.storage.local.set(updateData, () => {
+                                console.log("[Content] ✅ ADD_XP updated directly (fallback):", currentXP);
+                            });
+                        });
+                    }
+                }, 1000);
+
+                chrome.runtime.sendMessage({ type: "ADD_XP", amount: 10 }, (response) => {
+                    clearTimeout(xpTimeout);
+                    xpMessageReceived = true;
+                    if (chrome.runtime.lastError) {
+                        console.error("[Content] ❌ ADD_XP Error:", chrome.runtime.lastError.message);
+                    } else {
+                        console.log("[Content] ✅ ADD_XP Sent Success, response:", response);
+                    }
+                });
+            }
 
 
 
-        if (analysis.score > threshold && analysis.score > 0) {
-            showRiskHUD(analysis);
-        }
+            if (analysis.score > threshold && analysis.score > 0) {
+                showRiskHUD(analysis);
+            }
 
-        // --- PHASE 2: REAL AI VERIFICATION (Async with Cache) ---
-        // Optimization: Check cache first to save API calls/time
-        const hasSensitiveInput = document.querySelector('input[type="password"]');
-        if (analysis.score >= 20 || hasSensitiveInput) {
+            // --- PHASE 2: REAL AI VERIFICATION (Async with Cache) ---
+            // Optimization: Check cache first to save API calls/time
+            const hasSensitiveInput = document.querySelector('input[type="password"]');
+            if (analysis.score >= 20 || hasSensitiveInput) {
 
-            checkAICache(window.location.href, (cachedResult) => {
-                if (cachedResult) {
-                    console.log("[Content] ⚡ Using Cached AI Result");
-                    updateAnalysisWithAI(analysis, cachedResult);
-                } else {
-                    console.log("[Content] Initiating Real AI Scan (No Cache)...");
-                    chrome.runtime.sendMessage({
-                        type: "SCAN_CONTENT",
-                        url: window.location.href,
-                        content: document.body.innerText.substring(0, 5000)
-                    }, (res) => {
-                        if (chrome.runtime.lastError) return;
-                        if (res && res.error) console.error("AI Error:", res.error);
+                checkAICache(window.location.href, (cachedResult) => {
+                    if (cachedResult) {
+                        console.log("[Content] ⚡ Using Cached AI Result");
+                        updateAnalysisWithAI(analysis, cachedResult);
+                    } else {
+                        console.log("[Content] Initiating Real AI Scan (No Cache)...");
+                        chrome.runtime.sendMessage({
+                            type: "SCAN_CONTENT",
+                            url: window.location.href,
+                            content: document.body.innerText.substring(0, 5000)
+                        }, (res) => {
+                            if (chrome.runtime.lastError) return;
+                            if (res && res.error) console.error("AI Error:", res.error);
 
-                        if (res && res.aiAnalysis) {
-                            // Cache the result
-                            cacheAIResult(window.location.href, res.aiAnalysis);
-                            updateAnalysisWithAI(analysis, res.aiAnalysis);
-                        }
-                    });
-                }
-            });
-        }
-    }, 1500);
+                            if (res && res.aiAnalysis) {
+                                // Cache the result
+                                cacheAIResult(window.location.href, res.aiAnalysis);
+                                updateAnalysisWithAI(analysis, res.aiAnalysis);
+                            }
+                        });
+                    }
+                });
+            }
+        }, 1500);
+    });
 }
 
 // ...HUD function...
@@ -409,19 +428,33 @@ function initDownloadProtection(isFortressMode, isEnabled) {
             const analysis = currentPageAnalysis; // Use cached sync result
             const isRiskyScore = analysis.score > 30;
 
-            // Trigger if: HTTP OR Risky Score OR Fortress Mode (Zero Trust)
-            if (isHttp || isRiskyScore || isFortressMode) {
+            // Trigger if: Risky File Extension (ALWAYS) OR HTTP OR Risky Score OR Fortress Mode
+            const isDoubleExtension = /\.[a-z0-9]{3,4}\.(exe|scr|pif|bat)$/i.test(url);
+
+            if (isRiskyFile || isDoubleExtension || isHttp || isRiskyScore || isFortressMode) {
                 let message = `⚠️ SECURITY WARNING: Download Intercepted.\n`;
                 if (isFortressMode) message += `🛡️ Fortress Mode is Active (Zero Trust Enabled).\n`;
 
-                message += `\nRisk Factors:\n${isHttp ? '- Connection is not secure (HTTP)\n' : ''}${isRiskyScore ? '- High Risk Score\n' : ''}`;
+                message += `\nRisk Factors:\n`;
+
+                if (isDoubleExtension) {
+                    message += `🛑 DECEPTIVE FILE PATTERN DETECTED!\n`;
+                    message += `- File is disguised (Double Extension)\n`;
+                    message += `- Likely MALWARE masquerading as a document\n`;
+                } else if (isRiskyFile) {
+                    message += `- High Risk File Type (Executable/Script)\n`;
+                }
+
+                if (isHttp) message += `- Connection is not secure (HTTP)\n`;
+                if (isRiskyScore) message += `- High Risk Score (Phishing Detected)\n`;
+
                 message += `\nDo you want to proceed?`;
 
                 if (!confirm(message)) {
                     e.preventDefault();
                 } else {
                     // Double Confirmation Requirement for Risky Extensions in all modes
-                    if (isRiskyFile) {
+                    if (isRiskyFile || isDoubleExtension) {
                         if (!confirm("⚠️ FINAL WARNING: This file type is commonly used for malware.\n\nAre you ABSOLUTELY sure you want to download this?")) {
                             e.preventDefault();
                         }
@@ -595,64 +628,102 @@ function injectSecurityBanner(customMsg) {
 
 function showRiskHUD(analysis) {
     // If HUD exists, UPDATE it instead of returning
+    // If HUD exists, UPDATE it instead of returning
     const existingHUD = document.getElementById('phishingshield-hud');
     if (existingHUD) {
-        // Update Score Badge (if it exists in collapsed view)
-        const scoreBadge = existingHUD.shadowRoot ? existingHUD.shadowRoot.getElementById('ps-score-badge') : document.getElementById('ps-score-badge');
-        if (scoreBadge) {
-            scoreBadge.innerText = analysis.score;
-            scoreBadge.style.backgroundColor = getScoreColor(analysis.score);
-        }
+        try {
+            // CRITICAL: Update Data First (so info panel has new data even if display fails)
+            existingHUD.dataset.analysisIdx = JSON.stringify(analysis);
 
-        // Update Text (collapsed view)
-        const threatText = existingHUD.shadowRoot ? existingHUD.shadowRoot.getElementById('ps-threat-text') : document.getElementById('ps-threat-text');
-        if (threatText) {
-            threatText.innerText = analysis.primaryThreat;
-        }
+            // Update Score Badge
+            const scoreBadge = document.getElementById('ps-score-badge');
+            if (scoreBadge) {
+                scoreBadge.innerText = analysis.score;
 
-        // Update Details Panel (if open or created)
-        // We store the analysis object on the DOM element to be re-read by the click handler
-        existingHUD.dataset.analysisIdx = JSON.stringify(analysis);
+                // User Request: No background highlighter, just text color
+                scoreBadge.style.backgroundColor = 'transparent';
+                scoreBadge.style.padding = '0'; // Remove padding if it looks like a box
 
-        // If formatting function exists, try to update panel lively
-        const panel = document.getElementById('hud-details-panel');
-        if (panel && panel.style.display === 'block') {
-            // Re-render the list inside
-            let listHtml = '<ul>';
-            analysis.reasons.forEach(r => {
-                // Inline Parsing Logic to avoid Helper Function Dependency
-                const match = r.match(/(.*)\s\(\s*([+-]\d+)\s*\)$/);
-                let text = r;
-                let badge = '';
-
-                if (match) {
-                    text = match[1].trim();
-                    const scoreVal = parseInt(match[2]);
-                    const isSafety = scoreVal < 0 || text.includes('Adaptive Trust');
-                    const badgeClass = isSafety ? 'ps-score-badge bonus' : 'ps-score-badge';
-                    // Ensure sign is displayed
-                    const sign = scoreVal > 0 ? '+' : '';
-                    badge = `<span class="${badgeClass}">${sign}${scoreVal}</span>`;
+                let textColor = '#2ed573'; // Default Green
+                if (typeof getScoreColor === 'function') {
+                    textColor = getScoreColor(analysis.score);
                 } else {
-                    // Fallback check
-                    const simpleMatch = r.match(/\(\+(\d+)\)/);
-                    if (simpleMatch) {
-                        badge = `<span class="ps-score-badge">+${simpleMatch[1]}</span>`;
-                        text = r.replace(`(+${simpleMatch[1]})`, '').trim();
-                    }
+                    textColor = analysis.score > 50 ? '#ff4757' : '#2ed573';
                 }
+                scoreBadge.style.color = textColor;
+            }
 
-                listHtml += `<li><span>${text}</span>${badge}</li>`;
-            });
-            listHtml += '</ul>';
+            // Update Threat Text
+            const threatText = document.getElementById('ps-threat-text');
+            if (threatText) {
+                threatText.innerText = analysis.primaryThreat;
+            }
 
-            // Keep the title, just update list
-            const h4 = panel.querySelector('h4');
-            panel.innerHTML = '';
-            if (h4) panel.appendChild(h4);
-            panel.insertAdjacentHTML('beforeend', listHtml);
+            // Update Details Panel (Always re-render the list content to ensure it's fresh when opened)
+            const panel = document.getElementById('hud-details-panel');
+            if (panel) {
+                // Use 'analysis' object directly.
+
+                let listHtml = '<ul>';
+                analysis.reasons.forEach(r => {
+                    const match = r.match(/(.*)\s\(\s*([+-]\d+)\s*\)$/);
+                    let text = r;
+                    let badge = '';
+
+                    if (match) {
+                        text = match[1].trim();
+                        const scoreVal = parseInt(match[2]);
+                        const isSafety = scoreVal < 0 || text.includes('Adaptive Trust') || text.includes('Verified Official');
+                        const badgeClass = isSafety ? 'ps-score-badge bonus' : 'ps-score-badge';
+                        const sign = scoreVal > 0 ? '+' : '';
+                        badge = `<span class="${badgeClass}">${sign}${scoreVal}</span>`;
+                    } else if (r.includes('Fortress Mode')) {
+                        if (r.includes('+25')) badge = `<span class="ps-score-badge">+25</span>`;
+                    } else if (r.includes('(+')) {
+                        const simpleMatch = r.match(/\(\+(\d+)\)/);
+                        if (simpleMatch) {
+                            badge = `<span class="ps-score-badge">+${simpleMatch[1]}</span>`;
+                            text = r.replace(`(+${simpleMatch[1]})`, '').trim();
+                        }
+                    }
+                    if (r.includes('AI Analysis') && analysis.aiReportText) {
+                        const parts = r.split('(+');
+                        if (parts.length > 1) {
+                            text = parts[0].trim();
+                            // Use data attribute but NO inline handler. Class 'ps-ai-details-btn' will be bound later.
+                            badge = `<button class="ps-score-badge ps-ai-details-btn" data-report="${analysis.aiReportText.replace(/['"]/g, "&quot;")}" style="cursor:pointer; border:1px solid #aaa; margin-right:5px;">View Details</button> <span class="ps-score-badge">+${parts[1].replace(')', '')}</span>`;
+                        }
+                    } else if (r.includes('Real AI Analysis') && analysis.score > 20) {
+                        // Fallback for AI text if regex misses it
+                        const parts = r.split('(+');
+                        if (parts.length > 1) {
+                            text = parts[0].trim();
+                            badge = `<span class="ps-score-badge">+${parts[1].replace(')', '')}</span>`;
+                        }
+                    }
+                    listHtml += `<li><span>${text}</span>${badge}</li>`;
+                });
+                listHtml += '</ul>';
+
+                // Keep the title, just update list
+                const h4 = panel.querySelector('h4');
+                panel.innerHTML = '';
+                if (h4) panel.appendChild(h4);
+                panel.insertAdjacentHTML('beforeend', listHtml);
+
+                // Bind AI Details Button
+                const aiBtn = panel.querySelector('.ps-ai-details-btn');
+                if (aiBtn) {
+                    aiBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        alert("🧠 AI ASSESSMENT:\n\n" + aiBtn.getAttribute('data-report'));
+                    });
+                }
+            }
+
+        } catch (e) {
+            console.error("HUD Update Failed:", e);
         }
-
         return;
     }
 
@@ -882,8 +953,8 @@ function showRiskHUD(analysis) {
         <div style="display:flex; align-items:center; gap:10px;">
             <div style="font-size: 22px;">${icon}</div>
             <div style="display:flex; flex-direction:column; line-height:1.2;">
-                <span style="font-weight:800; font-size:16px;">${analysis.score}<small style="font-size:11px; opacity:0.7;">/100</small></span>
-                <span style="font-size:11px; color:${color}; font-weight:600; max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                <span id="ps-score-badge" style="font-weight:800; font-size:16px;">${analysis.score}<small style="font-size:11px; opacity:0.7;">/100</small></span>
+                <span id="ps-threat-text" style="font-size:11px; color:${color}; font-weight:600; max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                     ${analysis.primaryThreat || 'Threat Detected'}
                 </span>
             </div>
@@ -1189,17 +1260,23 @@ function updateAnalysisWithAI(analysis, aiResult) {
     // Merge logic
     analysis.score = Math.max(analysis.score, aiScore);
 
-    const aiMsg = `�� Real AI Analysis: ${aiResult.suggestion} (+${aiScore})`;
+    const aiMsg = `🤖 AI Analysis Detected Threat (+${aiScore})`;
     let duplicate = false;
-    for (let r of analysis.reasons) { if (r.includes('Real AI Analysis')) duplicate = true; }
+    for (let r of analysis.reasons) { if (r.includes('AI Analysis')) duplicate = true; }
 
     if (!duplicate) {
         analysis.reasons.push(aiMsg);
-        analysis.reasons.push(aiResult.reason); // No extra string interpolation needed
+        // Store full text for the "View Details" button
+        analysis.aiReportText = aiResult.reason;
     }
 
-    if (aiScore > 80) analysis.primaryThreat = "AI CONFIRMED THREAT";
-    else if (aiScore > 50) analysis.primaryThreat = "Suspicious Content (AI)";
+    // AI Override removed per user request (Primary Threat stays as heuristic detection)
 
     showRiskHUD(analysis);
+}
+
+function getScoreColor(score) {
+    if (score >= 80) return '#ff4757'; // Critical (Red)
+    if (score >= 50) return '#ffa502'; // Warning (Orange)
+    return '#2ed573'; // Safe (Green)
 }

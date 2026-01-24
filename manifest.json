@@ -16,7 +16,8 @@
     "management",
     "notifications",
     "scripting",
-    "alarms"
+    "alarms",
+    "downloads"
   ],
   "host_permissions": [
     "<all_urls>"

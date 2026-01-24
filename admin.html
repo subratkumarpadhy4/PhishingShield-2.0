@@ -643,13 +643,27 @@
                 </p>
 
                 <!-- Filter Controls -->
-                <div class="filter-group" style="margin-bottom: 20px; display: flex; gap: 10px;">
-                    <button class="btn btn-sm btn-active" id="filter-all" style="padding: 5px 15px;">All</button>
-                    <button class="btn btn-sm btn-outline" id="filter-pending"
-                        style="padding: 5px 15px;">Pending</button>
-                    <button class="btn btn-sm btn-outline" id="filter-banned" style="padding: 5px 15px;">Banned</button>
-                    <button class="btn btn-sm btn-outline" id="filter-ignored"
-                        style="padding: 5px 15px;">Ignored</button>
+                <div class="filter-group" style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
+                    <div
+                        style="display:flex; gap:5px; border-right: 2px solid #e2e8f0; padding-right: 15px; margin-right: 5px;">
+                        <button class="btn btn-sm btn-active" id="filter-all" style="padding: 5px 15px;">All
+                            Status</button>
+                        <button class="btn btn-sm btn-outline" id="filter-pending"
+                            style="padding: 5px 15px;">Pending</button>
+                        <button class="btn btn-sm btn-outline" id="filter-banned"
+                            style="padding: 5px 15px;">Banned</button>
+                        <button class="btn btn-sm btn-outline" id="filter-ignored"
+                            style="padding: 5px 15px;">Ignored</button>
+                    </div>
+
+                    <!-- NEW: Rank Filter -->
+                    <select id="filter-rank"
+                        style="padding:5px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; background:white; cursor:pointer;">
+                        <option value="all">� All Ranks</option>
+                        <option value="novice">🥉 Novice (Lvl 1-4)</option>
+                        <option value="scout">🥈 Scout (Lvl 5-19)</option>
+                        <option value="sentinel">🥇 Sentinel (Lvl 20+)</option>
+                    </select>
                 </div>
                 <table id="reports-table">
                     <thead>

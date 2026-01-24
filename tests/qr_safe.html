@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safe QR Verification Test</title>
+    <!-- Load QR Generator Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
         body {
             font-family: sans-serif;
@@ -37,41 +39,26 @@
         <p>Points to: <strong>https://google.com</strong></p>
 
         <!-- Canvas for dynamic generation -->
-        <canvas id="qrCanvas" width="150" height="150"></canvas>
+        <canvas id="qrCanvas"></canvas>
 
         <div style="margin-top:20px; font-weight:bold; color:#28a745;">
             Expected Risk Score: 10 (Safe - due to HTTP)
         </div>
         <p style="font-size:12px; color:#666;">
-            (The engine should see the pattern but if it can't read the URL, it defaults to Safe/0, which is correct.)
+            (The engine should see the pattern and read the URL as safe.)
         </p>
     </div>
 
     <script>
-        const ctx = document.getElementById('qrCanvas').getContext('2d');
-
-        // 1. White Background
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, 150, 150);
-
-        // 2. Draw Finder Patterns (The "Squares")
-        function drawFinder(x, y) {
-            ctx.fillStyle = 'black';
-            ctx.fillRect(x, y, 35, 35); // Outer
-            ctx.fillStyle = 'white';
-            ctx.fillRect(x + 5, y + 5, 25, 25); // Middle
-            ctx.fillStyle = 'black';
-            ctx.fillRect(x + 10, y + 10, 15, 15); // Inner
-        }
-        drawFinder(10, 10);
-        drawFinder(105, 10);
-        drawFinder(10, 105);
-
-        // 3. Draw Random Data (Simulating a QR)
-        ctx.fillStyle = 'black';
-        for (let i = 0; i < 80; i++) {
-            ctx.fillRect(40 + Math.random() * 70, 40 + Math.random() * 70, 5, 5);
-        }
+        // Use QRious to generate a VALID QR code
+        (function () {
+            var qr = new QRious({
+                element: document.getElementById('qrCanvas'),
+                value: 'https://google.com',
+                size: 200,
+                level: 'H'
+            });
+        })();
     </script>
 </body>
 
