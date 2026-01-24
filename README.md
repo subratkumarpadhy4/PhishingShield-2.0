@@ -36,45 +36,72 @@ Traditional antiviruses are **Reactive** (waiting for blacklists). PhishingShiel
 ### 🌐 System Architecture & Logic
 
 ### 🌐 System Architecture & Logic
-
-### 🌐 System Architecture & Logic
-
 #### 1. 🧩 Modular System View
 The system is composed of specialized detectors that feed into a central Risk Engine.
 
-<div align="center">
+> *Note: If the diagram below does not render on your device, [view the static image here](./images/architecture.png).*
 
-![PhishingShield Architecture](./images/architecture.png)
+```mermaid
+graph TD
+    subgraph "Browser Extension (Client)"
+        Input[Page Load] -->|Trigger| Content[content.js]
+        
+        subgraph "Risk Engine Core"
+            Content -->|1. Scan DOM| DOM[DOM Analyzer]
+            DOM -->|Check| QR[Quishing Detector]
+            DOM -->|Check| Favicon[Favicon Matcher]
+            DOM -->|Check| Cham[Chameleon Anti-Bot]
+            DOM -->|Monitor| DL[Download Defense]
+        end
+        
+        Content -->|Calculate Score| Heuristics[Heuristic Score]
+        Heuristics -->|Display| HUD[Risk HUD UI]
+    end
 
-</div>
+    subgraph "Gamification Layer"
+        HUD -->|Safe Browse (+5XP)| XP[XP Manager]
+        XP -->|Level Up| Unlocks{Feature Unlocks}
+        Unlocks -->|Lvl 5| QR
+        Unlocks -->|Lvl 10| AI_Enable[AI Analysis]
+        Unlocks -->|Lvl 20| Cham
+    end
+
+    subgraph "AI Cloud Layer"
+        Heuristics -.->|If Score > 20| BG[background.js]
+        BG -->|Request Audit| Server[Node.js Server]
+        Server -->|Forensic Prompt| LLM[Groq Llama-3 / Gemini]
+        LLM -->|Verdict| Server
+        Server -.->|Return +AI Score| HUD
+    end
+```
 
 #### 2. ⚡ Threat Detection Logic Flow
 How a "Suspicious Site" triggers the AI Defense Grid.
 
-```text
-USER             EXTENSION (Client)           SERVER (AI Cloud)
- |                        |                           |
- |--- Visits Page ------->|                           |
- |                        |                           |
- |                        |--- 1. Analyze DOM ------->|
- |                        |                           |
- |                        |<-- 2. Heuristic Score ----|
- |                        |                           |
- |<-- [ GREEN HUD ] ------| (If Score < 20)           |
- |    (Safe Site)         |                           |
- |                        |                           |
- |                        | (If Score >= 20)          |
- |                        |                           |
- |                        |--- 3. POST /ai/scan ----->|
- |                        |       (Snapshot)          |
- |                        |                           |
- |                        |                           |--- 4. LLM Analysis
- |                        |                           |    (Urgency, Logos)
- |                        |                           |
- |                        |<-- 5. AI Verdict: RISK ---|
- |                        |                           |
- |<-- [ RED HUD ] --------|                           |
- |    (Critical Block)    |                           |
+```mermaid
+sequenceDiagram
+    participant User
+    participant Ext as Content Script
+    participant RE as Risk Engine
+    participant BG as Background/API
+    participant AI as AI Model (Groq)
+
+    User->>Ext: Visits Page
+    Ext->>RE: Analyze DOM & Metadata
+    RE-->>Ext: Return Heuristic Score (e.g., 45/100)
+    
+    alt Score < 20 (Safe)
+        Ext->>User: Display GREEN HUD (Safe)
+        Ext->>BG: Add +10 XP (Safe Browsing)
+    else Score >= 20 (Suspicious)
+        Ext->>User: Display YELLOW HUD (Caution)
+        Note right of Ext: Initiating AI Scan...
+        Ext->>BG: POST /api/ai/scan (DOM Snapshot)
+        BG->>AI: Analyze for Phishing Tactics
+        AI-->>BG: Verdict: "Phishing" (+40 pts)
+        BG-->>Ext: Return AI_Score: 85 (Critical)
+        Ext->>User: Update HUD to RED (Blocked)
+    end
 ```
 
 ---
@@ -89,31 +116,23 @@ The core of our defense is a purely client-side heuristic engine.
 *   **Entropy Analysis**: Identifies randomly generated domains (DGA) used by botnets.
 *   **Extension Audit**: Scans *other* installed extensions to detect rogue scripts.
 
-### 2. � Dual-Engine AI Analysis
+### 2. Dual-Engine AI Analysis
 When heuristics flag a site as suspicious, the **AI Cloud Layer** engages.
+
 #### AI Logic Flow
-```text
-[Suspicious Page]
-      |
-      v
-(Score > 20?) --NO--> [Green HUD (Safe)]
-      |
-     YES
-      |
-      v
-[Snapshot DOM] --> [Send to Groq/Llama-3]
-                          |
-                          v
-                    (Is Phishing?)
-                     /          \
-                   NO            YES
-                   |              |
-           [Mark Safe]      (Confidence > 80%?)
-                                  |
-                                 YES
-                                  |
-                                  v
-                         [🔴 BLOCK & ALERT]
+
+```mermaid
+graph LR
+    A[Suspicious Page] --> B{Heuristic Score > 20?}
+    B -- No --> C[Green HUD]
+    B -- Yes --> D[Snapshot DOM]
+    D --> E[Send to Groq Llama-3]
+    E --> F{Is Phishing?}
+    F -- No --> G[Mark Safe (Cache)]
+    F -- Yes --> H{Confidence > 80%?}
+    H -- Yes --> I[🔴 BLOCK & ALERT]
+    H -- No --> J[Consult Gemini (Fallback)]
+    J --> I
 ```
 *   **Results**: Generates a human-readable report (e.g., "AI Detected: Imitating Amazon Login page with urgency tactics").
 
